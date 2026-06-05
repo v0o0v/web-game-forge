@@ -14,6 +14,8 @@ allowed-tools: Read, Write, Edit, Bash
 - 적을 총이나 투사체로 처치하는 탑다운 게임 전반
 
 ## 핵심 레시피
+
+0. **스타일·테마 미지정이면 먼저 물어보기** — 아트 스타일(픽셀 `PixelForge` / 미려한 스무스 `VectorForge`)·테마·분량이 요청에 명시돼 있지 않으면, 코드 전에 `AskUserQuestion`으로 확인한다 (web-game-builder의 '요청 명확화' 참고).
 1. `games/<slug>/` 스캐폴딩. `index.html`은 super-runner의 모바일 하니스 + 스크립트 로드 순서(phaser → pixelforge → audio → mobile → game) 따르기.
 2. **중력 0**: `physics: { arcade: { gravity: { y: 0 }, debug: false } }`. 탑다운에서는 중력이 없다.
 3. **8방향 이동**: `setVelocity(vx, vy)`. 대각선 이동 시 벡터 정규화(`Phaser.Math.Vector2.normalize`)로 속도 일정하게 유지.

@@ -16,6 +16,8 @@ Breakout·Snake·Pong·Space Invaders 등 고전 아케이드 게임 4종의 핵
 - 그 외 '고전 아케이드', '클래식 게임' 클론 요청
 
 ## 핵심 레시피
+
+0. **스타일·테마 미지정이면 먼저 물어보기** — 아트 스타일(픽셀 `PixelForge` / 미려한 스무스 `VectorForge`)·테마·분량이 요청에 명시돼 있지 않으면, 코드 전에 `AskUserQuestion`으로 확인한다 (web-game-builder의 '요청 명확화' 참고).
 1. `games/<slug>/` 스캐폴딩. `index.html`은 super-runner의 모바일 하니스 + 스크립트 로드 순서 따르기.
 2. 아래 장르별 핵심 루프를 `Game` 씬에 구현. 물리 엔진 없이 `update`에서 직접 좌표 이동해도 무방(단순도 우선).
 3. PixelForge로 필요한 스프라이트(`PixelForge.bake` 또는 `PixelForge.buildAll`), ChipAudio로 SFX, MobileHarness로 모바일 컨트롤.
