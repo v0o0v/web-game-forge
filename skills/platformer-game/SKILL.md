@@ -14,6 +14,8 @@ allowed-tools: Read, Write, Edit, Bash
 - 코인·블록·깃발 골인처럼 플랫포머 요소가 명시된 경우
 
 ## 핵심 레시피
+
+0. **스타일·테마 미지정이면 먼저 물어보기** — 아트 스타일(픽셀 `PixelForge` / 미려한 스무스 `VectorForge`)·테마·분량이 요청에 명시돼 있지 않으면, 코드 전에 `AskUserQuestion`으로 확인한다 (web-game-builder의 '요청 명확화' 참고).
 1. `games/super-runner/`를 `games/<slug>/`로 복제 후 개조. `index.html`의 모바일 하니스(뷰포트 meta + CSS 리셋)와 스크립트 로드 순서(phaser → pixelforge → audio → mobile → game)를 유지한다.
 2. **물리**: `arcade.gravity.y = 800` 내외. 캐릭터에 `setDragX`로 마찰 적용. `body.blocked.down`으로 착지 판정.
 3. **가변 점프**: 버튼을 길게 누를수록 높이 뜨도록 점프 중 버튼 해제 시 `vy`를 절반으로 줄인다. 코요테 타임(착지 후 N프레임 허용)과 점프 버퍼(공중에서 미리 누른 점프 기억)를 구현한다.
