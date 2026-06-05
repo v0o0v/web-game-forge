@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "web-game-builder",
+  "displayName": "Web Game Builder",
+  "version": "0.1.0",
+  "description": "브라우저/웹뷰에서 잘 돌아가는 완성도 높은 2D 웹 게임(슈퍼마리오류 플랫포머 등)을 Phaser 3 기반으로 자동 생성합니다. 사용자가 게임 제작을 요청하면 스킬이 자동 발동됩니다.",
+  "author": {
+    "name": "v0o0v",
+    "email": "v0o0v2@gmail.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "game",
+    "browser-game",
+    "web-game",
+    "2d-game",
+    "platformer",
+    "super-mario",
+    "phaser",
+    "canvas",
+    "mobile-webview",
+    "html5"
+  ],
+  "defaultEnabled": true
+}
