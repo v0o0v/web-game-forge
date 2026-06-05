@@ -8,6 +8,10 @@ allowed-tools: Read, Write, Edit
 
 문자 그리드로 픽셀아트 스프라이트를 코드만으로 만든다. 외부 이미지 파일 없이 CC0/IP-safe 에셋을 즉석 생성한다. web-game-builder의 전문 스킬. `engine/pixelforge.js`를 사용한다.
 
+> **이건 픽셀아트 전용.** 미려한 비-픽셀(스무스/벡터·그라데이션·글로우·글래스·곡선 캐릭터)
+> 그래픽은 `vector-graphics` 스킬(VectorForge)을 쓴다. 렌더 스타일은 게임당 하나로 통일한다
+> (픽셀 `pixelArt:true` ↔ 스무스 `pixelArt:false`).
+
 ## 언제 사용
 - 새 캐릭터·적·아이템·타일을 추가하거나 기존 스프라이트를 수정할 때
 - 프레임 애니메이션(걷기·점프·회전·깜박임)이 필요할 때

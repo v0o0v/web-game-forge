@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VectorForge — 스무스 그래픽 프리뷰</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;
+    background:linear-gradient(160deg,#1b2a4a 0%,#3b2766 38%,#7a2f6e 68%,#c2466b 100%);}
+  #game{width:100%;height:100dvh;}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<script src="../../engine/phaser.min.js"></script>
+<script src="../../engine/vectorforge.js"></script>
+<script>
+var Preview = {
+  key: 'Preview',
+  create: function () {
+    VectorForge.buildAll(this);
+    var self = this;
+    function label(x, y, txt, c) {
+      self.add.text(x, y, txt, { fontFamily: 'Segoe UI, Arial, sans-serif', fontSize: '15px',
+        color: c || '#ffe9c2', fontStyle: 'bold' }).setShadow(0, 1, 'rgba(0,0,0,0.5)', 2);
+    }
+    this.add.text(30, 18, 'VectorForge — 미려한 스무스 그래픽 (절차적 · CC0)', {
+      fontFamily: 'Segoe UI, Arial', fontSize: '22px', color: '#ffffff', fontStyle: 'bold'
+    }).setShadow(0, 2, 'rgba(0,0,0,0.5)', 4);
+
+    // 1) 카툰 벡터 캐릭터
+    label(30, 64, '● 카툰 벡터 캐릭터  (idle / run▶ / jump)');
+    this.add.sprite(70, 140, 'vf-hero', 0).setScale(3.2);
+    var hero = this.add.sprite(170, 140, 'vf-hero').setScale(3.2); hero.play('vf-hero-run');
+    this.add.sprite(270, 140, 'vf-hero', 3).setScale(3.2);
+
+    // 2) 그라데이션 / 글로우
+    label(380, 64, '● 그라데이션 / 글로우');
+    var coin = this.add.sprite(430, 130, 'vf-coin').setScale(3.0); coin.play('vf-coin-spin');
+    this.add.sprite(520, 130, 'vf-gem').setScale(3.0);
+    var orb = this.add.sprite(610, 130, 'vf-orb').setScale(3.0); orb.play('vf-orb-pulse');
+
+    // 3) 플랫 / 머티리얼 + 소프트섀도우
+    label(30, 232, '● 플랫 / 머티리얼 + 소프트섀도우');
+    this.add.sprite(120, 320, 'vf-platform').setScale(2.6);
+    this.add.sprite(330, 320, 'vf-cloud').setScale(2.2);
+    this.add.sprite(540, 320, 'vf-hill').setScale(2.2).setOrigin(0.5, 1).setY(360);
+
+    // 4) 글래스모피즘 (배경 위에 비쳐야 함)
+    label(30, 410, '● 글래스모피즘 / 글로시 버튼');
+    this.add.sprite(150, 500, 'vf-glass').setScale(2.4);
+    var btn = this.add.sprite(420, 500, 'vf-button').setScale(2.4);
+    this.add.text(420, 500, 'PLAY', { fontFamily: 'Segoe UI, Arial', fontSize: '18px',
+      color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5).setShadow(0, 1, 'rgba(0,0,0,0.4)', 2);
+
+    // 오로라 글로우 장식
+    label(720, 410, '● 별/글로우', '#bfe9ff');
+    VectorForge.bake(this, 'vf-star', { w: 28, h: 28, draw: function (ctx, w, h, t, VF) {
+      VF.glow(ctx, 'rgba(255,240,150,0.9)', 8, function () {
+        VF.star(ctx, w/2, h/2, 11, 4.6, 5, -Math.PI/2);
+        ctx.fillStyle = VF.radial(ctx, w/2, h/2, 12, [[0,'#fffce0'],[1,'#ffcf5a']]); ctx.fill();
+      });
+    }});
+    this.add.sprite(760, 500, 'vf-star').setScale(2.6);
+  }
+};
+new Phaser.Game({
+  type: Phaser.AUTO,
+  width: 900, height: 600,
+  parent: 'game',
+  transparent: true,
+  render: { pixelArt: false, antialias: true, roundPixels: false, preserveDrawingBuffer: true },
+  scene: [Preview]
+});
+</script>
+</body>
+</html>

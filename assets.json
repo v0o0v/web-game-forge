@@ -12,5 +12,12 @@
     { "name": "Brackeys' Platformer Bundle", "license": "CC0-1.0", "url": "https://brackeysgames.itch.io/brackeys-platformer-bundle" },
     { "name": "OpenGameArt.org (CC0 필터)", "license": "CC0-1.0 (per-item 확인 필수)", "url": "https://opengameart.org/content/cc0-resources" }
   ],
+  "recommendedHDVectorSources": [
+    { "name": "Kenney.nl — Vector/UI/Shape 팩 (스무스 그래픽)", "license": "CC0-1.0", "url": "https://kenney.nl/assets" },
+    { "name": "SVGRepo (CC0 필터)", "license": "CC0-1.0 (per-item 확인)", "url": "https://www.svgrepo.com/" },
+    { "name": "Game-icons.net", "license": "CC0-1.0 / CC-BY-3.0 (항목별 확인)", "url": "https://game-icons.net/" },
+    { "name": "OpenGameArt.org — CC0 HD/벡터", "license": "CC0-1.0 (per-item 확인)", "url": "https://opengameart.org/" }
+  ],
+  "renderStyleNote": "픽셀 게임은 PixelForge(pixelArt:true), 미려한 스무스 게임은 VectorForge(pixelArt:false, antialias:true). SVG는 this.load.svg(key,url,{width,height})로 임의 크기 또렷이 래스터화. 외부 에셋은 games/<slug>/assets/에 벤더링 + 아래 entries 에 CC0 로 등록.",
   "entries": []
 }
