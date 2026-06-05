@@ -1,0 +1,151 @@
+/* ============================================================================
+ * MobileHarness — 모바일 웹뷰 대응 하니스 (web-game-builder 엔진)
+ * ----------------------------------------------------------------------------
+ * 리서치(검증)에 기반한 모바일 웹뷰 베스트프랙티스를 한 곳에 묶는다:
+ *  - scaleConfig(): Phaser.Scale.FIT + CENTER_BOTH 고정 16:9 디자인 해상도
+ *  - installDomGuards(): iOS WKWebView 가 user-scalable=no 를 무시하는 것 대비
+ *    (gesturestart / 멀티터치 / 더블탭 줌 / 러버밴드 스크롤 preventDefault)
+ *  - TouchControls: 멀티터치 가상 D-패드 + 점프 버튼 (별도 최상단 Scene)
+ *  - 오디오 언락: 'Tap to start' 제스처에서 ChipAudio.unlock() 호출 (게임 코드에서 연결)
+ * ==========================================================================*/
+(function (global) {
+  'use strict';
+
+  var MobileHarness = {};
+
+  // Phaser scale config (게임 config.scale 에 펼쳐 넣기)
+  MobileHarness.scaleConfig = function (width, height) {
+    return {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+      width: width,
+      height: height,
+      min: { width: Math.round(width / 2), height: Math.round(height / 2) },
+      max: { width: width * 2, height: height * 2 }
+    };
+  };
+
+  // 터치 디바이스 여부
+  MobileHarness.isTouch = function () {
+    return ('ontouchstart' in global) ||
+      (global.navigator && global.navigator.maxTouchPoints > 0) ||
+      /[?&]touch=1/.test(global.location ? global.location.search : '');
+  };
+
+  // iOS/웹뷰용 DOM 가드 (index.html 의 viewport meta + CSS 리셋과 함께 사용)
+  MobileHarness.installDomGuards = function () {
+    var doc = global.document;
+    if (!doc) return;
+    // 더블탭/제스처 줌 차단
+    doc.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
+    doc.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });
+    var lastTouch = 0;
+    doc.addEventListener('touchend', function (e) {
+      var now = Date.now();
+      if (now - lastTouch <= 300) e.preventDefault(); // 더블탭 줌
+      lastTouch = now;
+    }, { passive: false });
+    // 멀티터치 줌 차단
+    doc.addEventListener('touchstart', function (e) {
+      if (e.touches && e.touches.length > 1) e.preventDefault();
+    }, { passive: false });
+    // 러버밴드/페이지 스크롤 차단
+    doc.addEventListener('touchmove', function (e) {
+      e.preventDefault();
+    }, { passive: false });
+    // 백그라운드 복귀 시 오디오 재개 훅 지점 (게임에서 onResume 지정)
+    doc.addEventListener('visibilitychange', function () {
+      if (!doc.hidden && MobileHarness._onResume) MobileHarness._onResume();
+    });
+  };
+  MobileHarness.onResume = function (fn) { MobileHarness._onResume = fn; };
+
+  // ===========================================================================
+  // TouchControls — 멀티터치 가상 컨트롤 (항상 최상단 Scene)
+  //  - 매 프레임 활성 포인터 위치로 버튼 상태를 재계산(슬라이드/멀티터치에 견고).
+  //  - 공유 입력 상태 객체(inputState)에 left/right/jump 를 기록한다.
+  // ===========================================================================
+  function makeTouchScene(designW, designH, inputState) {
+    return new Phaser.Class({
+      Extends: Phaser.Scene,
+      initialize: function TouchControls() { Phaser.Scene.call(this, { key: 'TouchControls', active: false }); },
+      create: function () {
+        var show = MobileHarness.isTouch();
+        // 멀티터치 활성화 (D패드 + 점프 동시 입력)
+        this.input.addPointer(3);
+
+        var H = designH, W = designW;
+        var pad = 18;
+        var r = 34;
+        this.buttons = [
+          { id: 'left',  x: pad + r + 6,           y: H - pad - r,      r: r, label: '◀' },
+          { id: 'right', x: pad + r * 3 + 16,       y: H - pad - r,      r: r, label: '▶' },
+          { id: 'jump',  x: W - pad - r,            y: H - pad - r,      r: r + 6, label: 'A' }
+        ];
+
+        var g = this.add.graphics();
+        g.setScrollFactor(0);
+        this._g = g;
+
+        // 라벨
+        this._labels = [];
+        var self = this;
+        this.buttons.forEach(function (b) {
+          var t = self.add.text(b.x, b.y, b.label, {
+            fontFamily: 'monospace', fontSize: (b.r) + 'px', color: '#ffffff'
+          }).setOrigin(0.5).setScrollFactor(0).setAlpha(show ? 0.9 : 0);
+          self._labels.push(t);
+        });
+
+        this._show = show;
+        if (!show) g.setAlpha(0);
+
+        // 음소거 토글 버튼 (우상단)
+        if (global.GAME_AUDIO) {
+          var mute = this.add.text(W - 14, 12, '♪', {
+            fontFamily: 'monospace', fontSize: '20px', color: '#ffffff'
+          }).setOrigin(1, 0).setScrollFactor(0).setInteractive({ useHandCursor: true });
+          mute.on('pointerdown', function () {
+            var m = global.GAME_AUDIO.toggleMute();
+            mute.setText(m ? '♪̸' : '♪').setAlpha(m ? 0.5 : 1);
+          });
+        }
+      },
+      update: function () {
+        var st = inputState;
+        st.left = false; st.right = false; st.up = false;
+        // Phaser Scene InputPlugin 에는 .pointers 배열이 없음 → InputManager 의 것을 사용
+        var ptrs = this.input.manager.pointers; // mousePointer + pointer1..N
+        for (var i = 0; i < ptrs.length; i++) {
+          var p = ptrs[i];
+          if (!p.isDown) continue;
+          for (var b = 0; b < this.buttons.length; b++) {
+            var btn = this.buttons[b];
+            var dx = p.x - btn.x, dy = p.y - btn.y;
+            if (dx * dx + dy * dy <= (btn.r + 8) * (btn.r + 8)) {
+              if (btn.id === 'left') st.left = true;
+              else if (btn.id === 'right') st.right = true;
+              else if (btn.id === 'jump') st.up = true;
+            }
+          }
+        }
+        // 시각 갱신
+        if (this._show) {
+          var g = this._g; g.clear();
+          for (var k = 0; k < this.buttons.length; k++) {
+            var btn2 = this.buttons[k];
+            var active = (btn2.id === 'left' && st.left) || (btn2.id === 'right' && st.right) || (btn2.id === 'jump' && st.up);
+            g.fillStyle(0xffffff, active ? 0.35 : 0.16);
+            g.lineStyle(2, 0xffffff, active ? 0.9 : 0.5);
+            g.fillCircle(btn2.x, btn2.y, btn2.r);
+            g.strokeCircle(btn2.x, btn2.y, btn2.r);
+          }
+        }
+      }
+    });
+  }
+  MobileHarness.TouchControlsClass = makeTouchScene;
+
+  global.MobileHarness = MobileHarness;
+  if (typeof module !== 'undefined' && module.exports) module.exports = MobileHarness;
+})(typeof window !== 'undefined' ? window : this);

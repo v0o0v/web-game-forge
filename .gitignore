@@ -1,0 +1,15 @@
+# OMC 오케스트레이션 상태 (세션별, 커밋 제외)
+.omc/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 로그 / 임시
+*.log
+*.tmp
+_t.json
+
+# Node (향후 대비)
+node_modules/
