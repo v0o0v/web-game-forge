@@ -32,7 +32,8 @@ ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
 - 무한 러너·플래피류 → `endless-runner`
 
 **제작 요소**
-- 스프라이트/타일/애니메이션 → `sprite-forge`
+- 스프라이트/타일/애니메이션 (픽셀아트) → `sprite-forge`
+- 미려한 스무스/벡터 그래픽 (그라데이션·글로우·글래스·곡선 캐릭터) → `vector-graphics`
 - 효과음/BGM → `chip-sound`
 - 레벨/맵/타일맵 → `level-designer`
 - HUD/메뉴/UI → `game-ui-hud`
@@ -46,6 +47,8 @@ ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
 
 ## 핵심 원칙
 1. **엔진:** Phaser 3 (vendored `engine/phaser.min.js`, MIT, v3 API 에 고정). 물리는 Arcade.
+   **렌더 스타일은 게임당 하나** — 픽셀(`PixelForge` + `pixelArt:true`) 또는 미려한 스무스
+   (`VectorForge` + `pixelArt:false, antialias:true`). 사용자 취향에 맞춰 택1, 섞지 않는다.
 2. **에셋 = CC0 / IP-safe:** 외부 저작물(닌텐도 마리오 스프라이트·이름 'Mario'·시그니처
    조합 등) 절대 금지. 기본은 `PixelForge` 절차적 픽셀아트(코드 생성). CC0 팩(Kenney 등)을
    쓸 땐 `assets.json` 라이선스 게이트로 CC0 만 허용하고 `CREDITS.txt` 를 남긴다.

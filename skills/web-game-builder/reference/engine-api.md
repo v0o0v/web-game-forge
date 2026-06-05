@@ -50,6 +50,45 @@ scene.anims.create({
 
 ---
 
+## VectorForge — 절차적 스무스/벡터 그래픽 (`engine/vectorforge.js`)
+
+PixelForge의 비-픽셀 짝꿍. 그라데이션·글로우·소프트섀도우·글래스질·곡선 캐릭터 같은 **미려한**
+그래픽을 코드로 생성한다. 외부 0, CC0/IP-safe. drawFn을 슈퍼샘플(기본 3x) 후 고품질 다운샘플 →
+부드러운 안티앨리어스 텍스처.
+
+> ⚠ **렌더 스타일은 게임당 하나.** 스무스 게임은 `render: { pixelArt:false, antialias:true,
+> roundPixels:false }`. 픽셀 게임은 `pixelArt:true`. 섞지 않는다.
+
+### `VectorForge.buildAll(scene)`
+내장 라이브러리 등록: `vf-hero`(카툰 마스코트 4프레임), `vf-coin`(글로시 4프레임), `vf-gem`,
+`vf-orb`(네온 2프레임), `vf-platform`, `vf-cloud`, `vf-hill`, `vf-glass`, `vf-button` + 애니
+(`vf-hero-idle/run/jump`, `vf-coin-spin`, `vf-orb-pulse`).
+
+### `VectorForge.bake(scene, key, def)`
+- `def = { w, h, ss?, draw|frames }`. `draw(ctx, w, h, frameIndex, VF)` 는 **논리 좌표**로 그린다.
+- `frames: [fn, ...]` 다중 프레임. `ss`(기본 3) = 슈퍼샘플 배율.
+
+```js
+VectorForge.bake(this, 'orb', { w:24, h:24, draw:function(ctx,w,h,t,VF){
+  VF.glow(ctx,'rgba(70,220,255,0.9)',9,function(){
+    VF.circle(ctx,w/2,h/2,8);
+    ctx.fillStyle = VF.radial(ctx,w/2,h/2,9,[[0,'#eaffff'],[0.4,'#66f0ff'],[1,'#2bb6e0']]);
+    ctx.fill();
+  });
+}});
+```
+
+### 헬퍼 `VF` (drawFn 5번째 인자, `VectorForge.helpers`)
+`rr`(둥근 사각형) · `circle`/`ellipse`/`poly`/`blob`/`star` · `lin`/`radial`(그라데이션) ·
+`glow`(발광) · `shadow`(소프트 드롭섀도우) · `glass`(글래스모피즘 패널).
+전체화면 배경: `VectorForge.gradientBackground(scene, key, w, h, stops)`.
+
+### 외부 HD CC0 아트 로딩
+절차적으로 부족하면 CC0 HD 아트 로딩. SVG는 임의 크기로 또렷: `this.load.svg(key,url,{width,height})`.
+HD 래스터/아틀라스: `this.load.image/atlas`. `assets.json` 게이트로 CC0만 허용, `CREDITS.txt` 고지.
+
+---
+
 ## ChipAudio — 절차적 8비트 사운드 (`engine/audio.js`)
 
 Web Audio 만으로 효과음 + BGM 합성. 오디오 파일 0. CC0/IP-safe. **BGM 은 오리지널 멜로디만.**

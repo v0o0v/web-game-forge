@@ -4,7 +4,7 @@
 
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Phaser](https://img.shields.io/badge/engine-Phaser%203.90-blueviolet)
-![Skills](https://img.shields.io/badge/skills-15-orange)
+![Skills](https://img.shields.io/badge/skills-16-orange)
 ![Assets](https://img.shields.io/badge/assets-CC0%20%2F%20IP--safe-success)
 ![Mobile](https://img.shields.io/badge/mobile--webview-ready-success)
 
@@ -31,8 +31,10 @@
   내장된 엔진(vendored `engine/phaser.min.js`, v3.90, MIT)을 사용합니다.
 - **📱 모바일 웹뷰 대응** — iOS WKWebView, 카카오/인스타 인앱 브라우저까지 커버하는 Scale.FIT,
   'Tap to start' 오디오 언락, 멀티터치 가상 D-패드+점프 버튼이 기본 포함됩니다.
-- **⚖️ CC0 / IP-safe 에셋** — 외부 파일 없이 `PixelForge`로 절차적 픽셀아트를 코드 생성합니다.
-  닌텐도 등 타사 에셋·이름·시그니처 조합을 사용하지 않습니다.
+- **🎨 두 가지 아트 스타일** — 픽셀아트(`PixelForge`)와 **미려한 스무스/벡터**(`VectorForge` —
+  그라데이션·글로우·소프트섀도우·글래스모피즘·곡선 캐릭터)를 모두 코드로 생성합니다. 게임당 한 스타일.
+- **⚖️ CC0 / IP-safe 에셋** — 외부 파일 없이 절차적으로 생성하거나, 외부 HD CC0 아트를 라이선스
+  게이트(`assets.json`, CC0만)로 로딩합니다. 닌텐도 등 타사 에셋·이름·시그니처 조합을 쓰지 않습니다.
 - **🔊 8비트 사운드** — `ChipAudio`가 Web Audio API로 효과음과 **오리지널** BGM을 코드 합성합니다.
   오디오 파일 0개, 100% CC0.
 - **🧩 15종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 5 + 품질·운영 4 + 메인 오케스트레이터.
@@ -131,7 +133,21 @@ http://127.0.0.1:8766/games/super-runner/index.html
 
 ---
 
-## 🧩 스킬 카탈로그 (15종)
+## 🎨 아트 스타일
+
+게임당 한 가지 렌더 스타일을 택합니다 — 둘 다 외부 다운로드 0, 코드 생성(CC0/IP-safe).
+
+- **픽셀아트** (`PixelForge`, `pixelArt:true`) — NES풍 레트로. 데모 `games/super-runner/` 참고.
+- **미려한 스무스/벡터** (`VectorForge`, `pixelArt:false`) — 그라데이션·글로우·소프트섀도우·
+  글래스모피즘·곡선 캐릭터. 4가지 스타일 쇼케이스: `games/style-preview/`.
+
+![VectorForge 스무스 그래픽 쇼케이스](docs/img/vectorforge.png)
+
+필요하면 외부 HD CC0 아트(SVG/래스터)도 `assets.json` 라이선스 게이트로 로딩합니다.
+
+---
+
+## 🧩 스킬 카탈로그 (16종)
 
 메인 `web-game-builder`가 전체 흐름을 조율하고, 요청 성격에 따라 전문 스킬이 자동 발동합니다.
 **장르로 스캐폴드 → 제작요소로 살붙이기 → 품질로 검증·최적화** 순서로 협력합니다.
@@ -144,7 +160,8 @@ http://127.0.0.1:8766/games/super-runner/index.html
 | | `arcade-classic` | 벽돌깨기·뱀·퐁·인베이더 |
 | | `puzzle-game` | 테트리스·매치3·2048 |
 | | `endless-runner` | 무한 러너·플래피류 |
-| 🛠 제작요소 | `sprite-forge` | PixelForge 스프라이트·애니메이션 |
+| 🛠 제작요소 | `sprite-forge` | PixelForge 픽셀아트 스프라이트·애니메이션 |
+| | `vector-graphics` | VectorForge 미려한 스무스/벡터 그래픽 + 외부 HD CC0 로딩 |
 | | `chip-sound` | ChipAudio 효과음·BGM |
 | | `level-designer` | 레벨·맵·타일맵 설계 |
 | | `game-ui-hud` | HUD·메뉴·UI 화면 |
@@ -159,7 +176,7 @@ http://127.0.0.1:8766/games/super-runner/index.html
 
 ---
 
-## ⚙️ 엔진 라이브러리 3종 (`engine/`)
+## ⚙️ 엔진 라이브러리 4종 (`engine/`)
 
 ### PixelForge (`pixelforge.js`)
 문자 그리드로 정의한 스프라이트를 Phaser 텍스처로 굽는 절차적 픽셀아트 생성기. 외부 이미지 0,
@@ -170,6 +187,20 @@ PixelForge.bake(this, 'star', {
   palette: { 'y': '#ffe23f', 'w': '#fff7c0' },
   frames: [ ["..y..", ".ywy.", "ywwwy", ".ywy.", "..y.."] ]
 });
+```
+
+### VectorForge (`vectorforge.js`)
+PixelForge의 비-픽셀 짝꿍. 그라데이션·글로우·소프트섀도우·글래스질·곡선 캐릭터 같은 **미려한**
+그래픽을 코드로 생성(슈퍼샘플 안티앨리어스). 외부 0, CC0/IP-safe.
+
+```js
+VectorForge.bake(this, 'orb', { w:24, h:24, draw:(ctx,w,h,t,VF) => {
+  VF.glow(ctx, 'rgba(70,220,255,0.9)', 9, () => {
+    VF.circle(ctx, w/2, h/2, 8);
+    ctx.fillStyle = VF.radial(ctx, w/2, h/2, 9, [[0,'#eaffff'],[0.4,'#66f0ff'],[1,'#2bb6e0']]);
+    ctx.fill();
+  });
+}});
 ```
 
 ### ChipAudio (`audio.js`)
@@ -205,13 +236,13 @@ web-game-forge/
 ├── skills/                                            # 15종 스킬 (메인 1 + 전문 14)
 │   ├── web-game-builder/  (+ reference/engine-api · mobile-webview)
 │   ├── platformer-game/  topdown-shooter/  arcade-classic/  puzzle-game/  endless-runner/
-│   ├── sprite-forge/  chip-sound/  level-designer/  game-ui-hud/  juice-fx/
+│   ├── sprite-forge/  vector-graphics/  chip-sound/  level-designer/  game-ui-hud/  juice-fx/
 │   └── mobile-webview-tune/  game-qa/  ip-license-guard/  perf-60fps/
 ├── hooks/hooks.json                                   # UserPromptSubmit 의도 감지 등록
 ├── scripts/detect-game-intent.{js,ps1,sh}            # 한/영 의도 감지(크로스플랫폼)
 ├── commands/make-game.md                              # /web-game-builder:make-game
-├── engine/  phaser.min.js · pixelforge.js · audio.js · mobile.js   # 재사용 엔진
-├── games/super-runner/  index.html · game.js · CREDITS.txt         # 플래그십 데모
+├── engine/  phaser.min.js · pixelforge.js · vectorforge.js · audio.js · mobile.js   # 재사용 엔진
+├── games/  super-runner/(픽셀 데모) · style-preview/(스무스 4스타일 쇼케이스)
 ├── assets.json                                        # CC0 라이선스 게이트 매니페스트
 ├── docs/  설계.md · img/                              # 아키텍처 명세 · 스크린샷
 ├── README.md · LICENSE
