@@ -202,7 +202,7 @@
 
 ## 4. 조합 설계법 (명확화 단계에서)
 
-WebGameForge의 '요청 명확화'(web-game-builder SKILL.md 0단계, make-game 커맨드)에서 이 사전을 의사결정 도구로 쓴다. 코드 작성 전, AskUserQuestion 1회(최대 4문항)로 핵심만 묶어 묻되 아래 4단계를 거쳐 답을 '장르 스킬 라우팅'으로 잇는다.
+WebGameForge의 '요청 명확화'(web-game-builder SKILL.md 0단계, make-game 커맨드)에서 이 사전을 의사결정 도구로 쓴다. 코드 작성 전, [reference/game-interview.md](../game-interview.md)의 **깊은 1문1답 인터뷰**(`deep-interview` 적응판)로 한 차원씩 캐되 — 이 사전은 **매 라운드 Claude가 제안할 참신한 컨셉의 출처**다. 아래 4단계로 제안·조합한 답을 '장르 스킬 라우팅'으로 잇는다(객관식 1회로 끝내지 말 것).
 
 ### 1단계: 템플릿 아키타입 제시
 사용자 요청이 모호하면(예: '재밌는 게임 만들어줘') combination_patterns의 검증된 레시피 3~4개를 골라 AskUserQuestion 옵션으로 제시한다. 각 옵션 라벨은 친근한 이름, 설명은 example 한 문장. 첫 옵션에 무난한 추천(예: '리듬 정밀 러너')을 '(추천)'으로. 요청에 이미 장르 단서가 있으면(예: '슈팅') 그 코어 루프를 고정하고 이 단계를 건너뛴다.

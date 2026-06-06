@@ -16,7 +16,7 @@ Tetris·Match-3·2048 등 2D 배열 보드 모델 기반의 퍼즐 게임을 스
 
 ## 핵심 레시피
 
-0. **스타일·테마 미지정이면 먼저 물어보기** — 아트 스타일(픽셀 `PixelForge` / 미려한 스무스 `VectorForge`)·테마·분량이 요청에 명시돼 있지 않으면, 코드 전에 `AskUserQuestion`으로 확인한다 (web-game-builder의 '요청 명확화' 참고). 어떤 퍼즐·재미요소를 조합할지 막막하면 **퍼즐 심화 라이브러리 [game-dna/puzzle/INDEX.md](../web-game-builder/reference/game-dna/puzzle/INDEX.md)**(20종 — 낙하·매치/병합·논리/연역·공간/물리·규칙)와 [puzzle/fun-elements.md](../web-game-builder/reference/game-dna/puzzle/fun-elements.md)의 §4 조합 설계법으로 하위장르 아키타입·재미요소를 제안한다(낙하/매치/병합 기존 레시피 + 연역 그리드·규칙조작·공간 푸시·물리 신규 스캐폴드).
+0. **코어·재미·스타일이 모호하면 청사진 인터뷰 먼저** — 요청이 한 줄·모호하거나 퍼즐 코어·재미요소·아트 스타일(픽셀 `PixelForge` / 미려한 스무스 `VectorForge`)·테마·분량이 명시돼 있지 않으면, 코드 전에 **[reference/game-interview.md](../web-game-builder/reference/game-interview.md)의 깊은 1문1답 인터뷰**를 수행한다 (web-game-builder '요청 명확화' = `deep-interview` 적응판). 추상적 객관식 1회로 끝내지 말 것 — **1문1답으로 약점 차원을 하나씩 캐고, 매 라운드 Claude가 game-dna 기반의 참신한 컨셉을 *먼저* 제안**하며 본인 의견을 밝힌다. 제안·조합의 출처는 **퍼즐 심화 라이브러리 [game-dna/puzzle/INDEX.md](../web-game-builder/reference/game-dna/puzzle/INDEX.md)**(20종 — 낙하·매치/병합·논리/연역·공간/물리·규칙)와 [puzzle/fun-elements.md](../web-game-builder/reference/game-dna/puzzle/fun-elements.md)의 §4 조합 설계법(낙하/매치/병합 기존 레시피 + 연역 그리드·규칙조작·공간 푸시·물리 신규 스캐폴드). 안티패턴(§3: 연역+실시간가속, 우아한해+강RNG 등)은 절충 되묻기로 가드. 필수 3개(코어·재미·아트/테마) 구체화 후 **청사진을 한 화면으로 읽어주고 최종 확인** → 그 뒤에만 스캐폴딩한다. 요청이 이미 구체적이면 인터뷰를 건너뛴다.
 1. `games/<slug>/` 스캐폴딩. `index.html`은 super-runner의 모바일 하니스 + 스크립트 로드 순서 따르기. 물리 불필요하므로 `physics` 설정 생략 가능.
 2. **보드 모델 / 렌더 분리**: `board[row][col]` 2D 배열이 유일한 상태 소스. 렌더는 `renderBoard()`가 매 변경 후 호출해 Phaser `Image`/`Rectangle`을 갱신한다. `update` 루프에서 직접 그리지 않는다.
 3. 장르별 핵심 루프는 아래 참고.
