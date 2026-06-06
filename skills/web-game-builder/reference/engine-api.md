@@ -104,9 +104,14 @@ audio.startBgm();                 // 루프 BGM 시작
 
 audio.sfx('jump');                // 효과음
 audio.stopBgm();
-audio.resume();                   // 백그라운드 복귀 시(visibilitychange) 재개
+audio.suspend();                  // 화면이 가려지면 BGM 타이머 정지 + ctx suspend (모든 소리 멈춤)
+audio.resume();                   // 복귀 시 ctx resume + 멈췄던 BGM 자동 재가동
 audio.toggleMute();               // 반환: 현재 muted 여부
 ```
+
+> 가시성 자동 처리: `MobileHarness.installDomGuards()` 가 `visibilitychange`(가려짐)·`pagehide` 에서
+> 전역 `GAME_AUDIO.suspend()`, 복귀 시 `resume()` 를 자동 호출한다 → **탭이 가려지거나 페이지를
+> 떠나면 소리가 멈추고**(서버를 내려도 무관), 돌아오면 BGM 이 재개된다.
 
 내장 SFX 키: `jump, coin, stomp, bump, brick, powerup, sprout, die, flag, 1up`.
 커스텀 톤: `audio.tone({ freq, dur, type:'square'|'triangle'|'sawtooth'|'sine', vol, to(슬라이드 목표 주파수), delay })`.
@@ -125,8 +130,10 @@ scale: Object.assign({ parent: 'game' }, MobileHarness.scaleConfig(384, 224))
 iOS WKWebView 가 `user-scalable=no` 를 무시하는 것 대비: `gesturestart`/멀티터치/더블탭 줌/
 러버밴드 스크롤(`touchmove`)을 `preventDefault`. Boot 에서 1회 호출.
 
-### `MobileHarness.onResume(fn)`
-`visibilitychange` 로 페이지 복귀 시 `fn` 호출(보통 `GAME_AUDIO.resume`).
+### `MobileHarness.onResume(fn)` / `MobileHarness.onHide(fn)`
+`visibilitychange` 처리: 화면이 가려지면 `onHide`(미지정 시 전역 `GAME_AUDIO.suspend()` 자동),
+복귀하면 `onResume`(미지정 시 `GAME_AUDIO.resume()` 자동)을 호출. `pagehide` 에서도 자동 `suspend()`.
+→ 백그라운드/탭 이탈 시 사운드가 계속 나는 문제를 엔진이 기본 차단한다(게임 코드 추가 작업 불필요).
 
 ### `MobileHarness.isTouch()`
 터치 디바이스 여부(`ontouchstart` / `maxTouchPoints` / `?touch=1`). 데스크톱에선 컨트롤 숨김.

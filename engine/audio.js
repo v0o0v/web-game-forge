@@ -15,6 +15,7 @@
     this._bgmTimer = null;
     this._bgmStep = 0;
     this._bgmOn = false;
+    this._bgmWanted = false; // startBgm 의도. 가시성 변화로 일시정지돼도 유지 → resume 시 자동 재가동
   }
 
   ChipAudio.prototype.init = function () {
@@ -42,6 +43,17 @@
   // 백그라운드 복귀 시 재-resume (웹뷰는 백그라운드에서 오디오를 정지시킴)
   ChipAudio.prototype.resume = function () {
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    if (this._bgmWanted && !this._bgmOn) this.startBgm(); // suspend 로 멈췄던 BGM 재가동
+  };
+
+  // 화면이 가려질 때(백그라운드 탭·홈 이동·화면 잠금 등) 모든 사운드를 멈춘다.
+  // BGM 타이머를 정지하고 AudioContext 를 suspend → 탭/서버를 닫지 않아도 소리가 끊긴다.
+  ChipAudio.prototype.suspend = function () {
+    if (this._bgmTimer) { clearInterval(this._bgmTimer); this._bgmTimer = null; }
+    this._bgmOn = false; // _bgmWanted 는 유지 → 복귀(resume) 시 자동 재가동
+    if (this.ctx && this.ctx.state === 'running' && this.ctx.suspend) {
+      try { this.ctx.suspend(); } catch (e) { /* noop */ }
+    }
   };
 
   ChipAudio.prototype.toggleMute = function () {
@@ -111,6 +123,7 @@
   ];
 
   ChipAudio.prototype.startBgm = function () {
+    this._bgmWanted = true;
     if (!this.ctx || this._bgmOn) return;
     this._bgmOn = true;
     this._bgmStep = 0;
@@ -128,6 +141,7 @@
   };
 
   ChipAudio.prototype.stopBgm = function () {
+    this._bgmWanted = false;
     this._bgmOn = false;
     if (this._bgmTimer) { clearInterval(this._bgmTimer); this._bgmTimer = null; }
   };
