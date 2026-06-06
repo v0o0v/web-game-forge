@@ -16,7 +16,7 @@ Tetris·Match-3·2048 등 2D 배열 보드 모델 기반의 퍼즐 게임을 스
 
 ## 핵심 레시피
 
-0. **스타일·테마 미지정이면 먼저 물어보기** — 아트 스타일(픽셀 `PixelForge` / 미려한 스무스 `VectorForge`)·테마·분량이 요청에 명시돼 있지 않으면, 코드 전에 `AskUserQuestion`으로 확인한다 (web-game-builder의 '요청 명확화' 참고).
+0. **스타일·테마 미지정이면 먼저 물어보기** — 아트 스타일(픽셀 `PixelForge` / 미려한 스무스 `VectorForge`)·테마·분량이 요청에 명시돼 있지 않으면, 코드 전에 `AskUserQuestion`으로 확인한다 (web-game-builder의 '요청 명확화' 참고). 어떤 재미요소를 넣을지 막막하면 [game-dna/puzzle.md](../web-game-builder/reference/game-dna/puzzle.md)(Tetris·Candy Crush·2048·Baba Is You 등 분석)와 [fun-elements.md](../web-game-builder/reference/game-dna/fun-elements.md)의 조합 설계법으로 아키타입·재미요소를 제안한다.
 1. `games/<slug>/` 스캐폴딩. `index.html`은 super-runner의 모바일 하니스 + 스크립트 로드 순서 따르기. 물리 불필요하므로 `physics` 설정 생략 가능.
 2. **보드 모델 / 렌더 분리**: `board[row][col]` 2D 배열이 유일한 상태 소스. 렌더는 `renderBoard()`가 매 변경 후 호출해 Phaser `Image`/`Rectangle`을 갱신한다. `update` 루프에서 직접 그리지 않는다.
 3. 장르별 핵심 루프는 아래 참고.

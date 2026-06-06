@@ -39,6 +39,8 @@
 - **🔊 8비트 사운드** — `ChipAudio`가 Web Audio API로 효과음과 **오리지널** BGM을 코드 합성합니다.
   오디오 파일 0개, 100% CC0.
 - **🧩 15종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 5 + 품질·운영 4 + 메인 오케스트레이터.
+- **🧬 게임 DNA 템플릿** — 인기 2D 게임 35종의 재미 요소를 분석한 레퍼런스(`reference/game-dna/`).
+  명확화 단계에서 "어떤 게임 만들지" 제안하고, 재미요소를 조합해 새 게임으로 녹입니다(메카닉만 차용, IP-safe).
 - **✅ 실제 실행 검증** — 헤드리스 step 하니스로 이동·충돌·메카닉을 결정적 검증. 데모 `super-runner`
   는 600프레임 연속 플레이 콘솔 에러 0으로 통과했습니다.
 - **현재 범위: 2D 전용** — 플랫포머가 플래그십, 슈팅·아케이드·퍼즐·러너로 확장.
@@ -183,6 +185,21 @@ Phaser 4 API 의 정확한 사용법(씬 라이프사이클·물리·스케일·
 반영합니다. 벤더링 출처: Phaser 공식 skills(MIT 라이선스). v3 API 혼용으로 인한 코드생성 오류를
 원천 차단합니다.
 
+### 🧬 게임 DNA 레퍼런스 라이브러리
+
+`skills/web-game-builder/reference/game-dna/` 디렉터리에 **지난 10여 년간 많은 사람이 플레이한
+2D 게임 35종의 재미 요소 분석**을 담았습니다. 플랫포머(Celeste·Hollow Knight·Cuphead…),
+러너(Flappy Bird·Geometry Dash·Canabalt…), 아케이드(Snake·Crossy Road·Pac-Man…),
+퍼즐(Tetris·Candy Crush·2048·Baba Is You…), 슈터·로그라이트(Vampire Survivors·Brotato·Geometry Wars…),
+물리·메가히트(Angry Birds·Cut the Rope·Plants vs. Zombies…)를 장르별 6개 파일로 분석합니다.
+
+각 게임은 **코어 루프·재미요소(`FE-*` 태그)·메카닉·난이도 곡선·게임필·리텐션·우리 엔진 재현도(✅/⚠️/❌)·
+조합 훅·IP 안전 메모** 템플릿으로 분해되며, [`fun-elements.md`](skills/web-game-builder/reference/game-dna/fun-elements.md)에
+**재미요소 사전 21종 + 검증된 조합 레시피 11종 + 안티패턴 + 4단계 조합 설계법**을 정리했습니다.
+게임 제작 명확화 단계에서 이 자료로 **"어떤 게임을 만들지" 제안하고, 여러 게임의 재미를 조합해
+새 게임에 녹입니다.** 분석 대상은 **메카닉·재미뿐** — 이름·캐릭터·스프라이트·음악 등 저작물은 쓰지 않습니다.
+색인·사용법: [`game-dna/INDEX.md`](skills/web-game-builder/reference/game-dna/INDEX.md).
+
 ---
 
 ## ⚙️ 엔진 라이브러리 4종 (`engine/`)
@@ -243,7 +260,7 @@ Web Audio API만으로 8비트 효과음과 **오리지널** BGM을 코드 합�
 web-game-forge/
 ├── .claude-plugin/  plugin.json · marketplace.json   # 플러그인 매니페스트
 ├── skills/                                            # 15종 스킬 (메인 1 + 전문 14)
-│   ├── web-game-builder/  (+ reference/engine-api · mobile-webview)
+│   ├── web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 35종 분석)
 │   ├── platformer-game/  topdown-shooter/  arcade-classic/  puzzle-game/  endless-runner/
 │   ├── sprite-forge/  vector-graphics/  chip-sound/  level-designer/  game-ui-hud/  juice-fx/
 │   └── mobile-webview-tune/  game-qa/  ip-license-guard/  perf-60fps/
