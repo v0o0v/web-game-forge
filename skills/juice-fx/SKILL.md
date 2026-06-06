@@ -27,7 +27,7 @@ g.destroy();
 // 이후 'spark'를 파티클·Image 조각에 자유롭게 사용
 ```
 
-### 2) 파티클 흩뿌리기 (Phaser 3.60+ ParticleEmitter)
+### 2) 파티클 흩뿌리기 (Phaser 4 ParticleEmitter)
 ```js
 function burst(scene, x, y, tint) {
   var emitter = scene.add.particles(x, y, 'spark', {
@@ -48,8 +48,8 @@ burst(this, coin.x, coin.y, 0xffe23f);
 burst(this, enemy.x, enemy.y, 0x884400);
 ```
 
-### 3) 조각 흩뿌리기 (트윈 기반 — 구버전 호환)
-Phaser 3.60 미만 또는 파티클이 무거울 때 사용한다.
+### 3) 조각 흩뿌리기 (트윈 기반 — 파티클이 무거울 때의 대안)
+파티클 emitter 대신 트윈으로 조각을 흩뿌린다. 파티클 emitter가 부담스러운 저사양 기기에서 쓴다.
 ```js
 function breakBurst(scene, x, y, tint, count) {
   count = count || 6;
@@ -158,5 +158,6 @@ onCoin: function (hero, coin) {
 ## 연계 / 원칙
 - web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(CC0/절차적).
 - 'spark' 텍스처는 Boot에서 `graphics.generateTexture`로 생성 — 외부 이미지 불필요.
-- Phaser 3.60+ `add.particles()` API 사용 시 `emitting: false` + `explode()` 패턴이 일회성 burst에 적합.
+- Phaser 4 `add.particles()` API: `emitting: false` + `explode()` 패턴이 일회성 burst에 적합.
 - 주스는 '적게, 정확하게' — 모든 이벤트에 다 쓰면 감각이 마비된다.
+- Phaser 4 API 참고: [particles](../web-game-builder/reference/phaser/particles.md), [tweens](../web-game-builder/reference/phaser/tweens.md), [cameras](../web-game-builder/reference/phaser/cameras.md), [filters-and-postfx](../web-game-builder/reference/phaser/filters-and-postfx.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

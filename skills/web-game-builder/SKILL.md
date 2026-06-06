@@ -1,7 +1,7 @@
 ---
 name: web-game-builder
 description: >
-  브라우저/웹뷰에서 잘 돌아가는 완성도 높은 2D 웹 게임을 Phaser 3 로 생성합니다.
+  브라우저/웹뷰에서 잘 돌아가는 완성도 높은 2D 웹 게임을 Phaser 4 로 생성합니다.
   단순 바닐라 JS 가 아니라 스프라이트 애니메이션·HUD/UI·모바일 멀티터치 컨트롤·오디오
   언락까지 포함합니다. 사용자가 게임을 만들/제작/개발/코딩/클론 해 달라고 할 때 사용 —
   플랫포머(슈퍼마리오류), 러너, 슈팅, 탑다운, 퍼즐, 아케이드, 벽돌깨기/테트리스/스네이크/
@@ -15,7 +15,7 @@ allowed-tools: Read, Write, Edit, Bash
 # web-game-builder — 2D 웹 게임 빌더
 
 브라우저/모바일 웹뷰에서 잘 돌아가는 **완성도 높은 2D 게임**을 만든다.
-바닐라 JS 로 투박하게 만들지 말고, 반드시 이 플러그인의 **엔진(Phaser 3 + PixelForge +
+바닐라 JS 로 투박하게 만들지 말고, 반드시 이 플러그인의 **엔진(Phaser 4 + PixelForge +
 ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
 
 > 현재 범위: **2D 전용**. 플래그십 예제는 `games/super-runner/`(슈퍼마리오류 플랫포머).
@@ -46,7 +46,10 @@ ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
 - 60fps 성능 최적화 → `perf-60fps`
 
 ## 핵심 원칙
-1. **엔진:** Phaser 3 (vendored `engine/phaser.min.js`, MIT, v3 API 에 고정). 물리는 Arcade.
+1. **엔진:** Phaser 4 (vendored `engine/phaser.min.js`, **v4.1.0**, MIT). 물리는 Arcade.
+   정확한 v4 API·패턴·Gotcha 는 `reference/phaser/INDEX.md`(공식 Phaser 4 스킬 28종 벤더링)에서
+   관련 문서를 골라 읽고 적용한다. v3 관용구(`group.children.iterate`·`setTintFill`·`Geom.Point`·
+   `roundPixels` 기본값 등)는 INDEX 의 'v3→v4 핵심 차이' 치트시트로 교정한다.
    **렌더 스타일은 게임당 하나** — 픽셀(`PixelForge` + `pixelArt:true`) 또는 미려한 스무스
    (`VectorForge` + `pixelArt:false, antialias:true`). 사용자 취향에 맞춰 택1, 섞지 않는다.
 2. **에셋 = CC0 / IP-safe:** 외부 저작물(닌텐도 마리오 스프라이트·이름 'Mario'·시그니처
@@ -82,6 +85,12 @@ ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
 - 명확화된 정보로 장르/메카닉/아트 스타일/캐릭터/레벨 규모/모바일 여부를 확정한다.
 - 아트 스타일에 따라 렌더 설정과 에셋 스킬을 고른다: 픽셀 → `pixelArt:true` + `sprite-forge`,
   스무스 → `pixelArt:false, antialias:true` + `vector-graphics`.
+
+### 1.5) Phaser 4 API 레퍼런스 선택 (코드 작성 전 필수)
+엔진은 **Phaser 4.1.0**. 코드를 짜기 전에 `reference/phaser/INDEX.md` 의 라우팅 표에서 이번 작업과
+관련된 Phaser 4 문서(예: 플랫포머 → `physics-arcade`·`sprites-and-images`·`animations`·`cameras`)를
+골라 읽고, 거기 명시된 v4 API/패턴/Gotcha 대로 작성한다. 떠오르는 v3 관용구는 INDEX 의
+'v3→v4 핵심 차이' 치트시트로 반드시 교정한다(우리 엔진 라이브러리는 v4 에서 동작 검증됨).
 
 ### 2) 폴더 스캐폴딩
 `games/<slug>/` 에 `index.html` + `game.js` 를 만들고 `engine/` 를 공유 참조한다.

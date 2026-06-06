@@ -103,3 +103,4 @@ function sfxGameOver() {
 - **BGM은 반드시 오리지널**. 닌텐도·세가 등 기존 게임 음악의 멜로디·화음 진행 인용 금지.
 - 백그라운드 복귀 시 `GAME_AUDIO.resume()` 호출: `MobileHarness.onResume(function() { GAME_AUDIO.resume(); })`.
 - 음소거 버튼은 `window.GAME_AUDIO.toggleMute()`로 토글.
+- Phaser 4 API 참고: [audio-and-sound](../web-game-builder/reference/phaser/audio-and-sound.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

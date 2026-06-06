@@ -72,7 +72,7 @@ glob: CREDITS.txt
 glob: engine/phaser.LICENSE.txt
 ```
 
-- `engine/phaser.min.js` → Phaser 3.90, MIT 라이선스 → `engine/phaser.LICENSE.txt` 고지 필수
+- `engine/phaser.min.js` → Phaser 4, MIT 라이선스 → `engine/phaser.LICENSE.txt` 고지 필수
 - `engine/pixelforge.js` → PixelForge, CC0 → `CREDITS.txt` 언급 권장
 - `engine/audio.js` → ChipAudio, CC0 → `CREDITS.txt` 언급 권장
 - `LICENSE` 파일: 게임 자체 라이선스 명시 (MIT, CC0, 독점 등)
@@ -97,3 +97,4 @@ glob: engine/phaser.LICENSE.txt
 - 라이선스 고지: `LICENSE`, `CREDITS.txt`, `engine/phaser.LICENSE.txt`
 - 참조: `skills/web-game-builder/SKILL.md` (IP 정책 섹션)
 - web-game-builder 워크플로의 품질 게이트. 상용 배포 전 필수 통과.
+- Phaser 4 엔진 전체 색인: [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

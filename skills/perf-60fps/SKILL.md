@@ -116,9 +116,18 @@ update() {
 
 고해상도 디바이스에서 픽셀 4배 이상 렌더링 방지.
 
+Phaser 4에는 game config `resolution`이 없다. DPR은 ScaleManager가 처리하며, 과도한 렌더 해상도가 문제면 `scale.zoom` 또는 `scale.max`로 캡한다.
+
 ```js
-// Phaser config
-resolution: Math.min(window.devicePixelRatio, 2),  // 최대 2x
+// Phaser config — resolution 설정 없이 ScaleManager에 위임
+scale: {
+  mode: Phaser.Scale.FIT,
+  autoCenter: Phaser.Scale.CENTER_BOTH,
+  width: W,
+  height: H,
+  // 과도한 확대를 막으려면 zoom 또는 max를 지정
+  // zoom: Phaser.Scale.MAX_ZOOM,
+},
 ```
 
 ### 6순위: 알파 오버레이·파티클 자제
@@ -169,3 +178,4 @@ setInterval(() => {
 - 모바일 DPR·Scale 설정: `mobile-webview-tune` 스킬 연계
 - 엔진 API 참조: `skills/web-game-builder/reference/engine-api.md`
 - web-game-builder 워크플로의 품질 게이트. 모바일 배포 전 필수 통과.
+- Phaser 4 API 참고: [game-object-components](../web-game-builder/reference/phaser/game-object-components.md), [groups-and-containers](../web-game-builder/reference/phaser/groups-and-containers.md), [particles](../web-game-builder/reference/phaser/particles.md), [game-setup-and-config](../web-game-builder/reference/phaser/game-setup-and-config.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

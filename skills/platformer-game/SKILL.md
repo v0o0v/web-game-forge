@@ -6,7 +6,7 @@ allowed-tools: Read, Write, Edit, Bash
 
 # platformer-game — 옆스크롤 2D 플랫포머
 
-옆스크롤 플랫포머 게임을 빠르게 스캐폴딩한다. `games/super-runner/`를 복제해 레벨·테마·캐릭터만 바꾸는 것이 가장 빠른 경로다. web-game-builder 플러그인의 전문 스킬이며 `engine/`(Phaser 3 + PixelForge + ChipAudio + MobileHarness)를 사용한다.
+옆스크롤 플랫포머 게임을 빠르게 스캐폴딩한다. `games/super-runner/`를 복제해 레벨·테마·캐릭터만 바꾸는 것이 가장 빠른 경로다. web-game-builder 플러그인의 전문 스킬이며 `engine/`(Phaser 4 + PixelForge + ChipAudio + MobileHarness)를 사용한다.
 
 ## 언제 사용
 - "마리오 같은 게임 만들어줘", "플랫포머 게임", "점프하고 적 밟는 게임"
@@ -68,3 +68,4 @@ update(time, delta) {
 - IP-safe(CC0/절차적): 'Mario' 이름·닌텐도 스프라이트 금지. 장르·메카닉은 자유.
 - 모바일 필수: `MobileHarness.scaleConfig`, `installDomGuards`, `TouchControlsClass` 포함.
 - 동작 예제 전체 코드는 `games/super-runner/game.js` 참조.
+- Phaser 4 API 참고: [physics-arcade](../web-game-builder/reference/phaser/physics-arcade.md), [sprites-and-images](../web-game-builder/reference/phaser/sprites-and-images.md), [animations](../web-game-builder/reference/phaser/animations.md), [cameras](../web-game-builder/reference/phaser/cameras.md), [tilemaps](../web-game-builder/reference/phaser/tilemaps.md), [input-keyboard-mouse-touch](../web-game-builder/reference/phaser/input-keyboard-mouse-touch.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

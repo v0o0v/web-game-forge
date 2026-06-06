@@ -92,3 +92,4 @@ Game-icons.net(CC0). 외부 에셋은 `games/<slug>/assets/`에 벤더링하고 
 - 픽셀 스타일은 `sprite-forge`(PixelForge), 스무스/벡터는 이 스킬(VectorForge). 게임당 하나.
 - 프리뷰: `games/style-preview/index.html` (4가지 스타일 쇼케이스).
 - IP-safe: 절차적 또는 CC0만. 엔진 API는 `reference/engine-api.md`.
+- Phaser 4 API 참고: [graphics-and-shapes](../web-game-builder/reference/phaser/graphics-and-shapes.md), [render-textures](../web-game-builder/reference/phaser/render-textures.md), [filters-and-postfx](../web-game-builder/reference/phaser/filters-and-postfx.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

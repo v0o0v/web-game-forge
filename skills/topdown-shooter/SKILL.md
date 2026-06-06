@@ -6,7 +6,7 @@ allowed-tools: Read, Write, Edit, Bash
 
 # topdown-shooter — 탑다운/트윈스틱 슈팅 게임
 
-위에서 내려다보는 시점(탑다운)의 슈팅 게임을 스캐폴딩한다. 8방향 이동과 조준 사격, 적 웨이브, 오브젝트 풀 구조를 갖춘다. web-game-builder 플러그인의 전문 스킬이며 `engine/`(Phaser 3 + PixelForge + ChipAudio + MobileHarness)를 사용한다.
+위에서 내려다보는 시점(탑다운)의 슈팅 게임을 스캐폴딩한다. 8방향 이동과 조준 사격, 적 웨이브, 오브젝트 풀 구조를 갖춘다. web-game-builder 플러그인의 전문 스킬이며 `engine/`(Phaser 4 + PixelForge + ChipAudio + MobileHarness)를 사용한다.
 
 ## 언제 사용
 - "탑다운 슈팅", "위에서 보는 총게임", "트윈스틱 슈터"
@@ -71,3 +71,4 @@ update() {
 - IP-safe(CC0/절차적): 외부 스프라이트·상표명 금지.
 - 모바일 필수: `MobileHarness.scaleConfig`, `installDomGuards`, 터치 조준 처리 포함.
 - 오브젝트 풀(`maxSize` + `get`/`killAndHide`)은 모바일 GC 부담을 줄이는 필수 패턴.
+- Phaser 4 API 참고: [physics-arcade](../web-game-builder/reference/phaser/physics-arcade.md), [input-keyboard-mouse-touch](../web-game-builder/reference/phaser/input-keyboard-mouse-touch.md), [groups-and-containers](../web-game-builder/reference/phaser/groups-and-containers.md), [particles](../web-game-builder/reference/phaser/particles.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

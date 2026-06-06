@@ -4,7 +4,7 @@ SUPER RUNNER — 크레딧 / 라이선스
 이 게임은 web-game-builder 플러그인의 플래그십 데모입니다.
 
 [엔진 / 라이브러리]
-- Phaser 3 (v3.90) — MIT License — Copyright (c) 2013-2025 Phaser Studio Inc.
+- Phaser 4 (v4.1.0) — MIT License — Copyright (c) 2013-2025 Phaser Studio Inc.
   (../../engine/phaser.LICENSE.txt)
 
 [그래픽]

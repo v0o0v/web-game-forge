@@ -38,8 +38,8 @@ allowed-tools: Read, Write, Edit, Bash
   (주의: `scene.input.pointers`는 씬-로컬이라 멀티터치 누락 버그 발생 가능)
 
 ### 5. DPR 제한
-- [ ] Phaser config `resolution: Math.min(window.devicePixelRatio, 2)` 설정
-- [ ] 또는 MobileHarness `scaleConfig` 반환값에 포함되는지 확인
+- [ ] Phaser 4에는 game config `resolution`이 없다. DPR은 ScaleManager가 처리하며, 과도한 렌더 해상도가 문제면 `scale.zoom` 또는 `scale.max`로 캡한다.
+- [ ] MobileHarness `scaleConfig(W, H)` 반환값이 `scale` 블록을 포함하는지 확인 — `resolution` 키가 있으면 제거
 
 ### 6. visibilitychange 오디오 재개
 - [ ] `MobileHarness.onResume(fn)` 또는 직접 `document.addEventListener('visibilitychange', ...)` 등록
@@ -56,32 +56,33 @@ allowed-tools: Read, Write, Edit, Bash
 // <meta name="viewport" content="width=device-width, initial-scale=1,
 //   maximum-scale=1, user-scalable=no, viewport-fit=cover">
 
-// game.js — Phaser config 예시
-import { scaleConfig, installDomGuards, TouchControls, onResume } from '../engine/mobile.js';
+// game.js — Phaser config 예시 (UMD 전역, ESM import 아님)
+// engine/mobile.js 는 window.MobileHarness 로 노출됨
+var W = 400, H = 600;
+MobileHarness.installDomGuards();
 
-const W = 400, H = 600;
-installDomGuards();
-
-const config = {
+var config = {
   type: Phaser.AUTO,
   width: W,
   height: H,
-  scale: scaleConfig(W, H),               // Scale.FIT + CENTER
-  resolution: Math.min(devicePixelRatio, 2),
+  scale: MobileHarness.scaleConfig(W, H),  // Scale.FIT + CENTER
+  // Phaser 4: resolution config 없음 — DPR은 ScaleManager가 처리
   scene: [Boot, Game],
 };
-const game = new Phaser.Game(config);
+var game = new Phaser.Game(config);
 
 // Boot 씬 — 오디오 언락 + 멀티터치
-class Boot extends Phaser.Scene {
-  create() {
+var Boot = new Phaser.Class({
+  Extends: Phaser.Scene,
+  initialize: function () { Phaser.Scene.call(this, { key: 'Boot' }); },
+  create: function () {
     this.input.addPointer(2);
-    this.input.once('pointerdown', () => audio.unlock());
-    onResume(() => audio.resume());
-    new TouchControls(W, H, GAME_INPUT);
+    this.input.once('pointerdown', function () { GAME_AUDIO.unlock(); });
+    MobileHarness.onResume(function () { GAME_AUDIO.resume(); });
+    new (MobileHarness.TouchControlsClass(W, H, GAME_INPUT));
     this.scene.start('Game');
   }
-}
+});
 ```
 
 ## 확인 방법
@@ -95,3 +96,4 @@ class Boot extends Phaser.Scene {
 - MobileHarness API: `skills/web-game-builder/reference/engine-api.md`
 - 예제 구현: `games/super-runner/` (TouchControls, onResume 실제 사용 사례)
 - web-game-builder 워크플로의 품질 게이트. 모바일 배포 전 필수 통과.
+- Phaser 4 API 참고: [scale-and-responsive](../web-game-builder/reference/phaser/scale-and-responsive.md), [game-setup-and-config](../web-game-builder/reference/phaser/game-setup-and-config.md), [input-keyboard-mouse-touch](../web-game-builder/reference/phaser/input-keyboard-mouse-touch.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

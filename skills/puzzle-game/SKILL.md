@@ -6,7 +6,7 @@ allowed-tools: Read, Write, Edit, Bash
 
 # puzzle-game — 그리드 기반 퍼즐 게임
 
-Tetris·Match-3·2048 등 2D 배열 보드 모델 기반의 퍼즐 게임을 스캐폴딩한다. 물리 엔진이 불필요한 순수 로직 기반 장르로, **보드 모델과 렌더를 분리**하는 것이 핵심이다. web-game-builder 플러그인의 전문 스킬이며 `engine/`(Phaser 3 + PixelForge + ChipAudio + MobileHarness)를 사용한다.
+Tetris·Match-3·2048 등 2D 배열 보드 모델 기반의 퍼즐 게임을 스캐폴딩한다. 물리 엔진이 불필요한 순수 로직 기반 장르로, **보드 모델과 렌더를 분리**하는 것이 핵심이다. web-game-builder 플러그인의 전문 스킬이며 `engine/`(Phaser 4 + PixelForge + ChipAudio + MobileHarness)를 사용한다.
 
 ## 언제 사용
 - "테트리스 만들어줘", "Tetris 클론", "낙하 블록 퍼즐"
@@ -82,3 +82,4 @@ spawnTile() {
 - IP-safe(CC0/절차적): 'Tetris'·'2048' 이름은 메카닉 설명용, 원작 스프라이트·폰트·상표 미사용.
 - 모바일 필수: `MobileHarness.scaleConfig`, `installDomGuards`. 스와이프 입력은 `pointerdown`/`pointerup` delta로 방향 판별.
 - 보드 모델과 렌더 분리가 버그 최소화의 핵심 — `update` 루프가 아닌 상태 변경 시점에만 `renderBoard()` 호출.
+- Phaser 4 API 참고: [input-keyboard-mouse-touch](../web-game-builder/reference/phaser/input-keyboard-mouse-touch.md), [time-and-timers](../web-game-builder/reference/phaser/time-and-timers.md), [tweens](../web-game-builder/reference/phaser/tweens.md), [data-manager](../web-game-builder/reference/phaser/data-manager.md), [groups-and-containers](../web-game-builder/reference/phaser/groups-and-containers.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

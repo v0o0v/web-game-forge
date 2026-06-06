@@ -3,13 +3,14 @@
 > **"슈퍼마리오 게임 만들어줘"** 한마디로, 모바일 웹뷰에서 잘 돌아가는 완성도 높은 2D 웹 게임을 자동으로 벼려내는 **Claude Code 플러그인**.
 
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Phaser](https://img.shields.io/badge/engine-Phaser%203.90-blueviolet)
+![Phaser](https://img.shields.io/badge/engine-Phaser%204.1-blueviolet)
 ![Skills](https://img.shields.io/badge/skills-16-orange)
+![Phaser refs](https://img.shields.io/badge/phaser--refs-28-informational)
 ![Assets](https://img.shields.io/badge/assets-CC0%20%2F%20IP--safe-success)
 ![Mobile](https://img.shields.io/badge/mobile--webview-ready-success)
 
 기존 클로드 코드에 "웹 게임 만들어줘"라고 하면 바닐라 JS 수준의 투박한 결과가 나옵니다.
-**WebGameForge는 게임 제작 의도를 자동 감지**해, 검증된 엔진 스택(Phaser 3 + 절차적 에셋/사운드 +
+**WebGameForge는 게임 제작 의도를 자동 감지**해, 검증된 엔진 스택(Phaser 4(4.1.0) + 절차적 에셋/사운드 +
 모바일 하니스)과 전문 스킬 14종으로 **스프라이트 애니메이션·HUD·터치 컨트롤·8비트 사운드까지 갖춘
 게임**을 만들어 줍니다.
 
@@ -27,8 +28,8 @@
 
 - **🪄 자동 발동** — "슈퍼마리오 만들어줘", "make a platformer", "탑다운 슈팅 만들어줘" 같은 자연어만으로
   관련 스킬이 자동 트리거됩니다. 별도 명령 암기가 필요 없습니다.
-- **🎮 Phaser 3 기반** — Arcade 물리·타일맵·스프라이트 애니메이션·카메라 추적·HUD가 전부 1급 API로
-  내장된 엔진(vendored `engine/phaser.min.js`, v3.90, MIT)을 사용합니다.
+- **🎮 Phaser 4 기반** — Arcade 물리·타일맵·스프라이트 애니메이션·카메라 추적·HUD가 전부 1급 API로
+  내장된 엔진(vendored `engine/phaser.min.js`, v4.1.0, MIT)을 사용합니다.
 - **📱 모바일 웹뷰 대응** — iOS WKWebView, 카카오/인스타 인앱 브라우저까지 커버하는 Scale.FIT,
   'Tap to start' 오디오 언락, 멀티터치 가상 D-패드+점프 버튼이 기본 포함됩니다.
 - **🎨 두 가지 아트 스타일** — 픽셀아트(`PixelForge`)와 **미려한 스무스/벡터**(`VectorForge` —
@@ -174,6 +175,14 @@ http://127.0.0.1:8766/games/super-runner/index.html
 각 전문 스킬은 tight한 description으로 관련 요청에만 발동하도록 설계해 스킬 listing 예산
 (컨텍스트 ~1%)을 관리합니다(총 ≈2.4k자, 개별 캡 1,536자 내).
 
+### 📚 Phaser 4 API 레퍼런스 라이브러리
+
+`skills/web-game-builder/reference/phaser/` 디렉터리에 **Phaser 공식 v4 에이전트용 스킬 문서
+28종 + INDEX.md** 를 벤더링하고 있습니다. 게임 생성 시 우리 스킬들이 이 레퍼런스를 직접 참조해
+Phaser 4 API 의 정확한 사용법(씬 라이프사이클·물리·스케일·입력·파티클 등)을 LLM 코드생성에
+반영합니다. 벤더링 출처: Phaser 공식 skills(MIT 라이선스). v3 API 혼용으로 인한 코드생성 오류를
+원천 차단합니다.
+
 ---
 
 ## ⚙️ 엔진 라이브러리 4종 (`engine/`)
@@ -252,7 +261,7 @@ web-game-forge/
 
 ## ⚖️ 라이선스 및 IP 안전 정책
 
-- **코드**: MIT (`LICENSE`) · **Phaser 3**: MIT (vendored, `engine/phaser.LICENSE.txt`)
+- **코드**: MIT (`LICENSE`) · **Phaser 4.1.0**: MIT (vendored, `engine/phaser.LICENSE.txt`)
 - **에셋**: 전부 CC0 또는 절차적 생성 (외부 저작물 미사용)
 - **닌텐도 미사용 원칙**: 마리오 스프라이트·사운드·이름 'Mario'·시그니처 조합(빨간모자+콧수염+
   파란 멜빵+배관공+이탈리안)을 절대 사용하지 않습니다.
@@ -276,6 +285,7 @@ chrome-devtools MCP로 실제 실행 검증 (super-runner):
 
 현재 **2D 전용, 플래그십은 슈퍼마리오류 플랫포머**입니다. 향후 검토:
 
+- ~~Phaser 4 업그레이드~~ — **완료** (v4.1.0 vendored + 공식 v4 레퍼런스 28종 벤더링)
 - 장르 템플릿을 동작 데모까지 승격 (현재 지침형 → super-runner 같은 실동작 코드)
 - Tiled 맵 에디터(.tmj) 연동
 - Phaser 가상조이스틱 플러그인 검토 (현재 자체 D-패드)
