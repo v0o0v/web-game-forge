@@ -213,7 +213,7 @@
 
 ## 4. 퍼즐 조합 설계법 (명확화 단계에서)
 
-WebGameForge '요청 명확화'(web-game-builder SKILL.md 0단계, make-game 커맨드, puzzle-game SKILL.md 0번 레시피)에서 이 사전을 의사결정 도구로 쓴다. 코드 작성 전 AskUserQuestion으로 핵심만 묶어 묻되 4단계를 거쳐 답을 'puzzle-game 스킬 라우팅'으로 잇는다.
+WebGameForge '요청 명확화'(web-game-builder SKILL.md 0단계, make-game 커맨드, puzzle-game SKILL.md 0번 레시피)에서 이 사전을 의사결정 도구로 쓴다. 코드 작성 전, [reference/game-interview.md](../../game-interview.md)의 **깊은 1문1답 인터뷰**(`deep-interview` 적응판)로 한 차원씩 캐되 — 이 사전은 **매 라운드 Claude가 제안할 참신한 퍼즐 컨셉의 출처**다. 아래 4단계로 제안·조합한 답을 'puzzle-game 스킬 라우팅'으로 잇는다(객관식 1회로 끝내지 말 것).
 
 ### 1단계 — 퍼즐 하위장르/아키타입 제시
 요청이 모호하면('퍼즐 만들어줘') combination_patterns에서 서로 다른 퍼즐 코어를 대표하는 3~4개를 AskUserQuestion 옵션으로 제시한다. 라벨은 친근한 이름, 설명은 example 한 문장. 퍼즐 코어 7종(낙하/매치/병합/연역/공간/물리/규칙)을 고르게 섞어 노출한다(예: '병합 하이스코어'=병합, '공간 푸시 머리싸움'=공간, '연역 그리드 데일리'=연역, '규칙발견 매치'=규칙). 첫 옵션에 무난한 추천을 '(추천)'으로(캐주얼이면 '병합 하이스코어', 사고형 선호면 '공간 푸시 머리싸움'). 요청에 이미 단서가 있으면('매치3', '스도쿠류', '소코반') 그 코어를 고정하고 이 단계를 건너뛴다.
