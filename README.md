@@ -200,6 +200,13 @@ Phaser 4 API 의 정확한 사용법(씬 라이프사이클·물리·스케일·
 새 게임에 녹입니다.** 분석 대상은 **메카닉·재미뿐** — 이름·캐릭터·스프라이트·음악 등 저작물은 쓰지 않습니다.
 색인·사용법: [`game-dna/INDEX.md`](skills/web-game-builder/reference/game-dna/INDEX.md).
 
+**🧩 퍼즐 심화 서브라이브러리** — 퍼즐은 별도로 **20종 심화 분석**(`game-dna/puzzle/`)으로 확장했습니다.
+낙하·실시간(Tetris·Puyo Puyo·Dr. Mario·Lumines·Puzzle Bobble), 매치·병합(Bejeweled·Candy Crush·Puzzle & Dragons·2048·Threes),
+논리·연역(Sudoku·Picross·Minesweeper·Wordle·Flow Free), 공간·물리·규칙(Sokoban·Baba Is You·Monument Valley·Lemmings·Cut the Rope)의
+**4개 하위장르 × 5종 + 퍼즐 전용 재미요소 사전(연역·규칙발견·공간추론·선계획 등 특화 8종 포함) + 조합 레시피 14종**
+([`puzzle/INDEX.md`](skills/web-game-builder/reference/game-dna/puzzle/INDEX.md)). `puzzle-game` 스킬이
+연역 그리드·규칙조작·공간 푸시·물리 신규 하위장르 스캐폴드까지 다룹니다.
+
 ---
 
 ## ⚙️ 엔진 라이브러리 4종 (`engine/`)
@@ -260,7 +267,7 @@ Web Audio API만으로 8비트 효과음과 **오리지널** BGM을 코드 합�
 web-game-forge/
 ├── .claude-plugin/  plugin.json · marketplace.json   # 플러그인 매니페스트
 ├── skills/                                            # 15종 스킬 (메인 1 + 전문 14)
-│   ├── web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 35종 분석)
+│   ├── web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 분석 + game-dna/puzzle/ 퍼즐 20종 심화)
 │   ├── platformer-game/  topdown-shooter/  arcade-classic/  puzzle-game/  endless-runner/
 │   ├── sprite-forge/  vector-graphics/  chip-sound/  level-designer/  game-ui-hud/  juice-fx/
 │   └── mobile-webview-tune/  game-qa/  ip-license-guard/  perf-60fps/

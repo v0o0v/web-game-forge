@@ -16,7 +16,7 @@ Tetris·Match-3·2048 등 2D 배열 보드 모델 기반의 퍼즐 게임을 스
 
 ## 핵심 레시피
 
-0. **스타일·테마 미지정이면 먼저 물어보기** — 아트 스타일(픽셀 `PixelForge` / 미려한 스무스 `VectorForge`)·테마·분량이 요청에 명시돼 있지 않으면, 코드 전에 `AskUserQuestion`으로 확인한다 (web-game-builder의 '요청 명확화' 참고). 어떤 재미요소를 넣을지 막막하면 [game-dna/puzzle.md](../web-game-builder/reference/game-dna/puzzle.md)(Tetris·Candy Crush·2048·Baba Is You 등 분석)와 [fun-elements.md](../web-game-builder/reference/game-dna/fun-elements.md)의 조합 설계법으로 아키타입·재미요소를 제안한다.
+0. **스타일·테마 미지정이면 먼저 물어보기** — 아트 스타일(픽셀 `PixelForge` / 미려한 스무스 `VectorForge`)·테마·분량이 요청에 명시돼 있지 않으면, 코드 전에 `AskUserQuestion`으로 확인한다 (web-game-builder의 '요청 명확화' 참고). 어떤 퍼즐·재미요소를 조합할지 막막하면 **퍼즐 심화 라이브러리 [game-dna/puzzle/INDEX.md](../web-game-builder/reference/game-dna/puzzle/INDEX.md)**(20종 — 낙하·매치/병합·논리/연역·공간/물리·규칙)와 [puzzle/fun-elements.md](../web-game-builder/reference/game-dna/puzzle/fun-elements.md)의 §4 조합 설계법으로 하위장르 아키타입·재미요소를 제안한다(낙하/매치/병합 기존 레시피 + 연역 그리드·규칙조작·공간 푸시·물리 신규 스캐폴드).
 1. `games/<slug>/` 스캐폴딩. `index.html`은 super-runner의 모바일 하니스 + 스크립트 로드 순서 따르기. 물리 불필요하므로 `physics` 설정 생략 가능.
 2. **보드 모델 / 렌더 분리**: `board[row][col]` 2D 배열이 유일한 상태 소스. 렌더는 `renderBoard()`가 매 변경 후 호출해 Phaser `Image`/`Rectangle`을 갱신한다. `update` 루프에서 직접 그리지 않는다.
 3. 장르별 핵심 루프는 아래 참고.
@@ -40,6 +40,14 @@ Tetris·Match-3·2048 등 2D 배열 보드 모델 기반의 퍼즐 게임을 스
 - 4×4 보드. 슬라이드 방향(← → ↑ ↓) 입력 시 해당 방향으로 모든 타일 이동+머지(같은 숫자 2개 합치기).
 - 머지된 타일은 같은 방향으로 다시 머지 안 됨(플래그로 표시). 이동 후 빈 칸에 랜덤(2 또는 4) 타일 스폰.
 - 2048 타일 달성 = 승리. 빈 칸 없고 이동 불가 = 패배.
+
+### 신규 하위장르 스캐폴드 (game-dna/puzzle 심화 20종 기반)
+보드모델/렌더 분리 원칙은 동일. 재미요소·조합·재현 노트 전체는 [game-dna/puzzle/INDEX.md](../web-game-builder/reference/game-dna/puzzle/INDEX.md), 재미요소 사전·조합 레시피는 [puzzle/fun-elements.md](../web-game-builder/reference/game-dna/puzzle/fun-elements.md).
+- **연역 그리드 (Sudoku·Picross·Minesweeper·Wordle)**: 셀에 `state`(unknown/filled/marked) + `candidates`(후보 비트마스크). 입력 시점에만 제약 전파 1패스(행/열/박스/단서 라인). 생성 단계에서 백트래킹 솔버로 **유일해 + 추측 불필요**를 검증(FE-FAIRNESS 핵심). undo 스택·펜슬마크 제공. 실시간 가속 금지(추론 시간 보장).
+- **규칙조작 (Baba Is You류)**: Sokoban 밀기 코어 재사용 + `isYou`/`isPush`/`isWin`/`isStop` 비트마스크 규칙엔진을 **매 수 직후 재평가**. 단어블록도 그냥 밀리는 보드 객체. 규칙 종류는 소수로 유지(폭발 ⚠️), `game-qa`로 창발 버그 검증, undo 필수.
+- **공간 푸시 (Sokoban)**: 방향 벡터 한 칸 이동(당기기 불가) + 교착 감지. 머리싸움 긴장형이면 undo 제한, 실험형이면 풀개방. 이동 수 카운트 → 별 1~3 판정.
+- **공간 경로 (Flow Free)**: `pointermove` 드래그로 인접 셀 경로 트레이스, 선 겹침 금지, 모든 칸 채움 판정. perfect(최소 교차)로 `FE-OPTIMIZE`.
+- **물리 (Cut the Rope류)**: 정밀 강체는 Matter(⚠️) 대신 **단순 임펄스 + 진자 근사**로 결정성·신뢰도 확보. 절단 횟수 제약 + 별 3개 판정. 궤적을 예측 가능하게 튜닝(FE-FAIRNESS).
 
 ## 짧은 스니펫
 
