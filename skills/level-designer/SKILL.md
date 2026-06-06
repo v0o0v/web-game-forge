@@ -137,3 +137,4 @@ Tiled 방식은 대형 맵에 유리하나, 타일 이미지가 CC0여야 IP-saf
 - `cx(col)`, `cy(row)` 헬퍼: `col * TILE + TILE/2` — 타일 중심 픽셀 좌표.
 - staticGroup 생성 후 반드시 `.refreshBody()` 호출.
 - 레벨 폭 카운팅 실수를 줄이려면 피처를 열 번호 오름차순으로 정렬해 작성한다.
+- Phaser 4 API 참고: [tilemaps](../web-game-builder/reference/phaser/tilemaps.md), [groups-and-containers](../web-game-builder/reference/phaser/groups-and-containers.md), [geometry-and-math](../web-game-builder/reference/phaser/geometry-and-math.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

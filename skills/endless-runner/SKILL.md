@@ -6,7 +6,7 @@ allowed-tools: Read, Write, Edit, Bash
 
 # endless-runner — 무한 러너 / 자동 전진 게임
 
-자동 전진(또는 배경·장애물 좌측 이동)하며 단일 입력(탭=점프/플랩)으로 플레이하는 무한 러너를 스캐폴딩한다. 패럴랙스 스크롤, 장애물 풀링, 거리 점수 구조를 갖춘다. web-game-builder 플러그인의 전문 스킬이며 `engine/`(Phaser 3 + PixelForge + ChipAudio + MobileHarness)를 사용한다.
+자동 전진(또는 배경·장애물 좌측 이동)하며 단일 입력(탭=점프/플랩)으로 플레이하는 무한 러너를 스캐폴딩한다. 패럴랙스 스크롤, 장애물 풀링, 거리 점수 구조를 갖춘다. web-game-builder 플러그인의 전문 스킬이며 `engine/`(Phaser 4 + PixelForge + ChipAudio + MobileHarness)를 사용한다.
 
 ## 언제 사용
 - "무한 달리기 게임", "endless runner", "자동 전진 게임"
@@ -104,3 +104,4 @@ spawnObstacle() {
 - 모바일 필수: `MobileHarness.scaleConfig`, `installDomGuards`. 점프 입력은 화면 전체 탭으로 단순하게.
 - 난이도 곡선: `speed = baseSpeed + elapsedTime * factor`로 선형 증가가 가장 밸런스 잡기 쉽다.
 - 최고 점수 영속화: `localStorage.setItem('highscore', score)`로 새로고침 후에도 유지.
+- Phaser 4 API 참고: [physics-arcade](../web-game-builder/reference/phaser/physics-arcade.md), [sprites-and-images](../web-game-builder/reference/phaser/sprites-and-images.md), [groups-and-containers](../web-game-builder/reference/phaser/groups-and-containers.md), [tweens](../web-game-builder/reference/phaser/tweens.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

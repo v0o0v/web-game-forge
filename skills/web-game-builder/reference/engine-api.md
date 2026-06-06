@@ -1,6 +1,6 @@
 # 엔진 API 레퍼런스
 
-`engine/` 의 3개 라이브러리 API. 게임 `game.js` 는 이들 + vendored Phaser 3 만 쓴다.
+`engine/` 의 3개 라이브러리 API. 게임 `game.js` 는 이들 + vendored Phaser 4(4.1.0) 만 쓴다.
 로드 순서: `phaser.min.js` → `pixelforge.js` → `audio.js` → `mobile.js` → `game.js`.
 
 ---
@@ -47,6 +47,7 @@ scene.anims.create({
 ```
 
 > 팁: 게임 config 에 `pixelArt: true, roundPixels: true` 를 켜면 확대 시 또렷한 픽셀.
+> Phaser 4에서는 `roundPixels` 기본값이 **false**이므로 픽셀아트 게임은 반드시 명시적으로 `true`로 설정할 것.
 
 ---
 

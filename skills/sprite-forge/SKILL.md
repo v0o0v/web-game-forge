@@ -101,3 +101,4 @@ this.tweens.add({ targets: star, y: 72, duration: 800, yoyo: true, repeat: -1, e
 - web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(CC0/절차적).
 - `PixelForge.buildAll` 내장 키: `hero`, `enemy`, `coin`, `ground`, `dirt`, `brick`, `qblock`, `pipeTop`, `pipeBody`, `mushroom`, `flag`, `pole`, `cloud`, `hill`, `bush`.
 - config에 `pixelArt: true, roundPixels: true` 필수 — 확대 시 또렷한 픽셀.
+- Phaser 4 API 참고: [sprites-and-images](../web-game-builder/reference/phaser/sprites-and-images.md), [animations](../web-game-builder/reference/phaser/animations.md), [loading-assets](../web-game-builder/reference/phaser/loading-assets.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

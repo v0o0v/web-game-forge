@@ -1,7 +1,7 @@
 /* ============================================================================
  * SUPER RUNNER — web-game-builder 플래그십 데모 (마리오류 2D 플랫포머)
  * ----------------------------------------------------------------------------
- * 엔진: Phaser 3.90 (MIT) + PixelForge(절차적 스프라이트) + ChipAudio(절차적 사운드)
+ * 엔진: Phaser 4.1.0 (MIT) + PixelForge(절차적 스프라이트) + ChipAudio(절차적 사운드)
  *       + MobileHarness(모바일 웹뷰 스케일/터치/오디오 언락)
  * 에셋: 100% 코드 생성 (CC0 / IP-safe). 닌텐도 마리오 에셋·이름·시그니처 미사용.
  * 캐릭터: '빨간 모자 러너'(오리지널) — 색 단서 1개(빨간 모자)만 남기고 나머지는 변경.
@@ -591,7 +591,9 @@
       }
 
       // 적 AI (벽/월드끝에서 방향 전환)
-      this.enemies.children.iterate(function (e) {
+      // Phaser 4: Group.children 는 네이티브 Set 이라 .iterate() 가 없다.
+      // getChildren()(배열) + slice()(순회 중 destroy 안전) 로 대체.
+      this.enemies.getChildren().slice().forEach(function (e) {
         if (!e || e.dead) return;
         if (e.body.blocked.left) { e.setVelocityX(26); e.setFlipX(true); }
         else if (e.body.blocked.right) { e.setVelocityX(-26); e.setFlipX(false); }
@@ -599,8 +601,8 @@
         if (e.y > (LEVEL.rows * TILE + 40)) e.destroy();
       });
 
-      // 아이템(버섯) 월드 끝 처리
-      this.items.children.iterate(function (m) {
+      // 아이템(버섯) 월드 끝 처리 (Phaser 4: getChildren() 배열 순회)
+      this.items.getChildren().forEach(function (m) {
         if (!m) return;
         if (m.body.blocked.left) m.setVelocityX(40);
         else if (m.body.blocked.right) m.setVelocityX(-40);

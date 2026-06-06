@@ -147,3 +147,4 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right)
 - UI Scene은 `setScrollFactor(0)`이 기본(카메라 독립) — 직접 설정 불필요.
 - HUD는 update()에서 매 프레임 setText를 호출해도 동작하지만, 성능상 값 변화 감지 후 갱신 권장.
 - 아이콘은 `PixelForge.buildAll`이 등록한 스프라이트(coin, hero 등) 또는 커스텀 bake 스프라이트를 재활용.
+- Phaser 4 API 참고: [text-and-bitmaptext](../web-game-builder/reference/phaser/text-and-bitmaptext.md), [scenes](../web-game-builder/reference/phaser/scenes.md), [scale-and-responsive](../web-game-builder/reference/phaser/scale-and-responsive.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

@@ -6,7 +6,7 @@ allowed-tools: Read, Write, Edit, Bash
 
 # arcade-classic — 클래식 아케이드 게임
 
-Breakout·Snake·Pong·Space Invaders 등 고전 아케이드 게임 4종의 핵심 루프를 스캐폴딩한다. 물리 의존도가 낮고 직접 좌표 이동으로 구현해도 충분하다. web-game-builder 플러그인의 전문 스킬이며 `engine/`(Phaser 3 + PixelForge + ChipAudio + MobileHarness)를 사용한다.
+Breakout·Snake·Pong·Space Invaders 등 고전 아케이드 게임 4종의 핵심 루프를 스캐폴딩한다. 물리 의존도가 낮고 직접 좌표 이동으로 구현해도 충분하다. web-game-builder 플러그인의 전문 스킬이며 `engine/`(Phaser 4 + PixelForge + ChipAudio + MobileHarness)를 사용한다.
 
 ## 언제 사용
 - "벽돌깨기", "Breakout 만들어줘"
@@ -78,3 +78,4 @@ update(time, delta) {
 - IP-safe(CC0/절차적): 게임 이름('Breakout'·'Pong' 등)은 메카닉 설명용, 스프라이트·로고 무단 복제 금지.
 - 모바일 필수: `MobileHarness.scaleConfig`, `installDomGuards`. 터치 입력은 장르별로 스와이프·탭·D-패드 적절히 선택.
 - 물리 엔진보다 직접 좌표 이동이 이 장르들에 더 직관적이고 버그가 적다.
+- Phaser 4 API 참고: [physics-arcade](../web-game-builder/reference/phaser/physics-arcade.md), [input-keyboard-mouse-touch](../web-game-builder/reference/phaser/input-keyboard-mouse-touch.md), [geometry-and-math](../web-game-builder/reference/phaser/geometry-and-math.md), [graphics-and-shapes](../web-game-builder/reference/phaser/graphics-and-shapes.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

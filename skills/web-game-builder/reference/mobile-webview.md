@@ -16,6 +16,7 @@
 - [ ] **iOS JS 가드**: `gesturestart`/멀티터치 `touchstart`/더블탭/`touchmove`(passive:false)
       `preventDefault`. (`MobileHarness.installDomGuards()`)
 - [ ] **`type: Phaser.AUTO`**: WebGL → Canvas 폴백(불안정한 인앱 브라우저 대비).
+      단, Phaser 4에서 Canvas 렌더러는 deprecated — 가급적 WebGL 유지. 폴백 시에도 동작은 하나 향후 제거 예정.
 - [ ] **Scale.FIT + CENTER_BOTH**, 고정 디자인 해상도 1개. (`MobileHarness.scaleConfig`)
 - [ ] **멀티터치**: `this.input.addPointer(2+)` — D-패드 + 점프 동시 입력.
       (`MobileHarness.TouchControlsClass` 가 처리)
@@ -28,6 +29,8 @@
       스트립 텍스처를 굽는다 — 작은 게임엔 충분).
 - [ ] 플랫포머는 **Arcade Physics**(Matter 아님). 화면 밖 바디는 컬링/비활성.
 - [ ] **devicePixelRatio ≤ 2** 로 제한. 픽셀아트는 `pixelArt:true, roundPixels:true`.
+      Phaser 4에는 game config `resolution` 옵션이 없다 — DPR 처리는 ScaleManager가 담당.
+      고해상도 제어가 필요하면 `scale.zoom` 또는 `scale.max`로 조정할 것(`resolution: Math.min(devicePixelRatio,2)` 패턴은 v4 미적용).
 - [ ] 동적 `Text` 남발 금지(매 변경 시 재래스터화). HUD 숫자는 변경 시에만 갱신.
 - [ ] 전체화면 알파 오버레이/과도한 파티클(필레이트 킬러) 자제.
 

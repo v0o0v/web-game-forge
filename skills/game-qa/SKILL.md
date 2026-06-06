@@ -121,3 +121,4 @@ console.assert(livesAfter < livesBefore, '충돌 피해 미적용');
 - 성능 이슈 발견 시 → `perf-60fps` 스킬 연계
 - 모바일 동작 이슈 → `mobile-webview-tune` 스킬 연계
 - web-game-builder 워크플로의 품질 게이트. 배포 전 필수 통과.
+- Phaser 4 API 참고: [scenes](../web-game-builder/reference/phaser/scenes.md), [time-and-timers](../web-game-builder/reference/phaser/time-and-timers.md), [events-system](../web-game-builder/reference/phaser/events-system.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).
