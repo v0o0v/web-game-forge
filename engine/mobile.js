@@ -53,12 +53,27 @@
     doc.addEventListener('touchmove', function (e) {
       e.preventDefault();
     }, { passive: false });
-    // 백그라운드 복귀 시 오디오 재개 훅 지점 (게임에서 onResume 지정)
+    // 가시성 변화: 화면이 가려지면 사운드 정지(suspend), 복귀하면 재개(resume).
+    //  - 게임이 onHide/onResume 을 지정하면 그것을 우선 사용.
+    //  - 미지정 시 전역 GAME_AUDIO 를 자동 suspend/resume → 백그라운드에서 소리가 지속되는 것 방지.
     doc.addEventListener('visibilitychange', function () {
-      if (!doc.hidden && MobileHarness._onResume) MobileHarness._onResume();
+      if (doc.hidden) {
+        if (MobileHarness._onHide) MobileHarness._onHide();
+        else if (global.GAME_AUDIO && global.GAME_AUDIO.suspend) global.GAME_AUDIO.suspend();
+      } else {
+        if (MobileHarness._onResume) MobileHarness._onResume();
+        else if (global.GAME_AUDIO && global.GAME_AUDIO.resume) global.GAME_AUDIO.resume();
+      }
     });
+    // 페이지 이탈/언로드(bfcache·탭 종료 직전) 시에도 사운드 정지
+    if (global.addEventListener) {
+      global.addEventListener('pagehide', function () {
+        if (global.GAME_AUDIO && global.GAME_AUDIO.suspend) global.GAME_AUDIO.suspend();
+      });
+    }
   };
   MobileHarness.onResume = function (fn) { MobileHarness._onResume = fn; };
+  MobileHarness.onHide = function (fn) { MobileHarness._onHide = fn; };
 
   // ===========================================================================
   // TouchControls — 멀티터치 가상 컨트롤 (항상 최상단 Scene)

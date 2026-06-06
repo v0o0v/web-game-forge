@@ -41,9 +41,10 @@ allowed-tools: Read, Write, Edit, Bash
 - [ ] Phaser 4에는 game config `resolution`이 없다. DPR은 ScaleManager가 처리하며, 과도한 렌더 해상도가 문제면 `scale.zoom` 또는 `scale.max`로 캡한다.
 - [ ] MobileHarness `scaleConfig(W, H)` 반환값이 `scale` 블록을 포함하는지 확인 — `resolution` 키가 있으면 제거
 
-### 6. visibilitychange 오디오 재개
-- [ ] `MobileHarness.onResume(fn)` 또는 직접 `document.addEventListener('visibilitychange', ...)` 등록
-- [ ] 탭 전환·홈 복귀 후 오디오가 자동 재개되는지 확인
+### 6. visibilitychange 오디오 정지/재개 (백그라운드 소리 차단)
+- [ ] `MobileHarness.installDomGuards()` 호출 시 자동: 탭이 가려지면 `GAME_AUDIO.suspend()`(BGM 타이머 정지 + ctx suspend), 복귀하면 `resume()`(BGM 자동 재가동). `pagehide` 에서도 suspend.
+- [ ] 탭 전환·홈 복귀·페이지 이탈 후 **소리가 멈췄다가 복귀 시 재개**되는지 확인 (로컬 서버를 내려도 열린 탭이 계속 소리 내면 안 됨)
+- [ ] 커스텀이 필요하면 `MobileHarness.onHide(fn)` / `onResume(fn)` 으로 덮어쓰기
 
 ### 7. 렌더러
 - [ ] Phaser config `type: Phaser.AUTO` (WebGL 우선, Canvas 폴백)

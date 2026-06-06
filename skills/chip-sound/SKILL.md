@@ -101,6 +101,6 @@ function sfxGameOver() {
 ## 연계 / 원칙
 - web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(CC0/절차적).
 - **BGM은 반드시 오리지널**. 닌텐도·세가 등 기존 게임 음악의 멜로디·화음 진행 인용 금지.
-- 백그라운드 복귀 시 `GAME_AUDIO.resume()` 호출: `MobileHarness.onResume(function() { GAME_AUDIO.resume(); })`.
+- 가시성 자동 처리: `MobileHarness.installDomGuards()` 가 탭이 가려지면 `GAME_AUDIO.suspend()`(BGM 정지+ctx suspend), 복귀하면 `resume()`(BGM 자동 재가동)을 호출 → **백그라운드/탭 이탈 시 소리가 계속 나지 않는다**(서버를 내려도 무관). 커스텀은 `MobileHarness.onHide/onResume(fn)`.
 - 음소거 버튼은 `window.GAME_AUDIO.toggleMute()`로 토글.
 - Phaser 4 API 참고: [audio-and-sound](../web-game-builder/reference/phaser/audio-and-sound.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).
