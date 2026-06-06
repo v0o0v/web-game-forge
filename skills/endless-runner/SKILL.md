@@ -16,7 +16,7 @@ allowed-tools: Read, Write, Edit, Bash
 
 ## 핵심 레시피
 
-0. **스타일·테마 미지정이면 먼저 물어보기** — 아트 스타일(픽셀 `PixelForge` / 미려한 스무스 `VectorForge`)·테마·분량이 요청에 명시돼 있지 않으면, 코드 전에 `AskUserQuestion`으로 확인한다 (web-game-builder의 '요청 명확화' 참고).
+0. **스타일·테마 미지정이면 먼저 물어보기** — 아트 스타일(픽셀 `PixelForge` / 미려한 스무스 `VectorForge`)·테마·분량이 요청에 명시돼 있지 않으면, 코드 전에 `AskUserQuestion`으로 확인한다 (web-game-builder의 '요청 명확화' 참고). 어떤 재미요소를 넣을지 막막하면 [game-dna/runners.md](../web-game-builder/reference/game-dna/runners.md)(Flappy Bird·Geometry Dash·Canabalt 등 분석)와 [fun-elements.md](../web-game-builder/reference/game-dna/fun-elements.md)의 조합 설계법으로 아키타입·재미요소를 제안한다.
 1. `games/<slug>/` 스캐폴딩. `index.html`은 super-runner의 모바일 하니스 + 스크립트 로드 순서 따르기.
 2. **월드 이동 vs 카메라 이동**: 플레이어 x좌표는 고정, 장애물·배경을 매 프레임 왼쪽으로 이동시키는 방식이 가장 단순하다. 또는 `camera.scrollX += speed * dt`로 카메라를 전진시켜도 됨.
 3. **패럴랙스 스크롤**: `tileSprite`(배경 레이어)를 속도 차이로 이동 — `bg.tilePositionX += 0.5 * speed * dt`, `ground.tilePositionX += speed * dt`. 또는 2개 이미지를 교대로 재배치.

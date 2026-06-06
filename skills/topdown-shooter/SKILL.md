@@ -15,7 +15,7 @@ allowed-tools: Read, Write, Edit, Bash
 
 ## 핵심 레시피
 
-0. **스타일·테마 미지정이면 먼저 물어보기** — 아트 스타일(픽셀 `PixelForge` / 미려한 스무스 `VectorForge`)·테마·분량이 요청에 명시돼 있지 않으면, 코드 전에 `AskUserQuestion`으로 확인한다 (web-game-builder의 '요청 명확화' 참고).
+0. **스타일·테마 미지정이면 먼저 물어보기** — 아트 스타일(픽셀 `PixelForge` / 미려한 스무스 `VectorForge`)·테마·분량이 요청에 명시돼 있지 않으면, 코드 전에 `AskUserQuestion`으로 확인한다 (web-game-builder의 '요청 명확화' 참고). 어떤 재미요소를 넣을지 막막하면 [game-dna/shooters-roguelite.md](../web-game-builder/reference/game-dna/shooters-roguelite.md)(Vampire Survivors·Brotato·Geometry Wars 등 분석)와 [fun-elements.md](../web-game-builder/reference/game-dna/fun-elements.md)의 조합 설계법으로 아키타입·재미요소를 제안한다.
 1. `games/<slug>/` 스캐폴딩. `index.html`은 super-runner의 모바일 하니스 + 스크립트 로드 순서(phaser → pixelforge → audio → mobile → game) 따르기.
 2. **중력 0**: `physics: { arcade: { gravity: { y: 0 }, debug: false } }`. 탑다운에서는 중력이 없다.
 3. **8방향 이동**: `setVelocity(vx, vy)`. 대각선 이동 시 벡터 정규화(`Phaser.Math.Vector2.normalize`)로 속도 일정하게 유지.
