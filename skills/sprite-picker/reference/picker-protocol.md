@@ -70,6 +70,42 @@ node skills/sprite-picker/picker/serve.mjs
   루트 — 다운로드분 풀뷰용 `assets-library/`·`games/<slug>/assets/`…). `/ws/` 는 닷파일(.git 등)·traversal 차단.
 - 정적 `python -m http.server` 도 가능하나 그땐 자동 회수·풀뷰(/ws/)·커밋 썸네일(/catalog/)이 안 되므로 폴백 전용.
 
+**신규 엔드포인트 (다운로드 큐 + 편집기):**
+
+| 엔드포인트 | 메서드 | 설명 |
+|---|---|---|
+| `/__sprite_picker_download_request` | POST | 팩 다운로드 큐 적재. body: `{packId, name, sourceId, safetyTier, downloadUrl, url}`. CC0 아닌 팩은 막음. 중복 packId 는 현재 상태 반환. 응답: `{ok, queued, duplicate}`. |
+| `/__sprite_picker_downloads` | GET | 큐 전체 JSON 반환(`{version,requests[]}`). 피커가 진행 상태 뱃지 표시에 사용. |
+| `/__sprite_picker_library_edit` | POST | 라이브러리 항목 수정. body: `{id, patch:{name?, frameConfig?, frames?, anims?, excludedFrames?}}`. `library.json` + `analysis.json` 동기 갱신. 응답: `{ok}`. |
+
+모든 신규 핸들러는 기존 CORS 헤더·OPTIONS 처리·경로 traversal 가드 패턴을 따른다.
+
+**다운로드 버튼 (카탈로그 카드):**
+- `safetyTier:"cc0"` 이고 아직 라이브러리에 없는 팩 카드에 "⬇ 다운로드" 버튼 표시.
+  (`isDownloaded` = library 항목 중 `sourcePackId === it.id` 존재 여부로 판정.)
+- 클릭 → `POST /__sprite_picker_download_request` → 성공 시 낙관적으로 카드에 "요청됨" 뱃지.
+- 실패/서버 없음: 비차단 토스트("서버 필요 — `node serve.mjs`").
+- 시작 시 `GET /__sprite_picker_downloads` 로 큐 로드 → 이미 `queued`/`done` 인 packId 는 버튼 대신 상태 뱃지.
+- 사용자가 채팅으로 돌아오면 Claude 가 큐를 처리한다("받아서 분석할게요 — 채팅으로 돌아가세요" 안내).
+
+**편집기 모달 (다운로드된 카드):**
+- 다운로드된 library 카드에 "편집" 버튼 추가 → 에디터 모달 열림(기존 lightbox 와 별개).
+- 모달 기능(canvas, 무의존성):
+  - 시트 렌더 + 프레임 오버레이(`frames[]` 있으면 그 영역, 없으면 `frameConfig` 그리드 라인).
+  - **그리드 조정**: `frameWidth`/`frameHeight`/`margin`/`spacing` 입력 → 즉시 재오버레이.
+  - **빈 프레임 제외 토글**: 그리드 칸 클릭 → `excludedFrames` 토글(시각 표시).
+  - **자유 영역**: 캔버스 위 드래그 → `frames[]` 에 새 사각형 추가. 기존 영역 클릭 선택 → 리사이즈/삭제/병합.
+  - **이름 지정**: 선택 프레임/영역에 `name` 입력.
+  - **애니 정의**: 프레임 다중선택 → 이름+frameRate 입력 → `anims[]` 추가. 애니 미리보기(setInterval) 옵션.
+  - **항목 이름 변경**: `name` 필드 편집.
+  - **저장**: `POST /__sprite_picker_library_edit {id, patch}`. 저장 후 모달 내 state 갱신 + 토스트.
+- `frames[]` 렌더는 풀뷰(`openFull`/`frameCanvas`)에서도 비균일 영역을 지원한다.
+
+> **검증 메모(2026-06-08).** 에디터는 구현·E2E 검증됨 — `#lightbox` 재사용, 그리드↔자유 영역 모드 전환,
+> 그리드 폭/높이/여백/간격 즉시 재오버레이(예: tilemap 18px→16px 변경 시 프레임 수 실시간 재계산),
+> 자유 영역은 캔버스 드래그로 영역 생성·8방위 리사이즈·다중선택 병합, 애니 미리보기, 저장 왕복
+> (`library_edit` → `library.json` 영속)까지 확인. 콘솔 에러 0.
+
 ### ④ 사용자 슬롯 배정
 - **슬롯 클릭 → 활성화 → 갤러리 이미지 클릭** 하면 그 슬롯에 배정되고 다음 빈 슬롯으로 자동 이동.
 - 또는 **이미지를 슬롯으로 드래그&드롭**.

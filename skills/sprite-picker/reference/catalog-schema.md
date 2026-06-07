@@ -87,29 +87,104 @@ sprite-picker 가 쓰는 3개 데이터 파일의 형식. 모두 JSON. **카탈�
 플러그인이 아니라 **게임 작업공간 루트**에 있다(설치처마다 다름). sprite-picker 가 에셋을 실제
 적용할 때마다 여기에 누적한다. 피커의 "이전 사용" 탭이 이 파일을 읽는다. 상세는 [library.md](./library.md).
 
+**analysisVersion 2** 로 확장된 항목 스키마(팩 다운로드·분석 후 자동 생성):
+
 ```jsonc
 {
   "schemaVersion": 1,
   "note": "이 프로젝트에서 실제 사용한 스프라이트. sprite-picker 가 자동 갱신.",
   "items": [
     {
-      "id": "kenney-pixel-hero",
-      "name": "픽셀 러너",
+      "id": "kenney-pixel-platformer__tilemap",   // 팩 항목 고유 id. 규칙: "<packId>__<sheetSlug>"
+      "name": "Pixel Platformer — tilemap",
       "sourceId": "kenney",              // 카탈로그 출처 id, 또는 "local" | "procedural"
+      "sourcePackId": "kenney-pixel-platformer",  // ★신규: 이 항목이 나온 packs.json 의 팩 id. 한 팩에서 나온 항목들이 이 값을 공유.
       "license": "CC0-1.0",
       "safetyTier": "cc0",
       "style": "pixel",
-      "contentTypes": ["character"],
-      "tags": ["player","run"],
-      "files": ["assets-library/kenney-pixel-hero/sheet.png"],
-      "frameConfig": { "frameWidth": 18, "frameHeight": 18 },  // load.spritesheet 용
-      "thumbnail": "assets-library/kenney-pixel-hero/thumb.png",
+      "contentTypes": ["tileset"],
+      "tags": ["platformer","tiles"],
+      "files": ["assets-library/kenney-pixel-platformer/tilemap.png"],
+      "full": "assets-library/kenney-pixel-platformer/tilemap.png",  // ★신규: 대표 렌더 경로(=files[0]). /ws/ 로 서빙.
+      "frameConfig": { "frameWidth": 18, "frameHeight": 18, "margin": 0, "spacing": 0 },  // 균일 그리드. null 이면 비균일
+      "frames": [                        // ★신규: 비균일/아틀라스/수동 영역. null 또는 생략이면 frameConfig 그리드 사용. 있으면 우선.
+        { "name": "tile_0", "x": 0, "y": 0, "w": 18, "h": 18 }
+      ],
+      "anims": [                         // ★신규: 명명 애니메이션. frames 인덱스 또는 frames[].name 참조.
+        { "name": "run", "frames": [0,1,2,3], "frameRate": 10, "repeat": -1 }
+      ],
+      "excludedFrames": [12, 13],        // ★신규: 그리드 모드에서 비어 있거나 제외할 프레임 인덱스
+      "thumbnail": "assets-library/kenney-pixel-platformer/tilemap.thumb.png",
       "usedIn": ["games/super-runner"],
-      "addedAt": "2026-06-07"
+      "downloaded": true,                // ★신규: fetch-pack + analyze-pack 을 거쳐 로컬에 있음
+      "analysisVersion": 2,              // ★신규: 분석 버전. 이 스키마는 version 2.
+      "addedAt": "2026-06-08"
     }
   ]
 }
 ```
+
+**frames vs frameConfig 우선순위:**
+- `frames[]` 가 있으면 피커는 그 영역을 개별 프레임으로 렌더한다.
+- `frames[]` 가 없고 `frameConfig` 가 있으면 균일 그리드로 처리한다.
+- 둘 다 없으면 단일 이미지로 취급한다.
+
+**한 팩 = 라이브러리 항목 N개:**
+한 카탈로그 팩(`packs.json` 항목)에서 여러 시트/이미지 그룹이 나올 수 있다. 그 경우 시트마다
+항목 1개가 생성되고, 모두 같은 `sourcePackId` 를 공유한다.
+
+---
+
+## 4) `assets-library/<packId>/analysis.json` — 팩 분석 메타
+
+`analyze-pack.mjs` 가 생성한다. `library.json` 항목과 정합을 유지하며, 편집기에서 항목을 수정하면
+해당 sheet 의 분석 메타도 함께 갱신된다. **커밋 유지 대상**(메타데이터).
+
+```jsonc
+{
+  "packId": "kenney-pixel-platformer",
+  "analyzedAt": "2026-06-08T12:00:00Z",
+  "sheets": [
+    {
+      "id": "kenney-pixel-platformer__tilemap",
+      "file": "tilemap.png",
+      "method": "atlas",                 // atlas | grid | alpha | single
+      "frameConfig": { "frameWidth": 18, "frameHeight": 18 } ,  // null 이면 비균일
+      "frames": [ { "name": "tile_0", "x": 0, "y": 0, "w": 18, "h": 18 } ],  // null 이면 frameConfig 그리드
+      "anims": [ { "name": "run", "frames": [0,1,2,3], "frameRate": 10, "repeat": -1 } ]
+    }
+  ]
+}
+```
+
+---
+
+## 5) 다운로드 큐 `.sprite-picker-downloads.json` (런타임, gitignore)
+
+피커의 "다운로드" 버튼을 클릭하면 서버에 적재되는 큐 파일. Claude 가 채팅으로 돌아올 때 이 파일을
+읽고 `fetch-pack.mjs` + `analyze-pack.mjs` 를 실행한다. 완료 후 해당 항목의 `status` 를 `"done"` 으로 갱신.
+
+```jsonc
+{
+  "version": 1,
+  "requests": [
+    {
+      "packId": "kenney-pixel-platformer",
+      "name": "Pixel Platformer",
+      "sourceId": "kenney",
+      "safetyTier": "cc0",
+      "downloadUrl": "https://kenney.nl/assets/pixel-platformer",
+      "url": "https://kenney.nl/assets/pixel-platformer",
+      "status": "queued",               // queued | downloading | analyzing | done | failed
+      "requestedAt": "2026-06-08T12:00:00Z",
+      "note": ""
+    }
+  ]
+}
+```
+
+- 같은 `packId` 가 이미 `queued`/`downloading`/`analyzing`/`done` 상태면 중복 적재 금지(상태만 반환).
+- CC0 아닌 팩은 서버가 `{ ok:false, error:"cc0 아님" }` 으로 막는다.
 
 ---
 

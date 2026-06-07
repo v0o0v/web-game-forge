@@ -18,12 +18,15 @@
  *   SPRITE_PICKER_WS     /ws/ 가 서빙할 작업공간 루트 기본 <cwd>
  *
  * 엔드포인트:
- *   GET  /                      → index.html (피커)
- *   GET  /<file>                → 피커 디렉터리 정적 파일(data.js 포함)
- *   GET  /catalog/<path>        → skills/sprite-picker/catalog/ 정적(커밋 썸네일 등)
- *   GET  /ws/<path>             → 작업공간 루트 정적(다운로드분 풀뷰 — assets-library/·games/… SVG/PNG/시트)
- *   POST /__sprite_picker_submit→ 본문(JSON)을 OUT 에 저장, {ok:true} 반환
- *   GET  /__sprite_picker_status→ 마지막 저장 여부/시각
+ *   GET  /                            → index.html (피커)
+ *   GET  /<file>                      → 피커 디렉터리 정적 파일(data.js 포함)
+ *   GET  /catalog/<path>              → skills/sprite-picker/catalog/ 정적(커밋 썸네일 등)
+ *   GET  /ws/<path>                   → 작업공간 루트 정적(다운로드분 풀뷰 — assets-library/·games/… SVG/PNG/시트)
+ *   POST /__sprite_picker_submit      → 본문(JSON)을 OUT 에 저장, {ok:true} 반환
+ *   GET  /__sprite_picker_status      → 마지막 저장 여부/시각
+ *   POST /__sprite_picker_download_request → 다운로드 큐에 팩 요청 적재(CC0 게이트)
+ *   GET  /__sprite_picker_downloads        → 다운로드 큐 JSON 반환
+ *   POST /__sprite_picker_library_edit     → library.json 항목 패치 + analysis.json 동기
  */
 import http from 'node:http';
 import fs from 'node:fs';
@@ -40,6 +43,10 @@ const PORT = parseInt(process.env.PORT || '8770', 10);
 const OUT = process.env.SPRITE_PICKER_OUT
   ? path.resolve(process.env.SPRITE_PICKER_OUT)
   : path.resolve(process.cwd(), '.sprite-picker-selection.json');
+// 다운로드 큐 경로 — process.cwd() 기준(gitignore 대상)
+const DL_QUEUE = path.resolve(process.cwd(), '.sprite-picker-downloads.json');
+// 라이브러리 JSON 경로
+const LIBRARY = path.resolve(process.cwd(), 'assets-library', 'library.json');
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -100,6 +107,163 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && u.pathname === '/__sprite_picker_status') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true, lastSavedAt, out: OUT }));
+    return;
+  }
+
+  // ── 다운로드 큐 ──────────────────────────────────────────────────────────────
+  // POST /__sprite_picker_download_request
+  // body: { packId, name, sourceId, safetyTier, downloadUrl, url }
+  // CC0 게이트 → 큐에 append(중복 제외) → {ok, queued, duplicate}
+  if (req.method === 'POST' && u.pathname === '/__sprite_picker_download_request') {
+    let body = '';
+    req.on('data', (c) => { body += c; if (body.length > 1_000_000) req.destroy(); });
+    req.on('end', () => {
+      try {
+        const item = JSON.parse(body);
+        // CC0 게이트
+        if (item.safetyTier !== 'cc0') {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'cc0 아님' }));
+          return;
+        }
+        // packId 필수
+        if (!item.packId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'packId 필수' }));
+          return;
+        }
+        // 큐 로드(없으면 초기화)
+        let queue;
+        try {
+          queue = JSON.parse(fs.readFileSync(DL_QUEUE, 'utf8'));
+        } catch {
+          queue = { version: 1, requests: [] };
+        }
+        // 중복 검사: queued/downloading/analyzing/done 상태면 중복
+        const ACTIVE = new Set(['queued', 'downloading', 'analyzing', 'done']);
+        const dup = queue.requests.some(
+          (r) => r.packId === item.packId && ACTIVE.has(r.status)
+        );
+        if (!dup) {
+          queue.requests.push({
+            packId: item.packId,
+            name: item.name || '',
+            sourceId: item.sourceId || '',
+            safetyTier: item.safetyTier,
+            downloadUrl: item.downloadUrl || item.url || '',
+            url: item.url || item.downloadUrl || '',
+            status: 'queued',
+            requestedAt: new Date().toISOString(),
+            note: '',
+          });
+          fs.writeFileSync(DL_QUEUE, JSON.stringify(queue, null, 2));
+          process.stderr.write(`[sprite-picker] 다운로드 큐 적재: ${item.packId}\n`);
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, queued: queue.requests.length, duplicate: dup }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: String(e) }));
+      }
+    });
+    return;
+  }
+
+  // GET /__sprite_picker_downloads — 큐 JSON 그대로 반환
+  if (req.method === 'GET' && u.pathname === '/__sprite_picker_downloads') {
+    try {
+      let queue;
+      try {
+        queue = JSON.parse(fs.readFileSync(DL_QUEUE, 'utf8'));
+      } catch {
+        queue = { version: 1, requests: [] };
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(queue));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: String(e) }));
+    }
+    return;
+  }
+
+  // ── 라이브러리 편집 ──────────────────────────────────────────────────────────
+  // POST /__sprite_picker_library_edit
+  // body: { id, patch: { name?, frameConfig?, frames?, anims?, excludedFrames? } }
+  // library.json items[] 에서 id 항목에 patch 머지(보존 머지) + analysis.json 동기
+  if (req.method === 'POST' && u.pathname === '/__sprite_picker_library_edit') {
+    let body = '';
+    req.on('data', (c) => { body += c; if (body.length > 5_000_000) req.destroy(); });
+    req.on('end', () => {
+      try {
+        const { id, patch } = JSON.parse(body);
+        if (!id || typeof patch !== 'object' || patch === null) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'id 와 patch 객체 필수' }));
+          return;
+        }
+        // library.json 로드
+        let lib;
+        try {
+          lib = JSON.parse(fs.readFileSync(LIBRARY, 'utf8'));
+        } catch (e) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'library.json 없음: ' + String(e) }));
+          return;
+        }
+        if (!Array.isArray(lib.items)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'library.json items[] 없음' }));
+          return;
+        }
+        const idx = lib.items.findIndex((it) => it.id === id);
+        if (idx === -1) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: `id "${id}" 항목 없음` }));
+          return;
+        }
+        // 보존 머지: patch 의 키만 덮어쓰고 나머지 유지, analysisVersion:2 유지
+        lib.items[idx] = Object.assign({}, lib.items[idx], patch, { analysisVersion: 2 });
+        fs.writeFileSync(LIBRARY, JSON.stringify(lib, null, 2));
+        process.stderr.write(`[sprite-picker] library 편집: ${id}\n`);
+
+        // analysis.json 동기: packId = id 의 '__' 앞부분
+        const packId = id.split('__')[0];
+        const libRoot = path.resolve(process.cwd(), 'assets-library');
+        const analysisPath = packId
+          ? path.resolve(libRoot, packId, 'analysis.json')
+          : null;
+        // 방어적 경계 가드: analysisPath 가 assets-library/ 밖으로 나가면 동기 생략
+        // (id 는 이미 library 항목과 일치해야 하므로 실질 위험은 낮지만, packId 에 ../ 등이 끼는 경우 차단)
+        if (analysisPath && analysisPath.startsWith(libRoot + path.sep)) {
+          try {
+            let analysis = JSON.parse(fs.readFileSync(analysisPath, 'utf8'));
+            if (Array.isArray(analysis.sheets)) {
+              const sheetIdx = analysis.sheets.findIndex((s) => s.id === id);
+              if (sheetIdx !== -1) {
+                // patch 중 analysis.json sheet 에 관련된 필드만 반영
+                const sheetPatch = {};
+                if (patch.frameConfig !== undefined) sheetPatch.frameConfig = patch.frameConfig;
+                if (patch.frames !== undefined) sheetPatch.frames = patch.frames;
+                if (patch.anims !== undefined) sheetPatch.anims = patch.anims;
+                if (patch.excludedFrames !== undefined) sheetPatch.excludedFrames = patch.excludedFrames;
+                analysis.sheets[sheetIdx] = Object.assign({}, analysis.sheets[sheetIdx], sheetPatch);
+                fs.writeFileSync(analysisPath, JSON.stringify(analysis, null, 2));
+                process.stderr.write(`[sprite-picker] analysis.json 동기: ${packId}\n`);
+              }
+            }
+          } catch {
+            // analysis.json 없거나 파싱 실패 — 무시(library.json 은 이미 저장됨)
+          }
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: String(e) }));
+      }
+    });
     return;
   }
 

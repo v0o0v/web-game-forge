@@ -68,7 +68,7 @@ web-game-builder 워크플로의 제작요소 스킬.
   웹사이트→팩, 검색·필터로 좁힌다. 팩 `preview`(커밋 썸네일)/`previewUrl` 을 최대한 채운다.
 - **추천은 피커가 자동 계산** — `targets` 메타가 정확할수록 '추천' 탭이 잘 맞는다.
 - **다운로드분 풀뷰.** `library` 항목은 미리보기가 아니라 풀로 렌더되고, 스프라이트시트는 프레임 분해로
-  **개별 프레임 선택**이 된다(`full`=작업공간 루트 기준 경로, `frameConfig`).
+  **개별 프레임 선택**이 된다(`full`=작업공간 루트 기준 경로, `frameConfig` 또는 `frames[]`).
 - `skills/sprite-picker/picker/data.js` 로 주입(`data.example.js` 템플릿). 스키마: [reference/catalog-schema.md](./reference/catalog-schema.md).
 - **커밋 썸네일 미리 받기(빠른 실행):** 카탈로그의 CC0 팩 커버는 [`sprite-catalog-refresh`](../sprite-catalog-refresh/SKILL.md)
   의 `catalog/prefetch.mjs` 로 미리 받아 `catalog/thumbnails/` 에 둔다. 평소엔 이 캐시만 쓴다.
@@ -76,6 +76,33 @@ web-game-builder 워크플로의 제작요소 스킬.
   `http://127.0.0.1:8770/`. `/`(피커)·`/catalog/`(커밋 썸네일)·`/ws/`(다운로드분 풀뷰)를 서빙. (정적
   `python -m http.server` 는 자동 회수·풀뷰가 안 되므로 폴백 전용 — 그땐 붙여넣기.)
   프로토콜·경로는 [reference/picker-protocol.md](./reference/picker-protocol.md).
+
+### 2-b) 팩 다운로드·분석·편집 (다운로드 버튼 → 큐 → Claude 실행)
+
+피커 카탈로그 카드의 "⬇ 다운로드" 버튼(`safetyTier:"cc0"` + 미다운로드 팩만 표시)을 클릭하면
+서버 큐(`.sprite-picker-downloads.json`)에 적재된다. **사용자가 채팅으로 돌아오면** Claude 가 큐를
+읽고 다음을 순서대로 실행한다:
+
+1. **팩 다운로드:**
+   ```
+   node skills/sprite-picker/catalog/fetch-pack.mjs --pack <packId> [--out <dir>] [--dry]
+   ```
+   CC0 게이트 통과 후 소스별 리졸버(kenney/gameart2d/opengameart/generic)로 실제 파일 URL 추출 →
+   `assets-library/<packId>/raw/` 에 원본 저장(ZIP 해제 포함, 최대 40MB).
+
+2. **분석 및 library.json 갱신:**
+   ```
+   node skills/sprite-picker/catalog/analyze-pack.mjs --pack <packId> [--lib <dir>]
+   ```
+   분석 방법 자동 결정(atlas → grid → alpha → single) → `<packId>/<sheetSlug>.png` + `.thumb.png` 생성 →
+   `library.json` 에 항목 upsert(`analysisVersion:2`, `sourcePackId`, `frames[]`, `anims[]` 포함) →
+   `analysis.json` 기록 → 큐 status `"done"` 으로 갱신.
+
+3. **편집기 모달(선택):** 다운로드된 카드의 "편집" 버튼 → `frameConfig`/`frames[]`/`excludedFrames`/`anims[]` 조정 →
+   `POST /__sprite_picker_library_edit` 로 `library.json` + `analysis.json` 동기 저장.
+
+스크립트 상세·엔드포인트는 [reference/sourcing.md](./reference/sourcing.md) 경로 A 와
+[reference/picker-protocol.md](./reference/picker-protocol.md) 참고.
 
 ### 3) 사용자 탐색·슬롯 배정 → "선택 완료" 자동 회수
 사용자가 탭(추천/전체/다운로드/후보)에서 찾아 슬롯을 클릭해 활성화하고 이미지(또는 다운로드 시트의 개별

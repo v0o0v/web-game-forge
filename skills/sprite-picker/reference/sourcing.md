@@ -12,14 +12,37 @@
 
 1. **라이선스 재확인.** 선택의 `safetyTier` 가 `cc0` 면 통과. `permissive-attribution` 이면
    `CREDITS.txt` 표기 약속, `mixed-per-item`/`avoid` 면 항목 라이선스를 직접 확인하거나 제외.
-2. **온디맨드 다운로드.** `downloadUrl` 에서 필요한 팩/파일만 받는다(매번이 아니라 선택 시 1회).
-   ```powershell
-   Invoke-WebRequest -Uri "<downloadUrl>" -OutFile "games/<slug>/assets/<pack>.zip"
+2. **온디맨드 다운로드(피커 다운로드 버튼 → 큐 → Claude 실행).** 피커의 카탈로그 카드에 "⬇ 다운로드"
+   버튼이 표시된다(`safetyTier:"cc0"` + 아직 다운로드되지 않은 팩). 클릭하면:
+   - `POST /__sprite_picker_download_request` 로 서버 큐(`.sprite-picker-downloads.json`)에 적재.
+   - 사용자가 채팅으로 돌아오면 Claude(리드)가 큐를 읽고 다음 스크립트를 실행한다.
+
+   **fetch-pack.mjs — 팩 다운로드:**
    ```
-   ```bash
-   curl -L "<downloadUrl>" -o "games/<slug>/assets/<pack>.zip"
+   node skills/sprite-picker/catalog/fetch-pack.mjs --pack <packId> [--out <dir=assets-library>] [--dry]
    ```
-   압축이면 풀어 필요한 스프라이트시트/아틀라스만 `games/<slug>/assets/` 에 남기고 나머지는 정리.
+   - `catalog/packs.json` 에서 packId 를 찾아 CC0 게이트 통과 후 다운로드.
+   - 소스별 리졸버(kenney/gameart2d/opengameart/generic)로 실제 파일 URL 추출.
+   - `assets-library/<packId>/raw/` 에 ZIP 해제(또는 이미지 직접 저장). 최대 40MB 제한.
+   - 결과 마지막 줄: `{"ok":true,"packId":..,"rawDir":..,"files":[...]}`.
+
+   **analyze-pack.mjs — 분석 및 library.json 갱신:**
+   ```
+   node skills/sprite-picker/catalog/analyze-pack.mjs --pack <packId> [--lib <dir=assets-library>]
+   ```
+   - `raw/` 의 이미지를 분석(atlas > grid > alpha > single 우선순위).
+   - `<packId>/<sheetSlug>.png` + `.thumb.png` 생성.
+   - `library.json` 에 항목 upsert(`analysisVersion:2`, `sourcePackId`, `frames[]`, `anims[]` 포함).
+   - `analysis.json` 기록, `.sprite-picker-downloads.json` 의 해당 status → `"done"`.
+   - 결과 마지막 줄: `{"ok":true,"packId":..,"items":[...],"methods":{...}}`.
+
+   > **검증 메모(2026-06-08).** kenney 리졸버는 라이브로 검증됨(`kenney-pixel-platformer` 실제
+   > 다운로드→ZIP 해제→분석: alpha BFS 가 `tilemap`=180·`tilemap-characters`=27·`tilemap-backgrounds`=24
+   > 프레임을 정확히 검출). gameart2d/opengameart/generic 리졸버는 구현돼 있으나 라이브 미검증 —
+   > 첫 사용 시 페이지 마크업 변동에 대비해 결과를 확인하라. itch.io 정적 페이지는 직접 링크가 없어
+   > `exit 3` 으로 명확히 실패하니, 그런 팩은 사용자가 받아 `assets-library/<packId>/raw/` 에 둔 뒤
+   > `analyze-pack.mjs` 만 돌린다.
+
 3. **`assets.json` 등록(라이선스 게이트).** 루트 `assets.json` 의 `entries[]` 에 추가:
    ```json
    { "name": "hero", "type": "spritesheet", "source": "kenney-pixel-platformer",
