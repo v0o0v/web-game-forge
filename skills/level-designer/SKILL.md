@@ -1,6 +1,6 @@
 ---
 name: level-designer
-description: "게임 레벨/맵/스테이지를 설계합니다 — 그리드 기반 레벨 데이터, 타일맵, 난이도 곡선, Tiled(.tmj) 연동 옵션. 레벨/맵/스테이지 제작·확장 요청 시 사용. level, map, stage, tilemap."
+description: "게임 레벨/스테이지의 내부 지형을 빌드합니다 — 그리드 기반 레벨 데이터, 타일맵(staticGroup·타일 배치), 난이도 곡선, Tiled(.tmj) 연동 옵션. 레벨 내부 지형·타일맵 빌드 요청 시 사용. 스테이지를 잇는 월드맵/진행 구조는 world-map-architect, 개별 레벨 설계 의도는 level-architect 소관. level, stage, tilemap, level data."
 allowed-tools: Read, Write, Edit
 ---
 

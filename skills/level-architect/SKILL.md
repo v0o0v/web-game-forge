@@ -10,8 +10,9 @@ description: >
   English: use when the user wants to add or improve levels/stages, tune difficulty, design a
   difficulty curve, or make levels more fun — analyze the game first, interview for intent, then
   apply level-design theory. Keywords: 레벨, 스테이지, 난이도 곡선, 밸런싱, 레벨 디자인, level,
-  stage, map, level design, difficulty curve, balancing, pacing, tutorial level.
-allowed-tools: Read, Write, Edit, Bash
+  stage, level design, difficulty curve, balancing, pacing, tutorial level.
+  스테이지를 잇는 월드맵/진행 위상(액트·무한맵·분기·허브)은 world-map-architect, 타일맵 빌드는 level-designer 소관.
+allowed-tools: Read, Write, Edit, Bash, AskUserQuestion
 ---
 
 # level-architect — 레벨 디자인 디렉터 (분석·의도·재미)
