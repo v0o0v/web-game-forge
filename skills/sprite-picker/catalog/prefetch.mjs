@@ -35,7 +35,7 @@ const opt = {
   maxKb: (function () { var i = argv.indexOf('--max-kb'); return i >= 0 ? parseInt(argv[i + 1], 10) : 800; })(),
   concurrency: 4
 };
-const MIN_BYTES = 256;                       // 이보다 작으면 깨진/에러 응답으로 간주
+const MIN_BYTES = 700;                       // 이보다 작으면 깨진 응답/초소형 strip(커버 부적합)으로 간주
 const MAX_BYTES = opt.maxKb * 1024;          // 썸네일 취지 — 너무 크면 커밋 안 함(라이브 링크 유지)
 
 if (typeof fetch !== 'function') {
