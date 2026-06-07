@@ -1,22 +1,65 @@
 {
   "$comment": "에셋 라이선스 게이트 매니페스트. 생성 게임이 외부 에셋을 쓸 때 여기에 항목을 등록하고, 리졸버는 license=='CC0' 만 기본 허용한다. CC-BY 는 attributionRequired:true 이면 게임 내/CREDITS 에 표기될 때만 허용. 현재 super-runner 데모는 외부 에셋 0(전부 PixelForge 절차적 생성)이라 entries 가 비어있다.",
   "policy": {
-    "allow": ["CC0", "MIT", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "Zlib"],
-    "denyAlways": ["ARR", "Nintendo", "unknown"],
+    "allow": [
+      "CC0",
+      "MIT",
+      "BSD-2-Clause",
+      "BSD-3-Clause",
+      "Apache-2.0",
+      "Zlib"
+    ],
+    "denyAlways": [
+      "ARR",
+      "Nintendo",
+      "unknown"
+    ],
     "ccByRequiresAttribution": true,
     "proceduralFallback": "engine/pixelforge.js (PixelForge) — 매치되는 에셋이 없으면 코드로 생성"
   },
   "recommendedCC0Sources": [
-    { "name": "Kenney.nl — Pixel Platformer / Audio / UI Pack", "license": "CC0-1.0", "url": "https://kenney.nl/assets" },
-    { "name": "Pixel Frog — Pixel Adventure 1 & 2", "license": "CC0-1.0", "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1" },
-    { "name": "Brackeys' Platformer Bundle", "license": "CC0-1.0", "url": "https://brackeysgames.itch.io/brackeys-platformer-bundle" },
-    { "name": "OpenGameArt.org (CC0 필터)", "license": "CC0-1.0 (per-item 확인 필수)", "url": "https://opengameart.org/content/cc0-resources" }
+    {
+      "name": "Kenney.nl — Pixel Platformer / Audio / UI Pack",
+      "license": "CC0-1.0",
+      "url": "https://kenney.nl/assets"
+    },
+    {
+      "name": "Pixel Frog — Pixel Adventure 1 & 2",
+      "license": "CC0-1.0",
+      "url": "https://pixelfrog-assets.itch.io/pixel-adventure-1"
+    },
+    {
+      "name": "Brackeys' Platformer Bundle",
+      "license": "CC0-1.0",
+      "url": "https://brackeysgames.itch.io/brackeys-platformer-bundle"
+    },
+    {
+      "name": "OpenGameArt.org (CC0 필터)",
+      "license": "CC0-1.0 (per-item 확인 필수)",
+      "url": "https://opengameart.org/content/cc0-resources"
+    }
   ],
   "recommendedHDVectorSources": [
-    { "name": "Kenney.nl — Vector/UI/Shape 팩 (스무스 그래픽)", "license": "CC0-1.0", "url": "https://kenney.nl/assets" },
-    { "name": "SVGRepo (CC0 필터)", "license": "CC0-1.0 (per-item 확인)", "url": "https://www.svgrepo.com/" },
-    { "name": "Game-icons.net", "license": "CC0-1.0 / CC-BY-3.0 (항목별 확인)", "url": "https://game-icons.net/" },
-    { "name": "OpenGameArt.org — CC0 HD/벡터", "license": "CC0-1.0 (per-item 확인)", "url": "https://opengameart.org/" }
+    {
+      "name": "Kenney.nl — Vector/UI/Shape 팩 (스무스 그래픽)",
+      "license": "CC0-1.0",
+      "url": "https://kenney.nl/assets"
+    },
+    {
+      "name": "SVGRepo (CC0 필터)",
+      "license": "CC0-1.0 (per-item 확인)",
+      "url": "https://www.svgrepo.com/"
+    },
+    {
+      "name": "Game-icons.net",
+      "license": "CC0-1.0 / CC-BY-3.0 (항목별 확인)",
+      "url": "https://game-icons.net/"
+    },
+    {
+      "name": "OpenGameArt.org — CC0 HD/벡터",
+      "license": "CC0-1.0 (per-item 확인)",
+      "url": "https://opengameart.org/"
+    }
   ],
   "renderStyleNote": "픽셀 게임은 PixelForge(pixelArt:true), 미려한 스무스 게임은 VectorForge(pixelArt:false, antialias:true). SVG는 this.load.svg(key,url,{width,height})로 임의 크기 또렷이 래스터화. 외부 에셋은 games/<slug>/assets/에 벤더링 + 아래 entries 에 CC0 로 등록.",
   "spritePickerCatalog": {
@@ -24,7 +67,67 @@
     "sources": "skills/sprite-picker/catalog/sources.json",
     "packs": "skills/sprite-picker/catalog/packs.json",
     "localLibrary": "assets-library/library.json",
-    "safetyTiers": ["cc0", "permissive-attribution", "mixed-per-item", "avoid"]
+    "safetyTiers": [
+      "cc0",
+      "permissive-attribution",
+      "mixed-per-item",
+      "avoid"
+    ]
   },
-  "entries": []
+  "entries": [
+    {
+      "name": "rune0-emerald",
+      "type": "svg",
+      "source": "game-icons.net (Lorc)",
+      "license": "CC-BY-3.0",
+      "attribution": "Lorc — game-icons.net — CC BY 3.0",
+      "url": "games/runeburst/assets/gems/rune0-emerald.svg",
+      "usedIn": "games/runeburst"
+    },
+    {
+      "name": "rune1-gems",
+      "type": "svg",
+      "source": "game-icons.net (Lorc)",
+      "license": "CC-BY-3.0",
+      "attribution": "Lorc — game-icons.net — CC BY 3.0",
+      "url": "games/runeburst/assets/gems/rune1-gems.svg",
+      "usedIn": "games/runeburst"
+    },
+    {
+      "name": "rune2-crystal-cluster",
+      "type": "svg",
+      "source": "game-icons.net (Lorc)",
+      "license": "CC-BY-3.0",
+      "attribution": "Lorc — game-icons.net — CC BY 3.0",
+      "url": "games/runeburst/assets/gems/rune2-crystal-cluster.svg",
+      "usedIn": "games/runeburst"
+    },
+    {
+      "name": "rune3-crystal-shine",
+      "type": "svg",
+      "source": "game-icons.net (Lorc)",
+      "license": "CC-BY-3.0",
+      "attribution": "Lorc — game-icons.net — CC BY 3.0",
+      "url": "games/runeburst/assets/gems/rune3-crystal-shine.svg",
+      "usedIn": "games/runeburst"
+    },
+    {
+      "name": "rune4-floating-crystal",
+      "type": "svg",
+      "source": "game-icons.net (Lorc)",
+      "license": "CC-BY-3.0",
+      "attribution": "Lorc — game-icons.net — CC BY 3.0",
+      "url": "games/runeburst/assets/gems/rune4-floating-crystal.svg",
+      "usedIn": "games/runeburst"
+    },
+    {
+      "name": "rune5-cut-diamond",
+      "type": "svg",
+      "source": "game-icons.net (Lorc)",
+      "license": "CC-BY-3.0",
+      "attribution": "Lorc — game-icons.net — CC BY 3.0",
+      "url": "games/runeburst/assets/gems/rune5-cut-diamond.svg",
+      "usedIn": "games/runeburst"
+    }
+  ]
 }

@@ -1,5 +1,162 @@
 {
   "schemaVersion": 1,
   "note": "이 프로젝트에서 실제 사용한 스프라이트 라이브러리. sprite-picker 가 에셋을 적용할 때마다 자동 갱신한다. 피커의 '이전 사용' 탭이 이 파일을 읽는다. 스키마: skills/sprite-picker/reference/catalog-schema.md §3.",
-  "items": []
+  "items": [
+    {
+      "id": "gameicons-lorc-emerald",
+      "name": "에메랄드 (룬 젬)",
+      "sourceId": "game-icons-net",
+      "license": "CC-BY-3.0",
+      "safetyTier": "permissive-attribution",
+      "style": "vector",
+      "contentTypes": [
+        "item",
+        "icon"
+      ],
+      "tags": [
+        "gem",
+        "crystal",
+        "rune",
+        "match3"
+      ],
+      "files": [
+        "games/runeburst/assets/gems/rune0-emerald.svg"
+      ],
+      "thumbnail": "",
+      "usedIn": [
+        "games/runeburst"
+      ],
+      "addedAt": "2026-06-07"
+    },
+    {
+      "id": "gameicons-lorc-gems",
+      "name": "젬 트리오 (룬 젬)",
+      "sourceId": "game-icons-net",
+      "license": "CC-BY-3.0",
+      "safetyTier": "permissive-attribution",
+      "style": "vector",
+      "contentTypes": [
+        "item",
+        "icon"
+      ],
+      "tags": [
+        "gem",
+        "crystal",
+        "rune",
+        "match3"
+      ],
+      "files": [
+        "games/runeburst/assets/gems/rune1-gems.svg"
+      ],
+      "thumbnail": "",
+      "usedIn": [
+        "games/runeburst"
+      ],
+      "addedAt": "2026-06-07"
+    },
+    {
+      "id": "gameicons-lorc-crystal-cluster",
+      "name": "크리스털 군집 (룬 젬)",
+      "sourceId": "game-icons-net",
+      "license": "CC-BY-3.0",
+      "safetyTier": "permissive-attribution",
+      "style": "vector",
+      "contentTypes": [
+        "item",
+        "icon"
+      ],
+      "tags": [
+        "gem",
+        "crystal",
+        "rune",
+        "match3"
+      ],
+      "files": [
+        "games/runeburst/assets/gems/rune2-crystal-cluster.svg"
+      ],
+      "thumbnail": "",
+      "usedIn": [
+        "games/runeburst"
+      ],
+      "addedAt": "2026-06-07"
+    },
+    {
+      "id": "gameicons-lorc-crystal-shine",
+      "name": "샤인 크리스털 (룬 젬)",
+      "sourceId": "game-icons-net",
+      "license": "CC-BY-3.0",
+      "safetyTier": "permissive-attribution",
+      "style": "vector",
+      "contentTypes": [
+        "item",
+        "icon"
+      ],
+      "tags": [
+        "gem",
+        "crystal",
+        "rune",
+        "match3"
+      ],
+      "files": [
+        "games/runeburst/assets/gems/rune3-crystal-shine.svg"
+      ],
+      "thumbnail": "",
+      "usedIn": [
+        "games/runeburst"
+      ],
+      "addedAt": "2026-06-07"
+    },
+    {
+      "id": "gameicons-lorc-floating-crystal",
+      "name": "플로팅 크리스털 (룬 젬)",
+      "sourceId": "game-icons-net",
+      "license": "CC-BY-3.0",
+      "safetyTier": "permissive-attribution",
+      "style": "vector",
+      "contentTypes": [
+        "item",
+        "icon"
+      ],
+      "tags": [
+        "gem",
+        "crystal",
+        "rune",
+        "match3"
+      ],
+      "files": [
+        "games/runeburst/assets/gems/rune4-floating-crystal.svg"
+      ],
+      "thumbnail": "",
+      "usedIn": [
+        "games/runeburst"
+      ],
+      "addedAt": "2026-06-07"
+    },
+    {
+      "id": "gameicons-lorc-cut-diamond",
+      "name": "컷 다이아몬드 (룬 젬)",
+      "sourceId": "game-icons-net",
+      "license": "CC-BY-3.0",
+      "safetyTier": "permissive-attribution",
+      "style": "vector",
+      "contentTypes": [
+        "item",
+        "icon"
+      ],
+      "tags": [
+        "gem",
+        "crystal",
+        "rune",
+        "match3"
+      ],
+      "files": [
+        "games/runeburst/assets/gems/rune5-cut-diamond.svg"
+      ],
+      "thumbnail": "",
+      "usedIn": [
+        "games/runeburst"
+      ],
+      "addedAt": "2026-06-07"
+    }
+  ]
 }
