@@ -159,12 +159,35 @@
     VectorForge.gradientBackground(scene, 'space-bg', DESIGN_W, DESIGN_H, [[0, '#171339'], [0.45, '#0f0b2a'], [1, '#06051a']]);
   }
 
-  function drawStarfield(scene) {
-    scene.add.image(DESIGN_W / 2, DESIGN_H / 2, 'space-bg').setDepth(-10);
+  // 스테이지(보드 모양)별 배경 성운 테마 — 그라데이션 + 별빛 색
+  var BG_THEMES = {
+    square:    { stops: [[0, '#1b1545'], [0.5, '#100b2c'], [1, '#06051a']], star: 0xcabfff, name: '보라 성운' },
+    cross:     { stops: [[0, '#0d2b34'], [0.5, '#08202a'], [1, '#04121a']], star: 0x9ff0ff, name: '청록 심연' },
+    diamond:   { stops: [[0, '#3a2a12'], [0.5, '#241a0c'], [1, '#140d05']], star: 0xffe6a0, name: '금빛 성단' },
+    hourglass: { stops: [[0, '#3a2114'], [0.5, '#2a140c'], [1, '#160a05']], star: 0xffc090, name: '노을' },
+    heart:     { stops: [[0, '#3a1426'], [0.5, '#260c18'], [1, '#16060e']], star: 0xffb0d0, name: '장미 성운' },
+    star:      { stops: [[0, '#2a1450'], [0.5, '#1a0e40'], [1, '#0a0620']], star: 0xe0a0ff, name: '무지개 폭발' },
+    ring:      { stops: [[0, '#0d2e2a'], [0.5, '#082420'], [1, '#041614']], star: 0x9fffe0, name: '도넛 은하' }
+  };
+  var BG_KEYS = ['square', 'cross', 'diamond', 'hourglass', 'heart', 'star', 'ring'];
+  function bgThemeFor(cfg) {
+    var key = cfg.shape;
+    if (cfg.daily) { var h = Math.abs(cfg.seed) % BG_KEYS.length; key = BG_KEYS[h]; } // 데일리는 날짜로 회전
+    var t = BG_THEMES[key] || BG_THEMES.square;
+    return { stops: t.stops, star: t.star, name: t.name, key: key + (cfg.daily ? '-d' : '') };
+  }
+
+  function drawStarfield(scene, theme) {
+    var key, starCol;
+    if (theme) {
+      key = 'bg-' + theme.key; starCol = theme.star;
+      if (!scene.textures.exists(key)) VectorForge.gradientBackground(scene, key, DESIGN_W, DESIGN_H, theme.stops);
+    } else { key = 'space-bg'; starCol = 0xffffff; }
+    scene.add.image(DESIGN_W / 2, DESIGN_H / 2, key).setDepth(-10);
     var rng = mulberry32(777);
     for (var i = 0; i < 70; i++) {
       var x = rng() * DESIGN_W, y = rng() * DESIGN_H, r = 0.6 + rng() * 1.8;
-      var s = scene.add.circle(x, y, r, 0xffffff, 0.4 + rng() * 0.5).setDepth(-9);
+      var s = scene.add.circle(x, y, r, starCol, 0.4 + rng() * 0.5).setDepth(-9);
       scene.tweens.add({ targets: s, alpha: 0.15, duration: 900 + rng() * 1600, yoyo: true, repeat: -1, delay: rng() * 1500 });
     }
   }
@@ -225,7 +248,7 @@
       if (this.mode === 'daily') {
         var d = new Date();
         this.dateKey = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
-        this.cfg = { name: '데일리 ' + this.dateKey, shape: 'square', colors: 6, moves: 24, goal: 5000, win: { type: 'score', target: 5000 }, overload: true, seed: parseInt(this.dateKey.replace(/-/g, ''), 10) };
+        this.cfg = { name: '데일리 ' + this.dateKey, shape: 'square', colors: 6, moves: 24, goal: 5000, win: { type: 'score', target: 5000 }, overload: true, daily: true, seed: parseInt(this.dateKey.replace(/-/g, ''), 10) };
         this.levelIndex = -1;
       } else {
         this.levelIndex = Math.min(data.level || 0, LEVELS.length - 1);
@@ -239,10 +262,14 @@
       this.board = []; this.spr = [];
       this.mask = []; this.jelly = []; this.ice = []; this.overload = [];
       this.sel = null;
+      this.realMove = true; this.itemMove = false;
+      this.items = this.cfg.daily ? { hammer: 3, shuffle: 2, core: 2, swap: 3 } : { hammer: 2, shuffle: 2, core: 1, swap: 2 };
+      this.armedItem = null; this.swapFirst = null;
     },
 
     create: function () {
-      drawStarfield(this);
+      this.theme = bgThemeFor(this.cfg);
+      drawStarfield(this, this.theme);
       this.buildMaskAndBoard();
 
       this.cellBgG = this.add.graphics().setDepth(0);
@@ -254,14 +281,18 @@
       this.renderOverlays();
       this.buildHUD();
       this.setupInput();
+      this.buildItemBar();
       this.updateHUD();
+      if (!this.hasMove()) this.shuffleBoard(true);
 
       var self = this;
       window.RUNEBURST = {
         scene: this, game: this.game,
         swipe: function (r, c, dir) { return self.inputSwipe(r, c, dir); },
         bank: function () { return self.bank(); },
-        state: function () { return { mode: self.mode, level: self.levelIndex, shape: self.cfg.shape, moves: self.movesLeft, score: self.score, pot: self.pot, mult: self.mult(), goal: self.cfg.goal, win: self.cfg.win.type, objective: self.objectiveProgress(), over: self.over, busy: self.busy }; },
+        useItem: function (k, r, c) { return self.devUseItem(k, r, c); },
+        hasMove: function () { return self.hasMove(); },
+        state: function () { return { mode: self.mode, level: self.levelIndex, shape: self.cfg.shape, theme: self.theme.name, moves: self.movesLeft, score: self.score, pot: self.pot, mult: self.mult(), goal: self.cfg.goal, win: self.cfg.win.type, objective: self.objectiveProgress(), items: self.items, hasMove: self.hasMove(), over: self.over, busy: self.busy }; },
         board: function () { return self.board.map(function (row, r) { return row.map(function (t, c) { return self.mask[r][c] ? (t ? (t.kind === 'rune' ? t.color : (t.kind === 'spreader' ? 'S' : 'I')) : '_') : '#'; }); }); },
         overlays: function () { return { jelly: self.jelly, ice: self.ice, overload: self.overload }; }
       };
@@ -411,7 +442,9 @@
       var self = this;
       this.input.on('pointerdown', function (p) { if (self.busy || self.over) return; self._down = self.cellAt(p.x, p.y); self._dx = p.x; self._dy = p.y; });
       this.input.on('pointerup', function (p) {
-        if (self.busy || self.over || !self._down) { self._down = null; return; }
+        if (self.busy || self.over) { self._down = null; return; }
+        if (self.armedItem) { self._down = null; var cc = self.cellAt(p.x, p.y); if (cc) self.applyArmed(cc.r, cc.c); return; }
+        if (!self._down) { return; }
         var from = self._down; self._down = null;
         var dx = p.x - self._dx, dy = p.y - self._dy, TH = 16;
         if (Math.abs(dx) > TH || Math.abs(dy) > TH) { var dir = (Math.abs(dx) > Math.abs(dy)) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'); self.clearSel(); self.inputSwipe(from.r, from.c, dir); }
@@ -467,7 +500,7 @@
       return true;
     },
 
-    beginMove: function () { this.cascadeDepth = 0; this.clearedThisMove = 0; this.potBeforeMove = this.pot; this.overloadHit = false; this.spreaderHit = false; this.wasHot = this.streak >= HOT; },
+    beginMove: function (isItem) { this.realMove = !isItem; this.itemMove = !!isItem; this.cascadeDepth = 0; this.clearedThisMove = 0; this.potBeforeMove = this.pot; this.overloadHit = false; this.spreaderHit = false; this.wasHot = this.streak >= HOT; },
     swapCells: function (r1, c1, r2, c2) { var tb = this.board[r1][c1]; this.board[r1][c1] = this.board[r2][c2]; this.board[r2][c2] = tb; var ts = this.spr[r1][c1]; this.spr[r1][c1] = this.spr[r2][c2]; this.spr[r2][c2] = ts; },
     animSwap: function (r1, c1, r2, c2, done) {
       var a = this.spr[r1][c1], b = this.spr[r2][c2], n = 0; function fin() { if (++n >= 2 && done) done(); }
@@ -719,7 +752,7 @@
         this.placeOverload();
       }
 
-      if (this.wasHot && weak) {
+      if (this.realMove && this.wasHot && weak) {
         var overloadActive = this.anyOverload();
         var lost = overloadActive ? this.pot : Math.floor(this.pot / 2);
         this.pot -= lost; this.streak = 0;
@@ -729,13 +762,17 @@
         if (extra >= 1) this.flashCenter('연쇄 ×' + this.cascadeDepth + '!', '#ffd34a');
       }
 
-      // 암흑물질 번식 (이번 수에 인접 소거 없었으면 퍼짐)
-      this.handleSpreaders();
+      // 암흑물질 번식 (실제 수에서만, 이번 수에 인접 소거 없었으면 퍼짐)
+      if (this.realMove) this.handleSpreaders();
 
       this.renderOverlays();
       this.updateHUD();
       this.checkEnd();
-      if (!this.over) this.busy = false;
+      if (!this.over) {
+        this.busy = false;
+        // 교착(가능한 수 없음) → 자동 셔플
+        if (!this.hasMove()) this.shuffleBoard(false);
+      }
     },
 
     anyOverload: function () { for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) if (this.overload[r][c]) return true; return false; },
@@ -765,6 +802,156 @@
           }
         }
       }
+    },
+
+    // ===========================================================================
+    // 교착 감지 + 자동 셔플
+    // ===========================================================================
+    hasMove: function () {
+      var r, c;
+      for (r = 0; r < ROWS; r++) for (c = 0; c < COLS; c++) { var t = this.board[r][c]; if (t && t.special === SP_CORE) return true; } // 코어는 언제나 발동 가능
+      for (r = 0; r < ROWS; r++) for (c = 0; c < COLS; c++) {
+        if (!this.swappable(r, c)) continue;
+        var nb = [[0, 1], [1, 0]];
+        for (var d = 0; d < 2; d++) {
+          var nr = r + nb[d][0], nc = c + nb[d][1];
+          if (!this.valid(nr, nc)) continue;
+          var u = this.board[nr][nc]; if (!u || u.kind !== 'rune' || this.ice[nr][nc]) continue;
+          var tmp = this.board[r][c]; this.board[r][c] = this.board[nr][nc]; this.board[nr][nc] = tmp;
+          var ok = this.findMatches().matched.size > 0;
+          tmp = this.board[r][c]; this.board[r][c] = this.board[nr][nc]; this.board[nr][nc] = tmp;
+          if (ok) return true;
+        }
+      }
+      return false;
+    },
+
+    shuffleBoard: function (silent) {
+      var self = this, cells = [], tiles = [];
+      for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) {
+        var t = this.board[r][c];
+        if (this.mask[r][c] && t && t.kind === 'rune') { cells.push([r, c]); tiles.push(t); }
+      }
+      if (tiles.length < 3) return;
+      var attempt = 0;
+      do {
+        shuffle(tiles, this.rng);
+        for (var i = 0; i < cells.length; i++) this.board[cells[i][0]][cells[i][1]] = tiles[i];
+        attempt++;
+      } while (attempt < 40 && (this.findMatches().matched.size > 0 || !this.hasMove()));
+      if (this.findMatches().matched.size > 0 || !this.hasMove()) this.regenRunes();
+      cells.forEach(function (p) { self.refreshTile(p[0], p[1]); var sp = self.spr[p[0]][p[1]]; if (sp) { sp.setScale(0.4); self.tweens.add({ targets: sp, scale: 1, duration: 260, ease: 'Back.out' }); } });
+      if (!silent) { this.flashCenter('셔플!', '#8ae8ff'); audio.sfx('powerup'); }
+    },
+
+    regenRunes: function () {
+      var n = this.cfg.colors;
+      for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) {
+        var t = this.board[r][c]; if (!this.mask[r][c] || !t || t.kind !== 'rune') continue;
+        var col, guard = 0;
+        do { col = Math.floor(this.rng() * n); guard++; } while (guard < 40 && (
+          (this.valid(r, c - 1) && this.matchable(r, c - 1) && this.valid(r, c - 2) && this.matchable(r, c - 2) && this.board[r][c - 1].color === col && this.board[r][c - 2].color === col) ||
+          (this.valid(r - 1, c) && this.matchable(r - 1, c) && this.valid(r - 2, c) && this.matchable(r - 2, c) && this.board[r - 1][c].color === col && this.board[r - 2][c].color === col)
+        ));
+        t.color = col; t.special = SP_NONE;
+      }
+    },
+
+    // ===========================================================================
+    // 아이템 (망치 · 셔플 · 컬러 코어 소환 · 자유 스왑)
+    // ===========================================================================
+    spendItem: function (k) { this.items[k] = Math.max(0, (this.items[k] || 0) - 1); this.updateItemBar(); },
+    disarm: function () { this.armedItem = null; this.cancelSwapFirst(); if (this.hintText && this.streak < HOT) this.hintText.setText('인접 룬을 스와이프 · 정산으로 점수 확정').setColor('#7c70b8'); this.updateItemBar(); },
+
+    handleItem: function (k) {
+      if (this.busy || this.over) return;
+      if (!this.items[k]) { this.flashCenter('아이템 없음', '#ff8a9a'); return; }
+      if (k === 'shuffle') { this.disarm(); this.spendItem('shuffle'); this.shuffleBoard(false); return; }
+      if (this.armedItem === k) { this.disarm(); return; }
+      this.clearSel(); this.disarm(); this.armedItem = k; this.updateItemBar();
+      var msg = k === 'hammer' ? '🔨 부술 룬을 탭 (다시 누르면 취소)' : (k === 'core' ? '💠 코어로 만들 룬을 탭' : '⇄ 교환할 인접 룬 두 개를 탭');
+      this.hintText.setText(msg).setColor('#ffd34a');
+    },
+
+    applyArmed: function (r, c) {
+      var k = this.armedItem;
+      if (k === 'hammer') this.applyHammer(r, c);
+      else if (k === 'core') this.applyCore(r, c);
+      else if (k === 'swap') this.applyFreeSwapTarget(r, c);
+    },
+
+    applyHammer: function (r, c) {
+      if (!this.valid(r, c) || !this.board[r][c]) return;
+      this.spendItem('hammer'); this.disarm(); this.busy = true; this.beginMove(true);
+      var clear = new Set(); clear.add(r + ',' + c); this.expandSpecials(clear); this.applyCellEffects(clear);
+      this.clearedThisMove += clear.size;
+      var self = this, spark = 6; this.cameras.main.shake(120, 0.006); audio.sfx('brick');
+      clear.forEach(function (key) {
+        var p = key.split(','), rr = +p[0], cc = +p[1], sp = self.spr[rr][cc];
+        if (sp) { self.tweens.add({ targets: sp, scale: 0, alpha: 0, angle: 120, duration: 150, ease: 'Back.in', onComplete: function () { sp.destroy(); } }); self.spr[rr][cc] = null; }
+        if (spark-- > 0 && self.board[rr][cc] && self.board[rr][cc].color >= 0) self.sparkle(self.cellX(cc), self.cellY(rr), self.board[rr][cc].color);
+        self.board[rr][cc] = null;
+      });
+      this.renderOverlays();
+      this.time.delayedCall(170, function () { var mf = self.applyGravityAndRefill(); self.time.delayedCall(140 + mf * 26, function () { self.resolveStep(); }); });
+    },
+
+    applyCore: function (r, c) {
+      if (!this.swappable(r, c)) { this.flashCenter('자유로운 룬에만', '#ff8a9a'); return; }
+      var t = this.board[r][c]; if (!t || t.kind !== 'rune') return;
+      this.spendItem('core'); this.disarm();
+      t.special = SP_CORE; this.refreshTile(r, c);
+      var sp = this.spr[r][c]; if (sp) { sp.setScale(0.3); this.tweens.add({ targets: sp, scale: 1, duration: 260, ease: 'Back.out' }); }
+      audio.sfx('powerup'); this.flashCenter('컬러 코어!', '#ffffff');
+    },
+
+    applyFreeSwapTarget: function (r, c) {
+      if (!this.swappable(r, c)) { this.flashCenter('자유로운 룬에만', '#ff8a9a'); return; }
+      if (!this.swapFirst) { this.swapFirst = { r: r, c: c }; var sp = this.spr[r][c]; if (sp) this.swapTween = this.tweens.add({ targets: sp, scale: 1.15, duration: 280, yoyo: true, repeat: -1 }); this.flashCenter('교환할 인접 룬 탭', '#8ae8ff'); return; }
+      var a = this.swapFirst;
+      if (a.r === r && a.c === c) { this.cancelSwapFirst(); return; }
+      if (Math.abs(a.r - r) + Math.abs(a.c - c) !== 1) { this.cancelSwapFirst(); this.swapFirst = { r: r, c: c }; var sp2 = this.spr[r][c]; if (sp2) this.swapTween = this.tweens.add({ targets: sp2, scale: 1.15, duration: 280, yoyo: true, repeat: -1 }); return; }
+      this.cancelSwapFirst(); this.spendItem('swap'); this.disarm();
+      this.busy = true; var self = this;
+      this.swapCells(a.r, a.c, r, c); this.lastSwap = { r: r, c: c };
+      this.animSwap(a.r, a.c, r, c, function () {
+        var info = self.findMatches();
+        if (info.matched.size > 0) { self.beginMove(true); self.resolveStep(); }
+        else { self.busy = false; if (!self.hasMove()) self.shuffleBoard(false); }
+      });
+    },
+    cancelSwapFirst: function () { if (this.swapTween) { this.swapTween.stop(); this.swapTween = null; } if (this.swapFirst && this.spr[this.swapFirst.r] && this.spr[this.swapFirst.r][this.swapFirst.c]) this.spr[this.swapFirst.r][this.swapFirst.c].setScale(1); this.swapFirst = null; },
+
+    devUseItem: function (k, r, c) { if (k === 'shuffle') { this.handleItem('shuffle'); return 'shuffled'; } this.armedItem = k; this.applyArmed(r, c); return 'used ' + k; },
+
+    buildItemBar: function () {
+      var meta = [{ k: 'hammer', icon: '🔨', name: '망치' }, { k: 'shuffle', icon: '🔀', name: '셔플' }, { k: 'core', icon: '💠', name: '코어' }, { k: 'swap', icon: '⇄', name: '스왑' }];
+      var y = BOARD_Y + TILE * ROWS + 96, bw = 122, gap = 8;
+      var total = meta.length * bw + (meta.length - 1) * gap, x0 = (DESIGN_W - total) / 2;
+      this.itemBtns = {}; var self = this;
+      meta.forEach(function (m, i) {
+        var x = x0 + i * (bw + gap) + bw / 2;
+        var cont = self.add.container(x, y);
+        var g = self.add.graphics(); cont.add(g); cont.bg = g;
+        cont.add(self.add.text(-bw / 2 + 22, 0, m.icon, { fontFamily: 'Segoe UI Emoji, Segoe UI, Arial', fontSize: '24px' }).setOrigin(0.5));
+        cont.add(self.add.text(-bw / 2 + 42, -7, m.name, { fontFamily: 'Segoe UI, Arial', fontSize: '15px', color: '#ffffff' }).setOrigin(0, 0.5));
+        var cnt = self.add.text(bw / 2 - 12, 0, '', { fontFamily: 'Segoe UI, Arial', fontSize: '16px', color: '#ffd34a', fontStyle: 'bold' }).setOrigin(1, 0.5); cont.add(cnt); cont.cnt = cnt;
+        var zone = self.add.zone(x, y, bw, 44).setInteractive({ useHandCursor: true });
+        zone.on('pointerdown', function () { self.handleItem(m.k); });
+        self.itemBtns[m.k] = cont;
+      });
+      this.updateItemBar();
+    },
+    updateItemBar: function () {
+      if (!this.itemBtns) return; var self = this;
+      Object.keys(this.itemBtns).forEach(function (k) {
+        var cont = self.itemBtns[k], n = self.items[k] || 0, armed = self.armedItem === k, g = cont.bg; g.clear();
+        var col = armed ? 0xffd34a : (n > 0 ? 0x6ea0ff : 0x555a70);
+        g.fillStyle(armed ? 0xffd34a : 0x1a1640, armed ? 0.28 : 0.5); g.fillRoundedRect(-61, -22, 122, 44, 10);
+        g.lineStyle(2, col, n > 0 ? 0.9 : 0.4); g.strokeRoundedRect(-61, -22, 122, 44, 10);
+        cont.cnt.setText('×' + n).setAlpha(n > 0 ? 1 : 0.4);
+        cont.setAlpha(n > 0 || armed ? 1 : 0.55);
+      });
     },
 
     bank: function () {
@@ -862,7 +1049,7 @@
       this.bankG.add(this.bankLabel);
       var zone = this.add.zone(DESIGN_W / 2, by, 360, 64).setInteractive({ useHandCursor: true }); var self = this;
       zone.on('pointerdown', function () { self.bank(); });
-      this.hintText = this.add.text(DESIGN_W / 2, by + 58, '인접 룬을 스와이프 · 정산으로 점수 확정', { fontFamily: 'Segoe UI, Arial', fontSize: '14px', color: '#7c70b8', align: 'center' }).setOrigin(0.5);
+      this.hintText = this.add.text(DESIGN_W / 2, by + 110, '인접 룬을 스와이프 · 정산으로 점수 확정', { fontFamily: 'Segoe UI, Arial', fontSize: '14px', color: '#7c70b8', align: 'center' }).setOrigin(0.5);
     },
 
     objLabel: function () {
