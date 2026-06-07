@@ -13,7 +13,7 @@
       "tags": ["18x18", "tilemap", "platformer", "characters", "coins"],
       "tileSize": 18,
       "previewUrl": "https://kenney.nl/media/pages/assets/pixel-platformer/cover.png",
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://kenney.nl/assets/pixel-platformer",
       "attributionRequired": false,
       "notes": "200개 자산, 18x18 타일. 캐릭터·타일·배경·아이템(코인 등). 동일 시리즈 확장팩도 모두 CC0."
@@ -28,7 +28,7 @@
       "contentTypes": ["character", "tileset", "item", "spritesheet"],
       "style": "pixel",
       "tags": ["platformer", "spritesheet", "redux"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://kenney.nl/assets/platformer-art-pixel-redux",
       "attributionRequired": false,
       "notes": "사이드스크롤 플랫포머용 픽셀 캐릭터·타일·아이템. 걷기 등 프레임 포함."
@@ -44,7 +44,7 @@
       "style": "pixel",
       "tags": ["18x18", "industrial", "expansion", "platformer"],
       "tileSize": 18,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://kenney-assets.itch.io/pixel-platformer-industrial-expansion",
       "attributionRequired": false,
       "notes": "Pixel Platformer 본팩 확장(산업 테마 타일·소품). itch.io 미러도 CC0."
@@ -61,7 +61,7 @@
       "tags": ["dungeon", "topdown", "16x16", "tiled"],
       "tileSize": 16,
       "previewUrl": "https://kenney.nl/media/pages/assets/tiny-dungeon/preview.png",
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://kenney.nl/assets/tiny-dungeon",
       "attributionRequired": false,
       "notes": "130+ 타일, 무기·아이템·캐릭터 포함. Tiled 샘플맵 동봉. 16x16 픽셀. CC0 확인."
@@ -77,7 +77,7 @@
       "style": "pixel",
       "tags": ["roguelike", "rpg", "16x16", "tile"],
       "tileSize": 16,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://kenney.nl/assets/roguelike-rpg-pack",
       "attributionRequired": false,
       "notes": "1700+ 에셋. RPG/로그라이크 타일·가구·UI·아이템 포함, 16x16. 페이지에 CC0 명시."
@@ -93,7 +93,7 @@
       "style": "pixel",
       "tags": ["roguelike", "cave", "dungeon", "16x16"],
       "tileSize": 16,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://kenney.nl/assets/roguelike-caves-dungeons",
       "attributionRequired": false,
       "notes": "520+ 에셋. 동굴·던전 타일셋. 16x16 픽셀. CC0."
@@ -109,7 +109,7 @@
       "style": "pixel",
       "tags": ["roguelike", "micro", "8x8", "topdown"],
       "tileSize": 8,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://kenney.nl/assets/micro-roguelike",
       "attributionRequired": false,
       "notes": "초소형(8x8) 로그라이크 타일·캐릭터. CC0."
@@ -124,7 +124,7 @@
       "contentTypes": ["character", "spritesheet"],
       "style": "pixel",
       "tags": ["roguelike", "character", "topdown"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://kenney.nl/assets/roguelike-characters",
       "attributionRequired": false,
       "notes": "로그라이크 캐릭터 스프라이트 모음. CC0."
@@ -140,7 +140,7 @@
       "style": "vector",
       "tags": ["button", "panel", "slider", "checkbox", "cursor", "hud"],
       "previewUrl": "https://kenney.nl/media/pages/assets/ui-pack/ab9e396e4d-1718203978/preview.png",
-      "thumbnail": "",
+      "preview": "thumbnails/kenney-ui-pack.png",
       "downloadUrl": "https://kenney.nl/media/pages/assets/ui-pack/f651646eab-1718203990/kenney_ui-pack.zip",
       "attributionRequired": false,
       "notes": "약 430개 PNG/벡터 UI 요소(버튼·패널·체크박스·슬라이더·아이콘). 범용 게임 UI 베이스로 가장 널리 쓰임."
@@ -156,7 +156,7 @@
       "style": "pixel",
       "tags": ["pixel", "button", "panel", "hud", "9-slice"],
       "previewUrl": "https://kenney.nl/media/pages/assets/pixel-ui-pack/0ac499be0d-1677661504/preview.png",
-      "thumbnail": "",
+      "preview": "thumbnails/kenney-pixel-ui-pack.png",
       "downloadUrl": "https://kenney.nl/media/pages/assets/pixel-ui-pack/821e760f21-1677661508/kenney_pixel-ui-pack.zip",
       "attributionRequired": false,
       "notes": "약 750개 픽셀아트 UI 요소. 픽셀 게임 HUD·패널·버튼에 적합."
@@ -172,7 +172,7 @@
       "style": "flat",
       "tags": ["icon", "gamepad", "platform", "controller"],
       "previewUrl": "https://kenney.nl/media/pages/assets/game-icons/349f36a54d-1677661575/preview.png",
-      "thumbnail": "",
+      "preview": "thumbnails/kenney-game-icons.png",
       "downloadUrl": "https://kenney.nl/media/pages/assets/game-icons/1ebf9c14af-1677661579/kenney_game-icons.zip",
       "attributionRequired": false,
       "notes": "약 105개 게임/플랫폼/컨트롤러 아이콘. 입력 안내 HUD 아이콘에 유용."
@@ -187,7 +187,7 @@
       "contentTypes": ["ui", "icon"],
       "style": "flat",
       "tags": ["sci-fi", "panel", "button", "hud", "frame"],
-      "thumbnail": "",
+      "preview": "",
       "attributionRequired": false,
       "notes": "약 130개 SF 테마 UI 요소. 패널·프레임·버튼·게이지 프레임."
     },
@@ -201,7 +201,7 @@
       "contentTypes": ["ui", "background"],
       "style": "hand-drawn",
       "tags": ["fantasy", "border", "frame", "panel", "9-slice"],
-      "thumbnail": "",
+      "preview": "",
       "attributionRequired": false,
       "notes": "약 140개 판타지 테두리·프레임. RPG 패널·창 테두리 9-slice용."
     },
@@ -216,7 +216,7 @@
       "style": "vector",
       "tags": ["shapes", "geometric", "smooth", "mascot", "platformer"],
       "previewUrl": "https://kenney.nl/media/pages/assets/shape-characters/b46e97bd9f-1698339456/preview.png",
-      "thumbnail": "",
+      "preview": "thumbnails/kenney-shape-characters.png",
       "downloadUrl": "https://kenney.nl/media/pages/assets/shape-characters/c016420b08-1698339465/kenney_shape-characters.zip",
       "attributionRequired": false,
       "notes": "100개 에셋. 둥근 도형 기반 스무스 캐릭터. CC0 확인."
@@ -232,7 +232,7 @@
       "style": "vector",
       "tags": ["pattern", "seamless", "vector", "background"],
       "previewUrl": "https://kenney.nl/media/pages/assets/pattern-pack/3b80483303-1677484337/preview.png",
-      "thumbnail": "",
+      "preview": "thumbnails/kenney-pattern-pack.png",
       "downloadUrl": "https://kenney.nl/media/pages/assets/pattern-pack/e787377a73-1721940715/kenney_pattern-pack.zip",
       "attributionRequired": false,
       "notes": "80개. 벡터(SVG/EPS) 포함. seamless 배경 패턴."
@@ -248,7 +248,7 @@
       "style": "flat",
       "tags": ["background", "parallax", "smooth", "hills", "clouds"],
       "previewUrl": "https://kenney.nl/media/pages/assets/background-elements/dc2e9037b9-1677670386/preview.png",
-      "thumbnail": "",
+      "preview": "thumbnails/kenney-background-elements.png",
       "downloadUrl": "https://kenney.nl/media/pages/assets/background-elements/b66a1ddec7-1677670395/kenney_background-elements.zip",
       "attributionRequired": false,
       "notes": "110개. 스무스/플랫 배경 요소(언덕·구름 등). Redux 버전(90개)도 별도 존재."
@@ -264,7 +264,7 @@
       "style": "pixel",
       "tags": ["1-bit", "roguelike", "rpg", "tilemap"],
       "previewUrl": "https://img.itch.zone/aW1hZ2UvMTE2NDQ4Mi83NDA2NTE2LnBuZw==/347x500/giJDbI.png",
-      "thumbnail": "",
+      "preview": "thumbnails/kenney-1-bit-pack.png",
       "downloadUrl": "https://kenney-assets.itch.io/1-bit-pack",
       "attributionRequired": false,
       "notes": "1,000+ 타일·캐릭터·오브젝트·아이템. 타일시트 + 개별 스프라이트, 단색·투명 배경 버전 포함. roguelike/RPG 범용."
@@ -280,7 +280,7 @@
       "style": "pixel",
       "tags": ["1-bit", "platformer", "tilemap"],
       "previewUrl": "https://img.itch.zone/aW1hZ2UvMTE2NDQ4NC83MzkyNzUyLnBuZw==/347x500/KY1iGH.png",
-      "thumbnail": "",
+      "preview": "thumbnails/kenney-1-bit-platformer-pack.png",
       "downloadUrl": "https://kenney-assets.itch.io/1-bit-platformer-pack",
       "attributionRequired": false,
       "notes": "400+ 스프라이트(캐릭터·아이템·적·블록·타일). 1-bit 컬러. 타일시트 + 개별 스프라이트."
@@ -295,7 +295,7 @@
       "contentTypes": ["character", "tileset", "spritesheet", "ui", "icon", "background", "effect", "item"],
       "style": "mixed",
       "tags": ["all-in-one", "bundle", "2d", "3d"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://kenney.itch.io/kenney-game-assets",
       "attributionRequired": false,
       "notes": "60,000+ 자산 단일 다운로드(2D 스프라이트, 저폴리 3D, 오디오, 폰트, UI). 전부 CC0."
@@ -311,7 +311,7 @@
       "style": "vector",
       "tags": ["particle", "fire", "smoke", "magic", "spark", "electricity"],
       "previewUrl": "https://kenney.nl/media/pages/assets/particle-pack/d50c7fc9b6-1677578655/preview.png",
-      "thumbnail": "",
+      "preview": "thumbnails/kenney-particle-pack.png",
       "downloadUrl": "https://kenney.nl/media/pages/assets/particle-pack/f8fe0f8cb8-1677578741/kenney_particle-pack.zip",
       "attributionRequired": false,
       "notes": "80+ 파티클 스프라이트(개별 PNG + 타일시트 + 벡터). 파이어·스모크·마법·스파크·전기 샘플. FX 파티클 텍스처로 광범위 사용."
@@ -327,7 +327,7 @@
       "style": "flat",
       "tags": ["smoke", "explosion", "flash", "puff", "vfx"],
       "previewUrl": "https://kenney.nl/media/pages/assets/smoke-particles/0e73ec90dd-1677695164/preview.png",
-      "thumbnail": "",
+      "preview": "thumbnails/kenney-smoke-particles.png",
       "downloadUrl": "https://kenney.nl/media/pages/assets/smoke-particles/23249a0d35-1677695171/kenney_smoke-particles.zip",
       "attributionRequired": false,
       "notes": "약 70~77개 스프라이트, 5스타일: 검은 연기·익스플로전·플래시·흰 퍼프 등. 폭발·연기 FX 시트로 바로 사용 가능."
@@ -342,7 +342,7 @@
       "contentTypes": ["icon", "ui"],
       "style": "flat",
       "tags": ["icon", "resource", "action", "dice", "card"],
-      "thumbnail": "",
+      "preview": "",
       "attributionRequired": false,
       "notes": "약 250개 액션·자원·주사위·카드 아이콘. 게임 HUD 자원/상태 아이콘 세트로 활용."
     },
@@ -356,7 +356,7 @@
       "contentTypes": ["icon", "ui"],
       "style": "flat",
       "tags": ["icon", "platform", "controller", "expansion"],
-      "thumbnail": "",
+      "preview": "",
       "attributionRequired": false,
       "notes": "Game Icons 확장. 추가 플랫폼/입력 아이콘."
     },
@@ -370,7 +370,7 @@
       "contentTypes": ["character", "spritesheet", "tileset", "item", "effect"],
       "style": "pixel",
       "tags": ["platformer", "fruit", "enemies", "animated", "20fps"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://pixelfrog-assets.itch.io/pixel-adventure-1",
       "attributionRequired": false,
       "notes": "플레이어 + 적 + 타일 + 과일/체크포인트 + 톱/스파이크볼 함정. idle/run/jump/fall 프레임 애니 완비. 플랫포머 입문 표준 에셋."
@@ -385,7 +385,7 @@
       "contentTypes": ["character", "spritesheet", "item", "effect"],
       "style": "pixel",
       "tags": ["platformer", "enemies", "20-enemies", "animated"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://pixelfrog-assets.itch.io/pixel-adventure-2",
       "attributionRequired": false,
       "notes": "Pixel Adventure 1 확장: 적 20종 추가 등. 동일 CC0."
@@ -400,7 +400,7 @@
       "contentTypes": ["character", "tileset", "effect"],
       "style": "pixel",
       "tags": ["rts", "topdown", "fantasy", "warband"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://pixelfrog-assets.itch.io/tiny-swords",
       "attributionRequired": false,
       "notes": "⚠ 재배포(벤더링) 제한 — 게임 번들 시 라이선스 확인 필수. 커스텀 라이선스: 게임 내장은 OK이나 에셋 파일 자체 재배포·재판매·repackage 금지(수정본 포함). 표기 의무 없음."
@@ -415,7 +415,7 @@
       "contentTypes": ["character", "tileset", "item", "background", "effect"],
       "style": "pixel",
       "tags": ["knight", "slime", "coin", "fruit", "music", "sfx", "beginner"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://brackeysgames.itch.io/brackeys-platformer-bundle",
       "attributionRequired": false,
       "notes": "플레이어(Knight)·적(Slime)·월드 타일셋·플랫폼·코인/과일 + 음악·SFX·폰트. 캐릭터 애니 포함. 입문자용 올인원."
@@ -430,7 +430,7 @@
       "contentTypes": ["character", "spritesheet", "tileset", "item", "effect", "background"],
       "style": "pixel",
       "tags": ["platformer", "16bit", "run", "jump", "idle", "vfx", "music"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://ansimuz.itch.io/sunny-land-pixel-game-art",
       "attributionRequired": false,
       "notes": "16비트 플랫포머 올인원. 플레이어 run/jump/idle 풀 애니 + 적 애니 + 타일셋·프롭·젬·VFX·음악. CC0 확인."
@@ -446,7 +446,7 @@
       "style": "pixel",
       "tags": ["explosion", "animation", "pixel-art", "spritesheet"],
       "previewUrl": "https://ansimuz.itch.io/explosion-animations-pack",
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://ansimuz.itch.io/explosion-animations-pack",
       "attributionRequired": false,
       "notes": "CC0, 'Credit is not required'. 기본 7종 익스플로전 애니 스프라이트시트. name-your-own-price 0원 다운로드 가능. 게임 폭발/타격 시퀀스에 적합."
@@ -462,7 +462,7 @@
       "style": "pixel",
       "tags": ["16x16", "dungeon", "characters", "weapons", "animated"],
       "tileSize": 16,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://0x72.itch.io/dungeontileset-ii",
       "attributionRequired": false,
       "notes": "GrafxKid 리컬러. 다수 캐릭터 walk 애니 + 무기·아이템·적. 아트 CC0(동반 코드는 MIT)."
@@ -478,7 +478,7 @@
       "style": "pixel",
       "tags": ["16x16", "dungeon", "tileset"],
       "tileSize": 16,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://0x72.itch.io/16x16-dungeon-tileset",
       "attributionRequired": false,
       "notes": "DungeonTileset II의 원본 v1. 동일 CC0 기조."
@@ -494,7 +494,7 @@
       "style": "pixel",
       "tags": ["dungeon", "sewer", "16x16"],
       "tileSize": 16,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://0x72.itch.io/16x16-dungeontileset-ii-sewers",
       "attributionRequired": false,
       "notes": "DungeonTileset II 하수도 확장(유료 $2). 사이드바 정식 Asset license 필드 부재 — CC0가 댓글 답변에만 근거. 번들 전 개별 라이선스 재확인 필수."
@@ -510,7 +510,7 @@
       "style": "pixel",
       "tags": ["16x16", "grassland", "autumn", "tropics", "winter", "parallax"],
       "tileSize": 16,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://grafxkid.itch.io/seasonal-tilesets",
       "attributionRequired": false,
       "notes": "4계절 타일셋(Grassland/Autumn/Tropics/Winter) + flat/parallax 배경 + 물·용암·오일 애니 타일. 16x16. 표기 선택."
@@ -525,7 +525,7 @@
       "contentTypes": ["character", "spritesheet"],
       "style": "pixel",
       "tags": ["knight", "hero", "idle", "run", "jump", "attack", "death", "animated"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://luizmelo.itch.io/hero-knight",
       "attributionRequired": false,
       "notes": "플레이어 캐릭터 풀 애니: idle/run/jump/fall/attack1·2/take hit/death. CC0 명시 확인. 평점 4.9."
@@ -540,7 +540,7 @@
       "contentTypes": ["character", "spritesheet", "tileset", "item", "ui"],
       "style": "pixel",
       "tags": ["cc0", "public-domain", "curated"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://opengameart.org/content/cc0-public-domain",
       "attributionRequired": false,
       "notes": "CC0로 표시된 큐레이션 묶음이나 사이트가 정확성 보증 안 함. 항목별 라이선스 페이지를 직접 확인 후 사용."
@@ -555,7 +555,7 @@
       "contentTypes": ["character", "spritesheet", "tileset", "item"],
       "style": "pixel",
       "tags": ["platformer", "arcade", "sprites"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://opengameart.org/content/arcade-platformer-assets",
       "attributionRequired": false,
       "notes": "아케이드 플랫포머용 스프라이트 모음. 라이선스 필드 개별 확인 필수."
@@ -570,7 +570,7 @@
       "contentTypes": ["character", "tileset", "item", "spritesheet"],
       "style": "pixel",
       "tags": ["platformer", "330-tiles", "sidescroller", "kenney"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://opengameart.org/content/platformer-art-deluxe",
       "attributionRequired": false,
       "notes": "사이드스크롤러용 330개 타일/스프라이트(Kenney 계열). 항목 라이선스 확인 후 사용."
@@ -586,7 +586,7 @@
       "style": "pixel",
       "tags": ["dungeon", "16x16", "kenney"],
       "tileSize": 16,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://opengameart.org/content/tiny-dungeon",
       "attributionRequired": false,
       "notes": "Kenney Tiny Dungeon의 OGA 미러. CC0. 항목 페이지 License 박스 확인."
@@ -601,7 +601,7 @@
       "contentTypes": ["tileset", "character", "item"],
       "style": "pixel",
       "tags": ["dungeon", "roguelike", "collection"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://opengameart.org/content/2d-dungeon-and-roguelike-1",
       "attributionRequired": true,
       "notes": "던전·로그라이크 자원 큐레이션 컬렉션. 포함 항목마다 라이선스 상이 → 항목별 확인 필수."
@@ -617,7 +617,7 @@
       "style": "pixel",
       "tags": ["monster", "creature", "16x16"],
       "tileSize": 16,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://opengameart.org/content/tiny-creatures",
       "attributionRequired": false,
       "notes": "clintbellanger의 소형 몬스터 스프라이트. 페이지 License 박스에서 CC0 확인 권장."
@@ -632,7 +632,7 @@
       "contentTypes": ["item", "icon"],
       "style": "vector",
       "tags": ["items", "equipment", "svg", "cc0", "orthogonal"],
-      "thumbnail": "",
+      "preview": "",
       "attributionRequired": false,
       "notes": "아이콘·장비 스프라이트. SVG(진짜 벡터) 포함. CC0 단일 — 이 항목은 안전."
     },
@@ -646,7 +646,7 @@
       "contentTypes": ["spritesheet", "character", "tileset"],
       "style": "mixed",
       "tags": ["cc0", "2d", "filter"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://opengameart.org/",
       "attributionRequired": false,
       "notes": "고급 검색에서 라이선스=CC0 + 타입=2D 필터. 다운로드 전 항목별 라이선스 배지 재확인 권장(오기재 사례 존재)."
@@ -662,7 +662,7 @@
       "style": "flat",
       "tags": ["cc0", "scifi", "lowpoly"],
       "previewUrl": "https://opengameart.org/sites/default/files/s23pftx9xmmsuho2wr9l.png",
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://opengameart.org/content/ultimate-space-kit-by-quaternius",
       "attributionRequired": false,
       "notes": "OGA 내 CC0 항목의 대표 예. 항목별 라이선스가 분명히 CC0로 표기됨."
@@ -678,7 +678,7 @@
       "style": "pixel",
       "tags": ["explosion", "particle", "animation", "spritesheet"],
       "previewUrl": "https://opengameart.org/sites/default/files/explosion_18.png",
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://opengameart.org/content/explosion-spritesheet",
       "attributionRequired": false,
       "notes": "작성자 Covalent Bonds. 페이지 명시 'use for free! no credit needed' CC0. 단일 explosion.png 스프라이트시트."
@@ -694,7 +694,7 @@
       "style": "vector",
       "tags": ["particle", "shader", "vfx", "fire", "smoke", "magic"],
       "previewUrl": "https://opengameart.org/sites/default/files/outnow.png",
-      "thumbnail": "",
+      "preview": "thumbnails/oga-particle-pack-80-kenney.png",
       "downloadUrl": "https://opengameart.org/content/particle-pack-80-sprites",
       "attributionRequired": false,
       "notes": "Kenney Particle Pack의 OGA 미러, 동일 CC0. 표기는 선택('Kenney.nl' 권장이나 의무 아님)."
@@ -710,7 +710,7 @@
       "style": "hd",
       "tags": ["explosion", "aura", "effect", "animation", "spritesheet"],
       "previewUrl": "https://opengameart.org/sites/default/files/Sample31.gif",
-      "thumbnail": "",
+      "preview": "thumbnails/oga-explosion-effects-and-more-soluna.gif",
       "downloadUrl": "https://opengameart.org/content/explosion-effects-and-more",
       "attributionRequired": false,
       "notes": "작성자 Soluna Software. CC0로 변경, 'You do not need to credit me' 명시. 무료 샘플 프레임 시트(같은 작성자 300-effect 풀팩은 상용이므로 무료 항목만 사용)."
@@ -725,7 +725,7 @@
       "contentTypes": ["ui", "icon", "background"],
       "style": "vector",
       "tags": ["cc0", "ui", "hud", "icon"],
-      "thumbnail": "",
+      "preview": "",
       "attributionRequired": false,
       "notes": "CC0 항목만 큐레이션된 리스트. 이 범위 내에서 고르면 무표기·번들 안전."
     },
@@ -739,7 +739,7 @@
       "contentTypes": ["ui", "icon"],
       "style": "hand-drawn",
       "tags": ["adventure", "rpg", "panel", "button", "kenney"],
-      "thumbnail": "",
+      "preview": "",
       "attributionRequired": false,
       "notes": "Kenney UI Pack - Adventure의 OGA 미러. CC0. 항목별 라이선스 표시 확인 후 사용."
     },
@@ -753,7 +753,7 @@
       "contentTypes": ["ui", "icon"],
       "style": "pixel",
       "tags": ["ui", "hud", "search"],
-      "thumbnail": "",
+      "preview": "",
       "attributionRequired": true,
       "notes": "고급검색에서 라이선스 필터(CC0 등)를 걸어 안전 항목만 추출. 각 페이지 라이선스 확인 필수."
     },
@@ -768,7 +768,7 @@
       "style": "pixel",
       "tags": ["16x16", "1100-assets", "platformer", "tileset"],
       "tileSize": 16,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://shackhal.itch.io/multi-platformer-tileset",
       "attributionRequired": false,
       "notes": "16x16 프로 타일셋, 1,100+ 자산. itch CC0 필터 노출작. 사용 전 페이지 라이선스 확인."
@@ -784,7 +784,7 @@
       "style": "pixel",
       "tags": ["rpg", "topdown", "4-directional", "32x32", "walk"],
       "tileSize": 32,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://pipoya.itch.io/pipoya-free-rpg-character-sprites-32x32",
       "attributionRequired": false,
       "notes": "64 캐릭터, 32x32, 4방향 걷기 애니, PNG 스프라이트시트. 4방향 걷기 요구 정확 충족. 소재 자체 재배포/재판매만 금지(게임 임베드는 허용)."
@@ -800,7 +800,7 @@
       "style": "pixel",
       "tags": ["rpg", "field", "dungeon", "32x32"],
       "tileSize": 32,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://pipoya.itch.io/pipoya-rpg-tileset-32x32",
       "attributionRequired": false,
       "notes": "필드/던전 RPG 타일셋 32x32. 동일 커스텀 라이선스(소재 재배포·재판매만 금지, 게임 임베드 허용)."
@@ -816,7 +816,7 @@
       "style": "pixel",
       "tags": ["rpg", "16x16", "field"],
       "tileSize": 16,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://pipoya.itch.io/free-rpg-tileset-16x16",
       "attributionRequired": false,
       "notes": "16x16 RPG 타일셋. 동일 커스텀 라이선스(소재 재배포·재판매만 금지, 게임 임베드 허용)."
@@ -832,7 +832,7 @@
       "style": "pixel",
       "tags": ["rpg", "4-directional", "32x32", "cat-ninja"],
       "tileSize": 32,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://pipoya.itch.io/pipoya-free-rpg-character-sprites-nekonin",
       "attributionRequired": false,
       "notes": "20 캐릭터, 4방향 걷기, 32x32. 동일 커스텀 라이선스(소재 재배포·재판매만 금지, 게임 임베드 허용)."
@@ -848,7 +848,7 @@
       "style": "pixel",
       "tags": ["rpg", "topdown", "32x32", "4-directional", "overworld"],
       "tileSize": 32,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://opengameart.org/content/liberated-pixel-cup-lpc-base-assets-sprites-map-tiles",
       "attributionRequired": true,
       "notes": "32x32 RPG 베이스 스프라이트(4방향 걷기) + 맵 타일. 작성자별 라이선스는 CREDITS.TXT 확인. CC-BY-SA 의무(표기 + ShareAlike). Sharm/Redshrike 항목만 OGA-BY로 카피레프트 회피 가능."
@@ -864,7 +864,7 @@
       "style": "pixel",
       "tags": ["rpg", "lpc", "32x32", "extension"],
       "tileSize": 32,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://opengameart.org/lpc-art-entries",
       "attributionRequired": true,
       "notes": "LPC 호환 확장 아트 다수. 항목마다 CC-BY-SA/GPL 외 CC-BY/OGA-BY/CC0 혼재 → 항목별 라이선스 개별 확인 필수."
@@ -880,7 +880,7 @@
       "style": "pixel",
       "tags": ["lpc", "4-directional", "8-directional", "64x64", "generator"],
       "tileSize": 64,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://github.com/liberatedpixelcup/Universal-LPC-Spritesheet-Character-Generator",
       "attributionRequired": true,
       "notes": "브라우저에서 의상·헤어·장비 레이어 조합 후 스프라이트시트 + CREDITS.csv 내보내기. 생성물 라이선스는 선택 레이어에 따라 결정(GPL/CC-BY-SA 디폴트 혼입 주의)."
@@ -896,7 +896,7 @@
       "style": "pixel",
       "tags": ["roguelike", "dungeon", "16x16", "monster", "dawnbringer"],
       "tileSize": 16,
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181",
       "attributionRequired": true,
       "notes": "16x16 종합 로그라이크: 던전/필드 타일, 다수 몬스터·캐릭터·아이템. 페이지 메타는 CC-BY 4.0이나 동봉 파일은 CC-BY-SA 3.0(불일치) + DawnBringer 크레딧 의무 + 숨김 스프라이트 비표준 조항."
@@ -911,7 +911,7 @@
       "contentTypes": ["icon", "ui"],
       "style": "vector",
       "tags": ["svg", "weapon", "magic", "status", "ability", "rpg"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://github.com/game-icons/icons",
       "attributionRequired": true,
       "notes": "공식 GitHub 미러(game-icons/icons)에서 전체 SVG 일괄 받기. 기본 CC-BY 3.0(일부 작가는 CC0). 작가별 표기 필요."
@@ -926,7 +926,7 @@
       "contentTypes": ["icon"],
       "style": "flat",
       "tags": ["lorc", "fantasy", "weapon", "creature"],
-      "thumbnail": "",
+      "preview": "",
       "attributionRequired": true,
       "notes": "기여자 Lorc(약 1,400+개). 표기: 'Icons made by Lorc. Available on https://game-icons.net'."
     },
@@ -940,7 +940,7 @@
       "contentTypes": ["icon"],
       "style": "flat",
       "tags": ["delapouite", "object", "item", "rpg"],
-      "thumbnail": "",
+      "preview": "",
       "attributionRequired": true,
       "notes": "기여자 Delapouite(약 2,000+개). 표기: 'Icons made by Delapouite. Available on https://game-icons.net'."
     },
@@ -954,7 +954,7 @@
       "contentTypes": ["icon", "ui"],
       "style": "vector",
       "tags": ["cc0", "public-domain", "ui", "icon"],
-      "thumbnail": "",
+      "preview": "",
       "attributionRequired": false,
       "notes": "CC0로 한정된 항목만 모은 필터 뷰. 이 범위 내 항목은 표기 불필요·번들/재배포 가능."
     },
@@ -968,7 +968,7 @@
       "contentTypes": ["icon", "ui"],
       "style": "vector",
       "tags": ["no-attribution", "cc0", "ui"],
-      "thumbnail": "",
+      "preview": "",
       "attributionRequired": false,
       "notes": "표기 불필요로 필터된 아이콘 뷰. 안전하게 무표기 사용 가능한 범위."
     },
@@ -982,7 +982,7 @@
       "contentTypes": ["icon", "ui"],
       "style": "vector",
       "tags": ["icons", "svg", "mit", "cc-by", "apache"],
-      "thumbnail": "",
+      "preview": "",
       "attributionRequired": true,
       "notes": "표기 필요 컬렉션. 번들 가능하나 해당 라이선스 고지 의무 준수. GPL·CC-NC-BY·Logo 항목은 제외. 항목별 확인 필수."
     },
@@ -997,7 +997,7 @@
       "style": "hand-drawn",
       "tags": ["doodle", "sketch", "people", "smooth", "illustration"],
       "previewUrl": "https://www.opendoodles.com/",
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://www.opendoodles.com/",
       "attributionRequired": false,
       "notes": "메인 페이지에서 개별/전체 다운로드. 다운로드 직링크는 동적이라 사이트에서 받음. CC0."
@@ -1012,7 +1012,7 @@
       "contentTypes": ["character"],
       "style": "hand-drawn",
       "tags": ["doodle", "faces", "color", "people"],
-      "thumbnail": "",
+      "preview": "",
       "attributionRequired": false,
       "notes": "동일 컬렉션의 색상/표정 변형. 모두 CC0."
     },
@@ -1027,7 +1027,7 @@
       "style": "vector",
       "tags": ["illustration", "smooth", "vector", "open-source", "mit"],
       "previewUrl": "https://illlustrations.co/",
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://illlustrations.co/",
       "attributionRequired": true,
       "notes": "100+ 벡터 일러스트. AI/SVG/EPS/PNG. MIT — LICENSE 동봉으로 고지 의무 충족. 브랜드 로고 묘사 항목만 제외(상표)."
@@ -1043,7 +1043,7 @@
       "style": "flat",
       "tags": ["space", "scifi", "lowpoly", "3d"],
       "previewUrl": "https://opengameart.org/sites/default/files/s23pftx9xmmsuho2wr9l.png",
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://opengameart.org/content/ultimate-space-kit-by-quaternius",
       "attributionRequired": false,
       "notes": "저폴리 우주/SF 키트. OGA에서 CC0 배지 확인됨. 3D지만 렌더 스프라이트화 가능."
@@ -1058,7 +1058,7 @@
       "contentTypes": ["item", "character"],
       "style": "flat",
       "tags": ["platformer", "lowpoly", "3d"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://quaternius.itch.io/ultimate-platformer-pack",
       "attributionRequired": false,
       "notes": "100+ 저폴리 플랫포머 모델. CC0. itch.io 배포."
@@ -1075,7 +1075,7 @@
       "tags": ["magic", "fire", "water", "earth", "wind", "portal", "explosion"],
       "tileSize": 32,
       "previewUrl": "https://img.itch.zone/aW1nLzExNjk3OTg4LnBuZw==/original/uPI%2FJY.png",
-      "thumbnail": "",
+      "preview": "thumbnails/foozle-pixel-magic-sprite-effects.png",
       "downloadUrl": "https://foozlecc.itch.io/pixel-magic-sprite-effects",
       "attributionRequired": false,
       "notes": "CC0, 'Attribution not required'. 10종 32x32 마법 스펠 FX + 아이콘. 마법 FX 시트로 적합."
@@ -1091,7 +1091,7 @@
       "style": "pixel",
       "tags": ["explosion", "fire", "energy", "magic", "vfx"],
       "previewUrl": "https://img.itch.zone/aW1nLzEyMzQ3MzI2LnBuZw==/original/t8YIvq.png",
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://codemanu.itch.io/vfx-free-pack",
       "attributionRequired": true,
       "notes": "22종 픽셀 FX(폭발·불·에너지·마법). 30/60fps, PNG 시트 + GIF + SpriteMancer 프로젝트. 본문은 CC0 주장하나 itch 메타는 CC-BY-4.0(충돌) — 보수적으로 표기 가정. 상업 사용 OK."
@@ -1107,7 +1107,7 @@
       "style": "pixel",
       "tags": ["explosion", "hit", "magic", "fire", "effect"],
       "previewUrl": "https://codemanu.itch.io/pixelart-effect-pack",
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://codemanu.itch.io/pixelart-effect-pack",
       "attributionRequired": true,
       "notes": "구버전 무료 픽셀 이펙트 팩. 라이선스 표기 불일치로 보수적으로 표기 의무 가정. 사용 전 페이지 License 재확인 권장."
@@ -1122,7 +1122,7 @@
       "contentTypes": ["character", "tileset", "ui"],
       "style": "hand-drawn",
       "tags": ["cc0", "platformer", "topdown", "rpg", "freebies"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://www.gameart2d.com/freebies.html",
       "attributionRequired": false,
       "notes": "freebies 섹션 한정 CC0(상업/비상업 무료, 표기 선택). 플랫포머·탑다운 RPG용 캐릭터·타일셋·GUI. completeness-critic 추가 — 팩 상세는 sprite-catalog-refresh 시 보강. 유료 자산은 재배포 금지."
@@ -1137,7 +1137,7 @@
       "contentTypes": ["character", "tileset", "item", "ui", "effect"],
       "style": "pixel",
       "tags": ["cc0", "rpg", "topdown", "godot"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://pixel-boy.itch.io/ninja-adventure-asset-pack",
       "attributionRequired": false,
       "notes": "탑다운 RPG/액션 종합 CC0 팩: 50+ 캐릭터·30+ 몬스터·9 보스·60+ 아이템·타일셋·UI·이펙트·사운드. completeness-critic 추가 — 팩 상세는 sprite-catalog-refresh 시 보강."
@@ -1152,7 +1152,7 @@
       "contentTypes": ["tileset", "character"],
       "style": "pixel",
       "tags": ["cc0", "platformer", "tileset", "retro"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://v3x3d.itch.io/",
       "attributionRequired": false,
       "notes": "Retro Lines(16x16)·Paper Pixels(8x8) 등 CC0 플랫포머 타일셋·애니 적/플레이어. completeness-critic 추가 — 팩 상세는 sprite-catalog-refresh 시 보강. 일부 확장은 Patreon 타임드 독점이므로 무료 공개분만, per-item 확인."
@@ -1167,7 +1167,7 @@
       "contentTypes": ["character", "ui"],
       "style": "hand-drawn",
       "tags": ["cc0", "people", "peeps", "illustration", "modular"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://www.openpeeps.com/",
       "attributionRequired": false,
       "notes": "손그림 인물(peeps) 모듈 라이브러리. CC0(상업/개인 무료, 표기 불필요). completeness-critic 추가 — 팩 상세는 sprite-catalog-refresh 시 보강."
@@ -1182,7 +1182,7 @@
       "contentTypes": ["background", "character", "ui"],
       "style": "vector",
       "tags": ["cc0", "svg", "vector", "illustration"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://lukaszadam.com/illustrations",
       "attributionRequired": false,
       "notes": "수백 개 SVG 일러스트. CC0(상업 가능, 표기 불필요). 메뉴·온보딩·배경/캐릭터 벡터 아트. completeness-critic 추가 — 팩 상세는 sprite-catalog-refresh 시 보강."
@@ -1197,7 +1197,7 @@
       "contentTypes": ["icon", "ui"],
       "style": "flat",
       "tags": ["mit", "svg", "icons", "ui", "hud"],
-      "thumbnail": "",
+      "preview": "",
       "downloadUrl": "https://tabler.io/icons",
       "attributionRequired": true,
       "notes": "6000+ MIT SVG 아이콘. 재배포·수정·상업 사용 자유, 라이선스 고지만 필요(표기 trivial). 게임 HUD·메뉴·설정 UI에 적합. completeness-critic 추가 — 팩 상세는 sprite-catalog-refresh 시 보강."

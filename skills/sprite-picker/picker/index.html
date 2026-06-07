@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>스프라이트 피커</title>
+  <link rel="icon" href="data:," />
   <link rel="stylesheet" href="picker.css" />
 </head>
 <body>
@@ -14,11 +15,6 @@
         <h1 id="title">스프라이트 피커</h1>
         <p id="subtitle" class="muted">적용 대상에 이미지를 배정하세요.</p>
       </div>
-    </div>
-    <div class="tabs" id="tabs">
-      <button class="tab active" data-group="catalog">카탈로그 <span class="count" data-count="catalog">0</span></button>
-      <button class="tab" data-group="library">이전 사용 <span class="count" data-count="library">0</span></button>
-      <button class="tab" data-group="candidate">이번 후보 <span class="count" data-count="candidate">0</span></button>
     </div>
   </header>
 
@@ -39,26 +35,52 @@
     <span class="shown-count muted small" id="shownCount"></span>
   </section>
 
+  <p class="view-hint muted small" id="viewHint"></p>
+
   <main id="gallery" class="gallery" aria-live="polite"></main>
 
-  <footer class="tray" id="tray">
-    <div class="tray-head">
-      <strong id="trayLabel">선택됨 <span id="selCount">0</span>개</strong>
-      <div class="tray-actions">
-        <button id="clearBtn" class="btn ghost" type="button">전체 해제</button>
-        <button id="completeBtn" class="btn primary big" type="button">✓ 선택 완료</button>
+  <!-- 하단 도크: 카테고리 탭바 + 선택 트레이 (함께 sticky bottom) -->
+  <div class="dock">
+    <nav class="bottom-nav" id="bottomNav" aria-label="카테고리">
+      <button class="nav-tab active" data-view="recommended"><span class="nav-ico">⭐</span><span class="nav-label">추천</span><span class="count" data-count="recommended">0</span></button>
+      <button class="nav-tab" data-view="all"><span class="nav-ico">🗂️</span><span class="nav-label">전체</span><span class="count" data-count="all">0</span></button>
+      <button class="nav-tab" data-view="downloaded"><span class="nav-ico">⬇️</span><span class="nav-label">다운로드</span><span class="count" data-count="downloaded">0</span></button>
+      <button class="nav-tab" data-view="candidate"><span class="nav-ico">✨</span><span class="nav-label">후보</span><span class="count" data-count="candidate">0</span></button>
+    </nav>
+
+    <footer class="tray" id="tray">
+      <div class="tray-head">
+        <strong id="trayLabel">선택됨 <span id="selCount">0</span>개</strong>
+        <div class="tray-actions">
+          <button id="clearBtn" class="btn ghost" type="button">전체 해제</button>
+          <button id="completeBtn" class="btn primary big" type="button">✓ 선택 완료</button>
+        </div>
       </div>
+      <div id="selList" class="sel-list"></div>
+      <details class="more-wrap">
+        <summary class="muted small">메모·선택 코드</summary>
+        <label class="note-label" for="note">메모(선택) — 색 보정·세부 요청을 적으면 Claude가 함께 읽습니다.</label>
+        <textarea id="note" rows="2" placeholder="예: 코인은 노란 톤으로, 적은 살짝 작게."></textarea>
+        <div class="token-wrap" id="tokenWrap">
+          <textarea id="token" rows="5" readonly aria-label="선택 코드 JSON"></textarea>
+          <p class="muted small">자동 전송이 안 되면(정적 서버), 이 코드를 복사해 채팅창에 붙여넣어 주세요.</p>
+          <button id="copyBtn" class="btn ghost" type="button">선택 코드 복사</button>
+        </div>
+      </details>
+    </footer>
+  </div>
+
+  <!-- 풀뷰 라이트박스(다운로드분 전체 보기 / 프레임 그리드) -->
+  <div class="lightbox" id="lightbox" hidden>
+    <div class="lightbox-backdrop" id="lightboxBackdrop"></div>
+    <div class="lightbox-panel" role="dialog" aria-modal="true" aria-label="전체 보기">
+      <div class="lightbox-head">
+        <strong id="lightboxTitle">전체 보기</strong>
+        <button class="btn ghost" id="lightboxClose" type="button">✕ 닫기</button>
+      </div>
+      <div class="lightbox-body" id="lightboxBody"></div>
     </div>
-    <div id="selList" class="sel-list"></div>
-    <label class="note-label" for="note">메모(선택) — 색 보정·세부 요청을 적으면 Claude가 함께 읽습니다.</label>
-    <textarea id="note" rows="2" placeholder="예: 코인은 노란 톤으로, 적은 살짝 작게."></textarea>
-    <details class="token-wrap" id="tokenWrap">
-      <summary>선택 코드(붙여넣기 폴백)</summary>
-      <textarea id="token" rows="6" readonly aria-label="선택 코드 JSON"></textarea>
-      <p class="muted small">자동 전송이 안 되면(정적 서버), 이 코드를 복사해 채팅창에 붙여넣어 주세요.</p>
-      <button id="copyBtn" class="btn ghost" type="button">선택 코드 복사</button>
-    </details>
-  </footer>
+  </div>
 
   <script src="data.js" onerror="window.__noData=true"></script>
   <script src="picker.js"></script>

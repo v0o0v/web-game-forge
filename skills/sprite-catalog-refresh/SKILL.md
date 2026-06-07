@@ -25,8 +25,9 @@ allowed-tools: Read, Write, Edit, Bash, WebSearch, WebFetch
 
 ## 산출물 (덮어쓰기 대상)
 - `skills/sprite-picker/catalog/sources.json` — 소스 목록 + 안전 티어
-- `skills/sprite-picker/catalog/packs.json` — 팩 인덱스 + 태그·미리보기
-- `skills/sprite-picker/catalog/thumbnails/` — 오프라인 썸네일(가능한 항목)
+- `skills/sprite-picker/catalog/packs.json` — 팩 인덱스 + 태그·`previewUrl`·`preview`(커밋 썸네일 경로)
+- `skills/sprite-picker/catalog/thumbnails/` — 오프라인 커버 썸네일 (`prefetch.mjs` 가 cc0 팩만 벤더링)
+- `skills/sprite-picker/catalog/prefetch.mjs` — 커버 썸네일 프리페치 스크립트(이 스킬이 호출, 수정은 드묾)
 - 스키마: [../sprite-picker/reference/catalog-schema.md](../sprite-picker/reference/catalog-schema.md).
 
 ## 방법 — 조사 → 적대적 검증 → 합성 (3단계)
@@ -50,11 +51,20 @@ allowed-tools: Read, Write, Edit, Bash, WebSearch, WebFetch
   제한은 `avoid` → 카탈로그에서 제외(또는 명시 경고).
 - 닌텐도 등 상용 IP 리핑 소스는 절대 넣지 않는다.
 
-### 3) 합성·티어링·썸네일
+### 3) 합성·티어링·썸네일(프리페치)
 - 중복 병합(소스 `id` 기준), 안전 티어로 정렬, `generatedAt`/`verifiedAt` 을 오늘 날짜로 기록.
-- 가능한 팩은 대표 미리보기를 받아 `thumbnails/<pack-id>.png` 로 벤더링(없으면 피커가 플레이스홀더 자동 렌더).
-  벤더링하는 미리보기도 **CC0 인 것만** 받는다.
-- 누락 점검(잘 알려진 CC0 소스가 빠졌는지) 후 JSON 2개를 덮어쓴다.
+- **커버 썸네일은 `catalog/prefetch.mjs` 로 자동 벤더링.** 팩에 `previewUrl` 을 채운 뒤 실행하면 **cc0 팩만**
+  커버를 받아 `thumbnails/<pack-id>.png` 로 저장하고 `packs.json` 의 `preview` 를 갱신한다(없으면 피커가
+  플레이스홀더 자동 렌더). 의존성 없음(Node 18+ 글로벌 fetch).
+  ```bash
+  node skills/sprite-picker/catalog/prefetch.mjs            # cc0 + previewUrl 보유 팩 전부
+  node skills/sprite-picker/catalog/prefetch.mjs --only kenney --limit 8   # 일부만
+  node skills/sprite-picker/catalog/prefetch.mjs --dry      # 받지 않고 대상만 출력
+  ```
+  - 가드: 매직바이트로 진짜 이미지인지 검증, 너무 작은(깨진) 응답·`--max-kb`(기본 800KB) 초과는 커밋하지
+    않고 `previewUrl` 라이브 링크만 유지. `mixed-per-item`/`avoid`/`permissive` 는 애초에 커밋 대상 아님.
+  - 실패/거부분은 `preview` 를 비워 두므로 피커가 알아서 폴백한다(오프라인 깨짐 없음).
+- 누락 점검(잘 알려진 CC0 소스가 빠졌는지) 후 JSON 2개를 덮어쓰고 `prefetch.mjs` 를 돌린다.
 
 ## 검증
 - 두 JSON 이 [catalog-schema.md](../sprite-picker/reference/catalog-schema.md) 스키마에 맞는지(파싱·필수 필드).
