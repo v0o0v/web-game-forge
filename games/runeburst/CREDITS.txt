@@ -11,10 +11,21 @@ Runeburst — 별무리 사가 / 크레딧 · 라이선스
 - VectorForge / ChipAudio / MobileHarness — 본 플러그인 엔진 (절차적 생성, 외부 에셋 0)
 
 ■ 에셋
-- 모든 그래픽: VectorForge 절차적 벡터 생성 (네온 글로우 룬 6색·컬러 코어·암흑물질·별조각·
+- 그래픽: VectorForge 절차적 벡터 생성 (네온 글로우 룬 타일 6색·컬러 코어·암흑물질·별조각·
   성운 배경, 외부 이미지 0) — CC0
+- 룬 6종 심볼(모양): game-icons.net 의 젬/크리스털 아이콘 SVG path 사용 — 아래 ■ 외부 에셋(CC-BY) 참조.
+  6색 팔레트·네온 타일·글로우는 VectorForge 절차 생성(CC0)이고, 심볼 '모양'만 외부 CC-BY 에셋이다.
+  sprite-picker 스킬로 사용자가 직접 선택해 적용함.
 - 모든 사운드: ChipAudio 절차적 합성 (Web Audio, 오디오 파일 0, BGM/SFX·콤보 피치 스택 오리지널) — CC0
 - 폰트: 시스템 폰트(Segoe UI / Arial / sans-serif) 폴백만 사용, 폰트 파일 미포함
+
+■ 외부 에셋 (CC-BY 3.0 — 표기 필수)
+- 룬 심볼 젬/크리스털 아이콘 6종: "emerald", "gems", "crystal-cluster", "crystal-shine",
+  "floating-crystal", "cut-diamond" — 작가 Lorc (https://lorcblog.blogspot.com/),
+  출처 game-icons.net (https://game-icons.net/), 라이선스 CC BY 3.0
+  (https://creativecommons.org/licenses/by/3.0/).
+  원본 SVG: games/runeburst/assets/gems/ 에 벤더링(배경 제거·흰색 통일, 런타임에 룬 색으로 틴트).
+  game.js 의 GEM_PATHS 에 path 데이터를 임베드해 네온 타일 위에 그린다. 변경 없이 사용(수정은 색 틴트뿐).
 
 ■ IP 안전
 - 매치3 장르 메카닉(인접 스왑·가로/세로 3+ 매치·중력 낙하·리필·캐스케이드·특수 타일
@@ -23,9 +34,10 @@ Runeburst — 별무리 사가 / 크레딧 · 라이선스
   아이디어로서 자유롭게 차용했습니다. 게임 메카닉은 저작권 보호 대상이 아닙니다.
 - 'Bejeweled'(PopCap)·'Candy Crush'(King) 등의 게임명·로고·서체·고유 보석/캔디 스프라이트·
   보이스라인·시그니처 BGM/SFX·특정 레벨 레이아웃은 일절 사용하지 않았습니다.
-- 룬 6색(홍/금/녹/청/남/자성 별자리 심볼)·특수 타일('라인 블래스터'/'컬러 코어'/'포장')·
-  장애물(성운 젤리/얼음/암흑물질)·별조각·과부하 셀·보드 모양·12개 레벨·데일리 보드는 모두
-  오리지널 자작이며, 모든 표현물은 VectorForge/ChipAudio로 절차 생성되었습니다.
+- 룬 6색 타일·특수 타일('라인 블래스터'/'컬러 코어'/'포장')·장애물(성운 젤리/얼음/암흑물질)·
+  별조각·과부하 셀·보드 모양·12개 레벨·데일리 보드는 모두 오리지널 자작이며, VectorForge/ChipAudio로
+  절차 생성되었습니다. 단 룬 6종의 '심볼 모양'은 game-icons.net(Lorc, CC-BY 3.0) 젬 아이콘을
+  차용했으며 위 ■ 외부 에셋 항목에 표기했습니다(색·네온 효과는 게임 고유, 형상만 차용).
 
 ■ 재미 요소 조합 (사용자 주도 청사진 + 캔디크러시 기믹 확장)
 - FE-COMBO (캐스케이드·깊을수록 칸당 ×깊이 고득점, 점수 즉시 누적) + 과부하 셀(×2) +
