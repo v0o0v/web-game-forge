@@ -1,0 +1,27 @@
+IS — 규칙을 다시 쓰는 퍼즐 / 크레딧 · 라이선스
+==================================================
+
+■ 게임
+- 제목: IS — 규칙을 다시 쓰는 퍼즐
+- 장르: 규칙조작(rule-manipulation) 그리드 퍼즐
+- 제작: web-game-builder 스킬 데모 (Phaser 4 기반)
+
+■ 사용 라이브러리
+- Phaser 4.1.0 — MIT License (engine/phaser.min.js, engine/phaser.LICENSE.txt 참조)
+- VectorForge / ChipAudio / MobileHarness — 본 플러그인 엔진 (절차적 생성, 외부 에셋 0)
+
+■ 에셋
+- 모든 그래픽: VectorForge 절차적 벡터 생성 (코드 생성, 외부 이미지 0) — CC0
+- 모든 사운드: ChipAudio 절차적 합성 (Web Audio, 오디오 파일 0, BGM/SFX 오리지널) — CC0
+- 폰트: 시스템 폰트(Segoe UI / Arial / sans-serif) 폴백만 사용, 폰트 파일 미포함
+
+■ IP 안전
+- 'Baba Is You'(Hempuli)의 메카닉(NOUN IS PROPERTY 규칙 파싱·단어블록 밀기·정체성 변환·undo)은
+  게임 시스템/아이디어로서 자유롭게 차용했습니다. 게임 메카닉은 저작권 보호 대상이 아닙니다.
+- 원작의 이름('Baba' 등)·스프라이트·단어블록 디자인·폰트·BGM/SFX·특정 레벨 레이아웃은
+  일절 사용하지 않았습니다.
+- 캐릭터/오브젝트 명칭(BLOB, ROCK, WALL, FLAG, WATER)·속성(YOU/WIN/PUSH/STOP/SINK)·
+  12개 레벨은 모두 오리지널 자작이며, 모든 표현물은 VectorForge/ChipAudio로 절차 생성되었습니다.
+
+■ 규칙 속성 (소수 깊게)
+- YOU(조종 대상) · WIN(승리) · PUSH(밀림) · STOP(막음) · SINK(삼킴) + 정체성 변환(NOUN IS NOUN)
