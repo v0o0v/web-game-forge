@@ -39,7 +39,8 @@ ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
 - 스프라이트/타일/애니메이션 (픽셀아트) → `sprite-forge`
 - 미려한 스무스/벡터 그래픽 (그라데이션·글로우·글래스·곡선 캐릭터) → `vector-graphics`
 - 효과음/BGM → `chip-sound`
-- 레벨/맵/타일맵 → `level-designer`
+- 레벨 설계(게임 분석·의도 인터뷰·난이도 곡선·재미 극대화) → `level-architect`
+- 레벨/맵/타일맵 빌드(구현 패턴) → `level-designer`
 - HUD/메뉴/UI → `game-ui-hud`
 - 파티클/스크린셰이크/게임필 → `juice-fx`
 

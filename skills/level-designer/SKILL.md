@@ -8,6 +8,8 @@ allowed-tools: Read, Write, Edit
 
 피처 리스트 방식으로 레벨 데이터를 정의하고 Phaser staticGroup으로 빌드한다. web-game-builder의 전문 스킬. `engine/`를 사용한다.
 
+> **이 스킬은 *어떻게 빌드*하는가(구현 패턴)를 담당한다.** *무엇을·왜* 설계하는가(게임 분석·의도 인터뷰·난이도 곡선·재미 극대화)는 상위 스킬 [`level-architect`](../level-architect/SKILL.md)가 담당하고, 거기서 확정된 설계안을 받아 이 스킬이 빌드한다. 곡선·페이싱·공정성 원칙은 [level-architect의 LD-* 사전](../level-architect/reference/level-design/INDEX.md) 참고.
+
 ## 언제 사용
 - 새 레벨·스테이지를 추가하거나 기존 레벨 구조를 수정·확장할 때
 - 난이도 곡선(도입부→중반→후반)을 설계할 때
@@ -133,6 +135,7 @@ this.physics.add.collider(this.hero, layer);
 Tiled 방식은 대형 맵에 유리하나, 타일 이미지가 CC0여야 IP-safe를 유지한다.
 
 ## 연계 / 원칙
+- 설계 의도·난이도 곡선·재미는 [`level-architect`](../level-architect/SKILL.md)가 결정 → 이 스킬이 빌드. 레벨이 "재미없다/단조롭다" 진단·리밸런싱도 level-architect 소관.
 - web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(CC0/절차적).
 - `cx(col)`, `cy(row)` 헬퍼: `col * TILE + TILE/2` — 타일 중심 픽셀 좌표.
 - staticGroup 생성 후 반드시 `.refreshBody()` 호출.

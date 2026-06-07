@@ -4,7 +4,7 @@
 
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Phaser](https://img.shields.io/badge/engine-Phaser%204.1-blueviolet)
-![Skills](https://img.shields.io/badge/skills-16-orange)
+![Skills](https://img.shields.io/badge/skills-17-orange)
 ![Phaser refs](https://img.shields.io/badge/phaser--refs-28-informational)
 ![Assets](https://img.shields.io/badge/assets-CC0%20%2F%20IP--safe-success)
 ![Mobile](https://img.shields.io/badge/mobile--webview-ready-success)
@@ -38,7 +38,7 @@
   게이트(`assets.json`, CC0만)로 로딩합니다. 닌텐도 등 타사 에셋·이름·시그니처 조합을 쓰지 않습니다.
 - **🔊 8비트 사운드** — `ChipAudio`가 Web Audio API로 효과음과 **오리지널** BGM을 코드 합성합니다.
   오디오 파일 0개, 100% CC0.
-- **🧩 15종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 5 + 품질·운영 4 + 메인 오케스트레이터.
+- **🧩 17종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 7 + 품질·운영 4 + 메인 오케스트레이터.
 - **🧬 게임 DNA 템플릿** — 인기 2D 게임 35종의 재미 요소를 분석한 레퍼런스(`reference/game-dna/`).
   명확화 단계에서 "어떤 게임 만들지" 제안하고, 재미요소를 조합해 새 게임으로 녹입니다(메카닉만 차용, IP-safe).
 - **✅ 실제 실행 검증** — 헤드리스 step 하니스로 이동·충돌·메카닉을 결정적 검증. 데모 `super-runner`
@@ -150,7 +150,7 @@ http://127.0.0.1:8766/games/super-runner/index.html
 
 ---
 
-## 🧩 스킬 카탈로그 (16종)
+## 🧩 스킬 카탈로그 (17종)
 
 메인 `web-game-builder`가 전체 흐름을 조율하고, 요청 성격에 따라 전문 스킬이 자동 발동합니다.
 **장르로 스캐폴드 → 제작요소로 살붙이기 → 품질로 검증·최적화** 순서로 협력합니다.
@@ -166,7 +166,8 @@ http://127.0.0.1:8766/games/super-runner/index.html
 | 🛠 제작요소 | `sprite-forge` | PixelForge 픽셀아트 스프라이트·애니메이션 |
 | | `vector-graphics` | VectorForge 미려한 스무스/벡터 그래픽 + 외부 HD CC0 로딩 |
 | | `chip-sound` | ChipAudio 효과음·BGM |
-| | `level-designer` | 레벨·맵·타일맵 설계 |
+| | `level-architect` | 게임 분석·의도 인터뷰·난이도 곡선·재미 극대화 레벨 **설계** |
+| | `level-designer` | 레벨·맵·타일맵 **빌드**(구현 패턴) |
 | | `game-ui-hud` | HUD·메뉴·UI 화면 |
 | | `juice-fx` | 파티클·스크린셰이크·게임필 |
 | ✅ 품질·운영 | `mobile-webview-tune` | 모바일 웹뷰 최적화·감사 |
@@ -266,10 +267,11 @@ Web Audio API만으로 8비트 효과음과 **오리지널** BGM을 코드 합�
 ```
 web-game-forge/
 ├── .claude-plugin/  plugin.json · marketplace.json   # 플러그인 매니페스트
-├── skills/                                            # 15종 스킬 (메인 1 + 전문 14)
+├── skills/                                            # 17종 스킬 (메인 1 + 전문 16)
 │   ├── web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 분석 + game-dna/puzzle/ 퍼즐 20종 심화)
 │   ├── platformer-game/  topdown-shooter/  arcade-classic/  puzzle-game/  endless-runner/
-│   ├── sprite-forge/  vector-graphics/  chip-sound/  level-designer/  game-ui-hud/  juice-fx/
+│   ├── level-architect/  (+ reference/level-interview · level-design/ LD-* 원칙 + 장르별 레벨 설계)  level-designer/
+│   ├── sprite-forge/  vector-graphics/  chip-sound/  game-ui-hud/  juice-fx/
 │   └── mobile-webview-tune/  game-qa/  ip-license-guard/  perf-60fps/
 ├── hooks/hooks.json                                   # UserPromptSubmit 의도 감지 등록
 ├── scripts/detect-game-intent.{js,ps1,sh}            # 한/영 의도 감지(크로스플랫폼)
