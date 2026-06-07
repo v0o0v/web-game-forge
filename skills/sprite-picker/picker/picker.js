@@ -386,7 +386,10 @@
     });
     document.getElementById('completeBtn').addEventListener('click', function () { complete(state); });
     document.getElementById('copyBtn').addEventListener('click', function () { copyToken(); });
-    document.getElementById('doneClose').addEventListener('click', function () { document.getElementById('doneOverlay').hidden = true; });
+    document.getElementById('doneClose').addEventListener('click', hideDone);
+    var ov = document.getElementById('doneOverlay');
+    ov.addEventListener('click', function (e) { if (e.target === ov) hideDone(); });        // 배경 클릭으로 닫기
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideDone(); }); // ESC 로 닫기
     els.note.addEventListener('input', function () { saveAndUpdate(state); });
   }
 
@@ -491,13 +494,19 @@
     else { els.token.removeAttribute('readonly'); els.token.select(); try { document.execCommand('copy'); } catch (e) {} els.token.setAttribute('readonly', ''); toast('선택 코드 복사됨'); }
   }
 
+  var doneTimer = null;
   function showDone(msgHtml, warn) {
     var ov = document.getElementById('doneOverlay');
     document.getElementById('doneMsg').innerHTML = msgHtml;
     document.getElementById('doneIcon').textContent = warn ? '📋' : '✅';
+    document.getElementById('doneClose').textContent = warn ? '계속 고르기' : '닫기';
     ov.querySelector('.done-card').className = 'done-card' + (warn ? ' warn' : '');
     ov.hidden = false;
+    if (doneTimer) clearTimeout(doneTimer);
+    // 성공(전송)은 잠깐 보이고 자동으로 사라진다(막힌 오버레이 방지). 폴백은 사용자가 직접 닫는다.
+    if (!warn) doneTimer = setTimeout(function () { ov.hidden = true; }, 3200);
   }
+  function hideDone() { var ov = document.getElementById('doneOverlay'); if (ov) ov.hidden = true; if (doneTimer) clearTimeout(doneTimer); }
   function toast(msg) {
     var t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t);
     requestAnimationFrame(function () { t.classList.add('show'); });
