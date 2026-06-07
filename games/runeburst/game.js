@@ -3,15 +3,15 @@
  * ----------------------------------------------------------------------------
  * 코어: 매치3 스왑 캐스케이드 (Bejeweled/Candy Crush류 — 메카닉만 차용, IP-safe).
  * 재미 조합 (사용자 주도 청사진 + 캔디크러시 기믹 확장):
- *   - FE-COMBO   : 스왑→소거→낙하→리필→재매치 캐스케이드 (음 높이가 쌓이는 피치 스택).
- *   - FE-RISK-REWARD : "콤보 배율 도박" — 점수는 잠재 점수(pot)에 ×배율로 쌓이고,
- *                  '정산(BANK)'으로 안전 확정 / 과열(streak>=HOT)에서 약한 한 수는 BUST.
+ *   - FE-COMBO   : 스왑→소거→낙하→리필→재매치 캐스케이드. 점수는 즉시 누적되고
+ *                  캐스케이드가 깊을수록 칸당 점수가 ×깊이로 커진다(정산 기능 없음, 음 피치 스택).
+ *   - FE-OVERLOAD : 과부하 셀(글로우)을 포함해 매치하면 그 수 점수 ×2 후 셀 재배치.
  *   - FE-CONSTRAINT+OPTIMIZE : 제한 이동 수 + (목표 4종) → 별 1~3 판정.
  *   - FE-PLANNING : 특수 타일 — 4매치=라인 블래스터, 5매치=컬러 코어, L/T자=포장,
  *                  특수+특수 스왑 조합 폭발(라인+라인=십자, 코어+코어=전체 등).
  *   - FE-JUST-ONE-MORE : 데일리 시드(오늘의 보드, 결과 이모지 공유) + localStorage 베스트.
  * 캔디크러시 기믹: 비정형 보드(셀 마스크) · 목표 4종(점수/성운 젤리/색 수집/별조각 내리기) ·
- *   장애물(성운 젤리 2겹 / 얼음 / 번식하는 암흑물질) · 과부하 셀(도박 시너지).
+ *   장애물(성운 젤리 2겹 / 얼음 / 번식하는 암흑물질) · 과부하 셀(×2) · 아이템 4종 · 교착 자동 셔플.
  * 엔진: Phaser 4.1.0 + VectorForge(네온 글로우 룬) + ChipAudio(콤보 피치 스택) + MobileHarness.
  * 보드모델/렌더 분리: board[r][c]=tile|null 이 유일 상태원, spr[r][c] 컨테이너는 거울.
  *   셀 오버레이(mask/jelly/ice/overload)는 별도 2D 배열로 타일과 독립 관리.
@@ -256,7 +256,7 @@
       }
       this.rng = mulberry32(this.cfg.seed);
       this.movesLeft = this.cfg.moves;
-      this.score = 0; this.pot = 0; this.streak = 0;
+      this.score = 0;
       this.busy = false; this.over = false;
       this.collected = 0; this.delivered = 0;
       this.board = []; this.spr = [];
@@ -275,7 +275,6 @@
       this.cellBgG = this.add.graphics().setDepth(0);
       this.drawCellBackgrounds();
       this.overlayG = this.add.graphics().setDepth(2);   // 젤리/얼음/과부하
-      this.hotGlow = this.add.graphics().setDepth(6);
 
       this.renderInit();
       this.renderOverlays();
@@ -289,16 +288,14 @@
       window.RUNEBURST = {
         scene: this, game: this.game,
         swipe: function (r, c, dir) { return self.inputSwipe(r, c, dir); },
-        bank: function () { return self.bank(); },
         useItem: function (k, r, c) { return self.devUseItem(k, r, c); },
         hasMove: function () { return self.hasMove(); },
-        state: function () { return { mode: self.mode, level: self.levelIndex, shape: self.cfg.shape, theme: self.theme.name, moves: self.movesLeft, score: self.score, pot: self.pot, mult: self.mult(), goal: self.cfg.goal, win: self.cfg.win.type, objective: self.objectiveProgress(), items: self.items, hasMove: self.hasMove(), over: self.over, busy: self.busy }; },
+        state: function () { return { mode: self.mode, level: self.levelIndex, shape: self.cfg.shape, theme: self.theme.name, moves: self.movesLeft, score: self.score, goal: self.cfg.goal, win: self.cfg.win.type, objective: self.objectiveProgress(), items: self.items, hasMove: self.hasMove(), over: self.over, busy: self.busy }; },
         board: function () { return self.board.map(function (row, r) { return row.map(function (t, c) { return self.mask[r][c] ? (t ? (t.kind === 'rune' ? t.color : (t.kind === 'spreader' ? 'S' : 'I')) : '_') : '#'; }); }); },
         overlays: function () { return { jelly: self.jelly, ice: self.ice, overload: self.overload }; }
       };
     },
 
-    mult: function () { return Math.min(MULT_CAP, 1 + this.streak); },
     valid: function (r, c) { return r >= 0 && r < ROWS && c >= 0 && c < COLS && this.mask[r][c]; },
     cellX: function (c) { return BOARD_X + c * TILE + TILE / 2; },
     cellY: function (r) { return BOARD_Y + r * TILE + TILE / 2; },
@@ -454,7 +451,6 @@
       function arrow(dir) { if (self.sel) self.inputSwipe(self.sel.r, self.sel.c, dir); }
       kb.on('keydown-LEFT', function () { arrow('left'); }); kb.on('keydown-RIGHT', function () { arrow('right'); });
       kb.on('keydown-UP', function () { arrow('up'); }); kb.on('keydown-DOWN', function () { arrow('down'); });
-      kb.on('keydown-SPACE', function () { self.bank(); });
     },
     cellAt: function (x, y) { var c = Math.floor((x - BOARD_X) / TILE), r = Math.floor((y - BOARD_Y) / TILE); return this.valid(r, c) ? { r: r, c: c } : null; },
     swappable: function (r, c) { var t = this.board[r][c]; return this.valid(r, c) && t && t.kind === 'rune' && !this.ice[r][c]; },
@@ -500,7 +496,7 @@
       return true;
     },
 
-    beginMove: function (isItem) { this.realMove = !isItem; this.itemMove = !!isItem; this.cascadeDepth = 0; this.clearedThisMove = 0; this.potBeforeMove = this.pot; this.overloadHit = false; this.spreaderHit = false; this.wasHot = this.streak >= HOT; },
+    beginMove: function (isItem) { this.realMove = !isItem; this.itemMove = !!isItem; this.cascadeDepth = 0; this.clearedThisMove = 0; this.scoreBeforeMove = this.score; this.overloadHit = false; this.spreaderHit = false; },
     swapCells: function (r1, c1, r2, c2) { var tb = this.board[r1][c1]; this.board[r1][c1] = this.board[r2][c2]; this.board[r2][c2] = tb; var ts = this.spr[r1][c1]; this.spr[r1][c1] = this.spr[r2][c2]; this.spr[r2][c2] = ts; },
     animSwap: function (r1, c1, r2, c2, done) {
       var a = this.spr[r1][c1], b = this.spr[r2][c2], n = 0; function fin() { if (++n >= 2 && done) done(); }
@@ -568,7 +564,7 @@
       this.expandSpecials(clear);
 
       var pts = clear.size * 10 * depth;
-      this.pot += pts; this.clearedThisMove += clear.size;
+      this.score += pts; this.clearedThisMove += clear.size; this.updateHUD();
       this.applyCellEffects(clear);
 
       this.comboTone(depth);
@@ -684,7 +680,7 @@
       var self = this;
       this.cascadeDepth = Math.max(this.cascadeDepth, depth);
       this.clearedThisMove += clear.size;
-      this.pot += clear.size * perTile;
+      this.score += clear.size * perTile; this.updateHUD();
       this.applyCellEffects(clear);
       this.comboTone(depth + 1);
       this.cameras.main.shake(220, 0.012);
@@ -739,28 +735,14 @@
     },
 
     afterMove: function () {
-      var extra = Math.max(0, this.cascadeDepth - 1);
-      var weak = (this.clearedThisMove <= 3 && this.cascadeDepth <= 1);
-
-      // 과부하 보너스
+      // 과부하 보너스: 이번 수에 얻은 점수만큼 추가(×2 효과) 후 재배치
       if (this.overloadHit) {
-        var contrib = this.pot - this.potBeforeMove;
-        var bonus = this.wasHot ? contrib : Math.floor(contrib * 0.5);
-        this.pot += bonus;
-        this.flashCenter('과부하 +' + bonus + (this.wasHot ? '  (×2!)' : ''), '#ffd34a');
-        audio.sfx('powerup');
-        this.placeOverload();
+        var bonus = this.score - this.scoreBeforeMove;
+        this.score += bonus;
+        this.flashCenter('과부하 ×2!  +' + bonus, '#ffd34a'); audio.sfx('powerup'); this.placeOverload();
       }
-
-      if (this.realMove && this.wasHot && weak) {
-        var overloadActive = this.anyOverload();
-        var lost = overloadActive ? this.pot : Math.floor(this.pot / 2);
-        this.pot -= lost; this.streak = 0;
-        this.flashCenter('콤보 붕괴!  -' + lost, '#ff5f7a'); audio.sfx('die'); this.cameras.main.shake(200, 0.01);
-      } else {
-        this.streak = Math.min(MULT_CAP - 1, this.streak + 1 + extra);
-        if (extra >= 1) this.flashCenter('연쇄 ×' + this.cascadeDepth + '!', '#ffd34a');
-      }
+      // 캐스케이드 콤보 연출
+      if (this.cascadeDepth >= 2) this.flashCenter('콤보 ×' + this.cascadeDepth + '!', '#ffd34a');
 
       // 암흑물질 번식 (실제 수에서만, 이번 수에 인접 소거 없었으면 퍼짐)
       if (this.realMove) this.handleSpreaders();
@@ -774,8 +756,6 @@
         if (!this.hasMove()) this.shuffleBoard(false);
       }
     },
-
-    anyOverload: function () { for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) if (this.overload[r][c]) return true; return false; },
 
     handleSpreaders: function () {
       var self = this, list = [];
@@ -861,7 +841,7 @@
     // 아이템 (망치 · 셔플 · 컬러 코어 소환 · 자유 스왑)
     // ===========================================================================
     spendItem: function (k) { this.items[k] = Math.max(0, (this.items[k] || 0) - 1); this.updateItemBar(); },
-    disarm: function () { this.armedItem = null; this.cancelSwapFirst(); if (this.hintText && this.streak < HOT) this.hintText.setText('인접 룬을 스와이프 · 정산으로 점수 확정').setColor('#7c70b8'); this.updateItemBar(); },
+    disarm: function () { this.armedItem = null; this.cancelSwapFirst(); if (this.hintText) this.hintText.setText('인접 룬을 스와이프 · 같은 색 3개로 매치').setColor('#7c70b8'); this.updateItemBar(); },
 
     handleItem: function (k) {
       if (this.busy || this.over) return;
@@ -926,7 +906,7 @@
 
     buildItemBar: function () {
       var meta = [{ k: 'hammer', icon: '🔨', name: '망치' }, { k: 'shuffle', icon: '🔀', name: '셔플' }, { k: 'core', icon: '💠', name: '코어' }, { k: 'swap', icon: '⇄', name: '스왑' }];
-      var y = BOARD_Y + TILE * ROWS + 96, bw = 122, gap = 8;
+      var y = BOARD_Y + TILE * ROWS + 46, bw = 122, gap = 8;
       var total = meta.length * bw + (meta.length - 1) * gap, x0 = (DESIGN_W - total) / 2;
       this.itemBtns = {}; var self = this;
       meta.forEach(function (m, i) {
@@ -954,16 +934,6 @@
       });
     },
 
-    bank: function () {
-      if (this.busy || this.over || this.pot <= 0) return false;
-      var gain = Math.round(this.pot * this.mult());
-      this.score += gain; this.pot = 0; this.streak = 0;
-      this.flashCenter('정산 +' + gain, '#5ff0a0'); audio.sfx('coin'); audio.sfx('1up');
-      this.updateHUD(); this.pulse(this.bankG);
-      // 점수 목표 즉시 달성 시(점수형) 조기 종료 가능 — 여기선 이동 소진까지 진행
-      return true;
-    },
-
     // --- 목표 / 종료 ---------------------------------------------------------
     jellyTotal: function () { var s = 0; for (var r = 0; r < ROWS; r++) for (var c = 0; c < COLS; c++) s += this.jelly[r][c]; return s; },
     objectiveProgress: function () {
@@ -985,12 +955,10 @@
       // 목표형은 달성 즉시 승리 (이동 아끼기)
       if (this.cfg.win.type !== 'score' && this.isWin()) { this.endGame(true); return; }
       if (this.movesLeft > 0) return;
-      if (this.pot > 0) { this.score += Math.round(this.pot * this.mult()); this.pot = 0; this.streak = 0; }
       this.endGame(this.isWin());
     },
     endGame: function (win) {
       if (this.over) return;
-      if (this.pot > 0) { this.score += Math.round(this.pot * this.mult()); this.pot = 0; this.streak = 0; this.updateHUD(); }
       this.over = true; this.busy = true;
       this._win = win;
       this.time.delayedCall(420, this.showResult, [], this);
@@ -1033,23 +1001,15 @@
       this.goalBarBg = this.add.graphics(); this.goalBarBg.fillStyle(0xffffff, 0.10); this.goalBarBg.fillRoundedRect(60, 84, DESIGN_W - 120, 14, 7);
       this.goalBarFill = this.add.graphics();
 
-      // 이동 / 배율
+      // 이동 / 점수
       this.add.text(140, 130, '남은 이동', { fontFamily: 'Segoe UI, Arial', fontSize: '14px', color: '#9a8fd0' }).setOrigin(0.5);
       this.movesText = this.add.text(140, 162, '', { fontFamily: 'Segoe UI, Arial', fontSize: '40px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
-      this.add.text(400, 130, '콤보 배율', { fontFamily: 'Segoe UI, Arial', fontSize: '14px', color: '#9a8fd0' }).setOrigin(0.5);
-      this.multText = this.add.text(400, 162, '×1', { fontFamily: 'Segoe UI, Arial', fontSize: '40px', color: '#ffd34a', fontStyle: 'bold' }).setOrigin(0.5).setShadow(0, 0, '#ff9a3a', 12, true, true);
-      this.scoreText = this.add.text(DESIGN_W / 2, 208, '', { fontFamily: 'Segoe UI, Arial', fontSize: '16px', color: '#b9a9ff' }).setOrigin(0.5);
+      this.add.text(400, 130, '점수', { fontFamily: 'Segoe UI, Arial', fontSize: '14px', color: '#9a8fd0' }).setOrigin(0.5);
+      this.scoreBig = this.add.text(400, 162, '0', { fontFamily: 'Segoe UI, Arial', fontSize: '40px', color: '#ffd34a', fontStyle: 'bold' }).setOrigin(0.5).setShadow(0, 0, '#ff9a3a', 12, true, true);
+      this.bestText = this.add.text(DESIGN_W / 2, 208, '', { fontFamily: 'Segoe UI, Arial', fontSize: '16px', color: '#b9a9ff' }).setOrigin(0.5);
 
-      // 정산 버튼
-      var by = BOARD_Y + TILE * ROWS + 44;
-      this.bankG = this.add.container(DESIGN_W / 2, by);
-      var bg = this.add.graphics(); bg.fillStyle(0x2fd07a, 0.22); bg.fillRoundedRect(-180, -32, 360, 64, 16); bg.lineStyle(2.5, 0x5ff0a0, 0.95); bg.strokeRoundedRect(-180, -32, 360, 64, 16);
-      this.bankG.add(bg);
-      this.bankLabel = this.add.text(0, 0, '정산하기', { fontFamily: 'Segoe UI, Arial', fontSize: '25px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
-      this.bankG.add(this.bankLabel);
-      var zone = this.add.zone(DESIGN_W / 2, by, 360, 64).setInteractive({ useHandCursor: true }); var self = this;
-      zone.on('pointerdown', function () { self.bank(); });
-      this.hintText = this.add.text(DESIGN_W / 2, by + 110, '인접 룬을 스와이프 · 정산으로 점수 확정', { fontFamily: 'Segoe UI, Arial', fontSize: '14px', color: '#7c70b8', align: 'center' }).setOrigin(0.5);
+      var by = BOARD_Y + TILE * ROWS + 96;
+      this.hintText = this.add.text(DESIGN_W / 2, by, '인접 룬을 스와이프 · 같은 색 3개로 매치', { fontFamily: 'Segoe UI, Arial', fontSize: '14px', color: '#7c70b8', align: 'center' }).setOrigin(0.5);
     },
 
     objLabel: function () {
@@ -1062,20 +1022,11 @@
 
     updateHUD: function () {
       this.movesText.setText(String(Math.max(0, this.movesLeft)));
-      this.multText.setText('×' + this.mult());
+      this.scoreBig.setText(String(this.score));
       this.objText.setText(this.objLabel());
-      this.scoreText.setText('점수 ' + this.score + '   ·   잠재 ' + this.pot + (this.getBest() != null ? '   ·   베스트 ' + this.getBest() : ''));
+      this.bestText.setText(this.getBest() != null ? '베스트 ' + this.getBest() : '');
       var ratio = Math.max(0, Math.min(1, this.score / this.cfg.goal));
       this.goalBarFill.clear(); this.goalBarFill.fillStyle(ratio >= 1 ? 0x5ff0a0 : 0x8a6bff, 0.95); this.goalBarFill.fillRoundedRect(60, 84, Math.max(2, (DESIGN_W - 120) * ratio), 14, 7);
-      if (this.bankLabel) this.bankLabel.setText(this.pot > 0 ? '정산  +' + Math.round(this.pot * this.mult()) : '정산하기');
-      this.renderHot();
-    },
-    renderHot: function () {
-      if (!this.hotGlow) return; this.hotGlow.clear();
-      if (this.streak >= HOT) {
-        this.hotGlow.lineStyle(4, 0xff5f7a, 0.85); this.hotGlow.strokeRoundedRect(BOARD_X - 8, BOARD_Y - 8, BOARD_W + 16, TILE * ROWS + 16, 16);
-        if (!this._hotTween) { this._hotTween = this.tweens.add({ targets: this.hotGlow, alpha: 0.3, duration: 360, yoyo: true, repeat: -1 }); this.hintText.setText('🔥 과열! 정산하거나 큰 수를 노리세요').setColor('#ff8a9a'); }
-      } else { this.hotGlow.alpha = 1; if (this._hotTween) { this._hotTween.stop(); this._hotTween = null; this.hotGlow.alpha = 1; this.hintText.setText('인접 룬을 스와이프 · 정산으로 점수 확정').setColor('#7c70b8'); } }
     },
 
     bestKey: function () { return this.mode === 'daily' ? 'rb-daily-' + this.dateKey : 'rb-best-' + this.levelIndex; },
