@@ -59,17 +59,27 @@ web-game-builder 워크플로의 제작요소 스킬.
 온디맨드 Read 후 탑다운 1문1답으로 끈질기게 캔다. **준비도 게이트(SP1·SP2·SP3) 충족 전엔 피커를 안 띄운다.**
 
 ### 2) 대상(targets) + 광범위 후보 → 피커 주입 → 서빙
-- **적용 대상 슬롯(targets)** 을 만든다 — 각 대상에 이름+설명(예: `{id:"player",name:"플레이어",
-  description:"주인공 걷기/점프"}`). 사용자는 *순서를 외워 찍는 대신* 슬롯에 이미지를 배정한다(SP3·SP6에서 도출).
-- **후보는 광범위하게.** `catalog/packs.json` + `assets-library` + 후보를 **수십~수백 개** 넣고
-  사용자가 검색·필터로 좁히게 한다(너무 적게 주지 말 것). 실제 이미지 `thumbnail` URL을 최대한 채운다.
-- `skills/sprite-picker/picker/data.js` 로 주입(`data.example.js` 템플릿).
-- **컴패니언 서버로 서빙(자동 회수용):** `node skills/sprite-picker/picker/serve.mjs` (background) →
-  `http://127.0.0.1:8770/`. (POST 회수 불필요하면 정적 `python -m http.server` 도 가능 — 그땐 붙여넣기 폴백.)
+- **적용 대상 슬롯(targets)** 을 만든다 — 각 대상에 이름+설명(+추천용 `tags/contentTypes/style`, 예:
+  `{id:"player",name:"플레이어",description:"주인공 걷기/점프",tags:["player","run"],contentTypes:["character"],style:"pixel"}`).
+  사용자는 *순서를 외워 찍는 대신* 슬롯에 이미지를 배정한다(SP3·SP6에서 도출).
+- **후보는 광범위하게, 웹사이트별로.** `catalog/sources.json`(웹사이트 메타 → `sources[]`) +
+  `catalog/packs.json`(각 카드 **`sourceId` 필수**) + `assets-library` 를 **수십~수백 개** 넣는다.
+  피커가 하단 4탭(**추천 / 전체(웹사이트→팩 아코디언) / 다운로드(풀뷰) / 후보**)으로 보여주고 사용자가
+  웹사이트→팩, 검색·필터로 좁힌다. 팩 `preview`(커밋 썸네일)/`previewUrl` 을 최대한 채운다.
+- **추천은 피커가 자동 계산** — `targets` 메타가 정확할수록 '추천' 탭이 잘 맞는다.
+- **다운로드분 풀뷰.** `library` 항목은 미리보기가 아니라 풀로 렌더되고, 스프라이트시트는 프레임 분해로
+  **개별 프레임 선택**이 된다(`full`=작업공간 루트 기준 경로, `frameConfig`).
+- `skills/sprite-picker/picker/data.js` 로 주입(`data.example.js` 템플릿). 스키마: [reference/catalog-schema.md](./reference/catalog-schema.md).
+- **커밋 썸네일 미리 받기(빠른 실행):** 카탈로그의 CC0 팩 커버는 [`sprite-catalog-refresh`](../sprite-catalog-refresh/SKILL.md)
+  의 `catalog/prefetch.mjs` 로 미리 받아 `catalog/thumbnails/` 에 둔다. 평소엔 이 캐시만 쓴다.
+- **컴패니언 서버로 서빙(자동 회수+풀뷰용):** `node skills/sprite-picker/picker/serve.mjs` (background) →
+  `http://127.0.0.1:8770/`. `/`(피커)·`/catalog/`(커밋 썸네일)·`/ws/`(다운로드분 풀뷰)를 서빙. (정적
+  `python -m http.server` 는 자동 회수·풀뷰가 안 되므로 폴백 전용 — 그땐 붙여넣기.)
   프로토콜·경로는 [reference/picker-protocol.md](./reference/picker-protocol.md).
 
-### 3) 사용자 슬롯 배정 → "선택 완료" 자동 회수
-사용자가 슬롯을 클릭해 활성화하고 이미지를 클릭(또는 드래그)하면 그 대상에 배정된다(다음 빈 슬롯 자동 이동).
+### 3) 사용자 탐색·슬롯 배정 → "선택 완료" 자동 회수
+사용자가 탭(추천/전체/다운로드/후보)에서 찾아 슬롯을 클릭해 활성화하고 이미지(또는 다운로드 시트의 개별
+프레임)를 클릭(또는 드래그)하면 그 대상에 배정된다(다음 빈 슬롯 자동 이동).
 **"✓ 선택 완료"** 를 누르면 회수한다:
 - **자동(권장):** 피커가 `POST /__sprite_picker_submit` → `serve.mjs` 가 선택을
   `.sprite-picker-selection.json` 에 저장 → **그 파일을 Read** 한다(없으면 잠깐 대기 후 재시도).
@@ -83,7 +93,8 @@ web-game-builder 워크플로의 제작요소 스킬.
 - 이전 사용분 → 다운로드 없이 즉시 참조.
 - 절차 생성 → [`sprite-forge`](../sprite-forge/SKILL.md)/[`vector-graphics`](../vector-graphics/SKILL.md) 위임.
 - **배정대로 적용:** `assignments[].targetId` → 그 대상에 해당 `image` 를 적용(슬롯 설명이 곧 적용처).
-  `unassignedTargets` 는 절차 생성으로 채우거나 다시 묻는다. 선택의 `note`(색 보정 등 SP6 세부)를 반영.
+  `image.group:"library"` 면 다운로드분 재사용(경로 C), `image.frame` 이 있으면 `load.spritesheet`(그 `frameConfig`)
+  후 해당 프레임 인덱스를 쓴다. `unassignedTargets` 는 절차 생성으로 채우거나 다시 묻는다. 선택의 `note` 반영.
 
 ### 5) 라이브러리 누적 + 검증
 - 적용한 에셋을 `assets-library/` 에 복사 + `library.json` 갱신([reference/library.md](./reference/library.md)).

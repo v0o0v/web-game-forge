@@ -66,8 +66,8 @@ sprite-picker 가 쓰는 3개 데이터 파일의 형식. 모두 JSON. **카탈�
       "style": "pixel",                  // 단일 값
       "tags": ["platformer","character","tiles","animation"],
       "tileSize": 18,                    // 픽셀 타일/프레임 크기(있으면)
-      "previewUrl": "https://…/preview.png",   // 원격 대표 미리보기 (라이브 탈출구)
-      "thumbnail": "thumbnails/kenney-pixel-platformer.png", // 벤더링 오프라인 썸네일(있으면)
+      "preview": "thumbnails/kenney-pixel-platformer.png", // 커밋된 오프라인 커버(prefetch.mjs 가 채움). /catalog/ 로 서빙.
+      "previewUrl": "https://…/preview.png",   // 원격 대표 미리보기 (라이브 탈출구 + "원본 ↗")
       "downloadUrl": "https://kenney.nl/...",  // 실제 다운로드 (온디맨드)
       "attributionRequired": false,
       "notes": "18px 타일. 캐릭터 4프레임 걷기."
@@ -76,7 +76,10 @@ sprite-picker 가 쓰는 3개 데이터 파일의 형식. 모두 JSON. **카탈�
 }
 ```
 
-- `thumbnail` 이 없으면 피커가 **메타데이터로 플레이스홀더 타일을 즉석 렌더**한다(오프라인 동작 보장).
+- **`preview`** 는 [`sprite-catalog-refresh`](../../sprite-catalog-refresh/SKILL.md) 의 `catalog/prefetch.mjs`
+  가 CC0 팩의 커버를 받아 `catalog/thumbnails/<pack-id>.png` 로 벤더링한 **오프라인 썸네일**이다(실행 시 빠름).
+  `safetyTier:"cc0"` 인 팩만 커밋하고, `mixed-per-item`/`avoid` 는 커밋하지 않고 `previewUrl` 라이브 링크만 둔다.
+- `preview` 도 `previewUrl` 도 없으면 피커가 **메타데이터로 플레이스홀더 타일을 즉석 렌더**한다(오프라인 동작 보장).
 - `previewUrl` 은 카드의 "원본 ↗" 라이브 링크로도 쓰인다.
 
 ## 3) `assets-library/library.json` — 이전에 실제 사용한 스프라이트 (프로젝트 로컬·사용자 작성)
@@ -118,23 +121,39 @@ sprite-picker 가 쓰는 3개 데이터 파일의 형식. 모두 JSON. **카탈�
 ```jsonc
 {
   "title": "…", "subtitle": "…", "request": "…",
+  "pageSize": 24, "recommendLimit": 24,
+  "submitUrl": "http://127.0.0.1:8770/__sprite_picker_submit",
   "tiers": { /* sources.json.tiers */ },
   "targets": [                          // 있으면 "어사인 모드"(슬롯에 배정). 없으면 "프리 모드"(다중 선택)
-    { "id": "player", "name": "플레이어", "description": "주인공 — 걷기/점프", "hint": "" }
+    { "id": "player", "name": "플레이어", "description": "주인공 — 걷기/점프", "hint": "",
+      "tags": ["player","run"], "contentTypes": ["character"], "style": "pixel" }  // ← 추천 점수 기준(있으면)
   ],
-  "catalog":  [ /* 광범위 후보 카드(수십~수백) */ ],
-  "library":  [ /* 이전 사용분 */ ],
+  "sources": [                          // '전체' 탭 웹사이트 아코디언 헤더. sources.json 에서 추림.
+    { "id": "kenney", "name": "Kenney.nl", "url": "https://kenney.nl/assets", "safetyTier": "cc0" }
+  ],
+  "catalog":  [ /* 광범위 후보 카드(수십~수백). 각 카드 sourceId 필수 */ ],
+  "library":  [ /* 다운로드분 — 풀로 렌더 */ ],
   "candidate":[ /* 절차 제안·로컬 파일 */ ]
 }
 ```
 
-- **카드 정규화 필드:** `id, name, sourceName, license, safetyTier, style, contentTypes[], tags[],
-  thumbnail?, animated?, previewUrl?, url?, downloadUrl?, notes?`. `group` 은 `catalog | library | candidate`.
-  `thumbnail` 에 실제 이미지 URL 을 넣으면 그대로 보이고, 없으면 메타데이터로 플레이스홀더 자동 렌더.
-  `animated: true` 면 thumbnail(SMIL/CSS 애니 SVG)을 `<object>` 로 렌더해 **움직이는 미리보기**가 된다
-  (`<img>` 는 SVG 애니가 안 돌아감). 애니메이션 스프라이트 후보에 쓴다.
-- **빈 탭 자동 회피:** 피커는 항목이 있는 첫 그룹(catalog→candidate→library)을 기본 탭으로 연다.
-- **targets 필드:** `id`(고유), `name`(표시), `description`(슬롯 설명 — 무엇을 적용할지), `hint?`.
+- **탐색 모델(v3):** 하단 카테고리 탭 = **추천 · 전체 · 다운로드 · 후보**.
+  - **추천:** 피커가 `targets`(또는 `request`)와 카드 메타(`tags/contentTypes/style`)를 매칭해 **런타임 점수
+    정렬**, 상위 `recommendLimit` 개 노출. 별도 주입 불필요 — `targets` 에 `tags/contentTypes/style` 을 정확히 채울수록 추천 정확도가 올라간다.
+  - **전체:** `sources` 웹사이트별 아코디언 → 그 안의 팩 카드(`sourceId` 로 그룹핑). 팩 카드 "펼치기"로 대형 미리보기.
+  - **다운로드:** `library` 를 **풀(전체)로 렌더**(미리보기 아님).
+  - **후보:** `candidate`.
+- **카드 정규화 필드(catalog/candidate):** `id, name, sourceId, sourceName, license, safetyTier, style,
+  contentTypes[], tags[], preview?, previewUrl?, animated?, url?, downloadUrl?, notes?`.
+  - `preview`: catalog 면 `thumbnails/<id>.png`(→ `/catalog/`). 없으면 `previewUrl`(원격) → 없으면 플레이스홀더.
+  - `animated: true` 면 preview/previewUrl(SMIL/CSS 애니 SVG)을 `<object>` 로 렌더해 **움직이는 미리보기**.
+  - **`sourceId` 는 catalog 카드 필수** — '전체' 탭 웹사이트 그룹핑에 쓰인다.
+- **library 카드(다운로드분, 풀뷰) 필드:** 위 + `downloaded: true, full, frameConfig?{frameWidth,frameHeight}, thumbnail?`.
+  - `full`/`thumbnail` 은 **작업공간 루트 기준 경로**(→ `/ws/` 로 서빙). assets-library/ 든 games/<slug>/assets/ 든 무관.
+  - SVG/단일 이미지는 풀해상도로 인라인 렌더. `frameConfig` 가 있으면 시트를 **canvas 로 프레임 분해**해
+    개별 프레임을 보여주고 어사인 모드에서 **개별 프레임 선택**이 가능하다.
+- **빈 탭 자동 회피:** 항목이 없는 카테고리 탭은 비활성/안내 표시.
+- **targets 필드:** `id`(고유), `name`(표시), `description`(슬롯 설명), `hint?`, 그리고 추천용 `tags?/contentTypes?/style?`.
 
 ### 선택 출력 (`.sprite-picker-selection.json` / 토큰 / `window.__spritePickerSelection()`)
 
