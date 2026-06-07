@@ -36,8 +36,10 @@ ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
 - 무한 러너·플래피류 → `endless-runner`
 
 **제작 요소**
-- 스프라이트/타일/애니메이션 (픽셀아트) → `sprite-forge`
-- 미려한 스무스/벡터 그래픽 (그라데이션·글로우·글래스·곡선 캐릭터) → `vector-graphics`
+- 실제 스프라이트/시트/애니메이션을 **시각적으로 골라 적용**(CC0 카탈로그·로컬 파일·이전 사용분) → `sprite-picker`
+  (아트를 어떻게 채울지 = **실제 에셋 소싱 vs 절차 생성** 결정 게이트. 카탈로그 갱신은 `sprite-catalog-refresh`)
+- 스프라이트/타일/애니메이션 (픽셀아트, **절차 생성**) → `sprite-forge`
+- 미려한 스무스/벡터 그래픽 (그라데이션·글로우·글래스·곡선 캐릭터, **절차 생성**) → `vector-graphics`
 - 효과음/BGM → `chip-sound`
 - 레벨 설계(게임 분석·의도 인터뷰·난이도 곡선·재미 극대화) → `level-architect`
 - 레벨/맵/타일맵 빌드(구현 패턴) → `level-designer`
@@ -142,7 +144,11 @@ games/<slug>/
 `index.html` 은 `super-runner/index.html` 의 `<head>`(뷰포트 meta + CSS 리셋)와
 스크립트 로드 순서(phaser → pixelforge → audio → mobile → game)를 그대로 따른다.
 
-### 3) 에셋 생성 (`engine/pixelforge.js`)
+### 3) 에셋 생성 / 소싱
+- **먼저 아트 출처를 가른다(결정 게이트).** 비주얼은 재미의 핵심이므로, 인터뷰(C4)에서 **실제 에셋을
+  골라 쓸지 / 절차 생성할지**를 사용자에게 묻는다. "실제 에셋·시각적으로 고르고 싶다"이거나 사용자가
+  스프라이트를 *선택*하려는 기색이면 [`sprite-picker`](../sprite-picker/SKILL.md) 로 위임한다(CC0 카탈로그·
+  로컬 파일·이전 사용분을 브라우저 갤러리로 시각 선택 → 다운로드·벤더링·로드). 절차 생성이면 아래로.
 - 스프라이트는 문자 그리드로 정의한다. `PixelForge.LIB` 에 새 항목을 추가하거나 게임별로
   `PixelForge.bake(scene, key, def)` 를 직접 호출한다.
 - `def = { frames: [ ["row","row",...], ... ], palette?: {char:hex} }`.

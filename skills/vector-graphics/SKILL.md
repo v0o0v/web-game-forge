@@ -90,6 +90,8 @@ Game-icons.net(CC0). 외부 에셋은 `games/<slug>/assets/`에 벤더링하고 
 
 ## 연계 / 원칙
 - 픽셀 스타일은 `sprite-forge`(PixelForge), 스무스/벡터는 이 스킬(VectorForge). 게임당 하나.
+- **실제 외부 CC0 에셋(HD/벡터/SVG)을 카탈로그에서 시각적으로 골라 쓰려면** [`sprite-picker`](../sprite-picker/SKILL.md).
+  이 스킬은 *절차 생성 + 임시 로딩* 담당이고, sprite-picker 가 큐레이션·시각 선택·로컬 라이브러리·캐싱을 맡는다.
 - 프리뷰: `games/style-preview/index.html` (4가지 스타일 쇼케이스).
 - IP-safe: 절차적 또는 CC0만. 엔진 API는 `reference/engine-api.md`.
 - Phaser 4 API 참고: [graphics-and-shapes](../web-game-builder/reference/phaser/graphics-and-shapes.md), [render-textures](../web-game-builder/reference/phaser/render-textures.md), [filters-and-postfx](../web-game-builder/reference/phaser/filters-and-postfx.md). 전체 색인은 [reference/phaser/INDEX.md](../web-game-builder/reference/phaser/INDEX.md).

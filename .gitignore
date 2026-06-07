@@ -13,3 +13,6 @@ _t.json
 
 # Node (향후 대비)
 node_modules/
+
+# sprite-picker 세션 산출물 (피커에 주입하는 후보 데이터 — 매 요청마다 새로 생성)
+skills/sprite-picker/picker/data.js

@@ -94,6 +94,10 @@ glob: engine/phaser.LICENSE.txt
 
 ## 연계 / 원칙
 - 정책 매니페스트: `assets.json` (CC0 게이트)
+- **외부 에셋 소싱:** [`sprite-picker`](../sprite-picker/SKILL.md)가 가져온 스프라이트의 `safetyTier`
+  (`cc0`/`permissive-attribution`/`mixed-per-item`/`avoid`)를 이 게이트로 최종 점검한다 — `cc0`는 통과,
+  `permissive-attribution`은 `CREDITS.txt` 표기 확인, `mixed-per-item`/`avoid`는 항목별 확인 또는 차단.
+  카탈로그 캐시: `skills/sprite-picker/catalog/`. 로컬 라이브러리: `assets-library/library.json`.
 - 라이선스 고지: `LICENSE`, `CREDITS.txt`, `engine/phaser.LICENSE.txt`
 - 참조: `skills/web-game-builder/SKILL.md` (IP 정책 섹션)
 - web-game-builder 워크플로의 품질 게이트. 상용 배포 전 필수 통과.
