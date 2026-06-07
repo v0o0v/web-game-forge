@@ -21,17 +21,18 @@
     {
       "id": "kenney-platformer-art-pixel-redux",
       "sourceId": "kenney",
-      "name": "Platformer Art: Pixel Redux",
-      "url": "https://kenney.nl/assets/platformer-art-pixel-redux",
+      "name": "Platformer Art Pixel",
+      "url": "https://kenney.nl/assets/platformer-art-pixel",
+      "previewUrl": "https://kenney.nl/media/pages/assets/platformer-art-pixel/e0ce345e1d-1677696731/sample.png",
       "license": "CC0-1.0",
       "safetyTier": "cc0",
       "contentTypes": ["character", "tileset", "item", "spritesheet"],
       "style": "pixel",
       "tags": ["platformer", "spritesheet", "redux"],
-      "preview": "",
-      "downloadUrl": "https://kenney.nl/assets/platformer-art-pixel-redux",
+      "preview": "thumbnails/kenney-platformer-art-pixel-redux.png",
+      "downloadUrl": "https://kenney.nl/assets/platformer-art-pixel",
       "attributionRequired": false,
-      "notes": "사이드스크롤 플랫포머용 픽셀 캐릭터·타일·아이템. 걷기 등 프레임 포함."
+      "notes": "사이드스크롤 플랫포머용 픽셀 캐릭터·타일·아이템(걷기 등 프레임 포함). 구 'Platformer Art: Pixel Redux' 페이지(/assets/platformer-art-pixel-redux)가 404로 내려가, Kenney가 통합·개명한 현행 'Platformer Art Pixel' 페이지로 url·previewUrl 갱신(2026-06-08). 동일 CC0."
     },
     {
       "id": "kenney-pixel-platformer-industrial",
@@ -978,7 +979,7 @@
       "tags": ["cc0", "public-domain", "ui", "icon"],
       "preview": "",
       "attributionRequired": false,
-      "notes": "CC0로 한정된 항목만 모은 필터 뷰. 이 범위 내 항목은 표기 불필요·번들/재배포 가능."
+      "notes": "CC0로 한정된 항목만 모은 필터 뷰. 이 범위 내 항목은 표기 불필요·번들/재배포 가능. 단일 커버 없는 필터 페이지라 previewUrl 비움이 정상. 라이선스 표기 재확인 시도(2026-06-08): svgrepo.com Vercel 429 봇월 차단 + chrome-devtools 인스턴스 점유로 미확인."
     },
     {
       "id": "svgrepo-no-attribution-filter",
@@ -992,7 +993,7 @@
       "tags": ["no-attribution", "cc0", "ui"],
       "preview": "",
       "attributionRequired": false,
-      "notes": "표기 불필요로 필터된 아이콘 뷰. 안전하게 무표기 사용 가능한 범위."
+      "notes": "표기 불필요로 필터된 아이콘 뷰. 안전하게 무표기 사용 가능한 범위. 단일 커버 없는 필터 페이지라 previewUrl 비움이 정상. 라이선스 표기 재확인 시도(2026-06-08): svgrepo.com Vercel 429 봇월 차단 + chrome-devtools 인스턴스 점유로 미확인."
     },
     {
       "id": "svgrepo-attribution-collections",
@@ -1141,16 +1142,16 @@
       "sourceId": "gameart2d",
       "name": "Game Art 2D Freebies",
       "url": "https://www.gameart2d.com/freebies.html",
-      "previewUrl": "https://www.gameart2d.com/uploads/3/0/9/1/30917885/nature-tileset-bundle-2_orig.png",
+      "previewUrl": "https://www.gameart2d.com/uploads/3/0/9/1/30917885/boy-free-sprite_1.jpg",
       "license": "CC0-1.0",
       "safetyTier": "cc0",
       "contentTypes": ["character", "tileset", "ui"],
       "style": "hand-drawn",
       "tags": ["cc0", "platformer", "topdown", "rpg", "freebies"],
-      "preview": "",
+      "preview": "thumbnails/gameart2d-freebies.jpg",
       "downloadUrl": "https://www.gameart2d.com/freebies.html",
       "attributionRequired": false,
-      "notes": "freebies 섹션 한정 CC0(상업/비상업 무료, 표기 선택). 플랫포머·탑다운 RPG용 캐릭터·타일셋·GUI. completeness-critic 추가 — 팩 상세는 sprite-catalog-refresh 시 보강. 유료 자산은 재배포 금지."
+      "notes": "freebies 섹션 한정 CC0(상업/비상업 무료, 표기 선택). 플랫포머·탑다운 RPG용 캐릭터·타일셋·GUI. completeness-critic 추가 — 팩 상세는 sprite-catalog-refresh 시 보강. 유료 자산은 재배포 금지. 커버는 실제 무료(freebie) 캐릭터 프리뷰 boy-free-sprite(94KB)로 교체 — 구 previewUrl nature-tileset-bundle은 유료 번들(1387KB)이라 부적합해 800KB 가드에 막혔음(2026-06-08)."
     },
     {
       "id": "ninja-adventure-asset-pack",
