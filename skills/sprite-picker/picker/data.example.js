@@ -13,6 +13,10 @@ window.SPRITE_PICKER_DATA = {
   subtitle: "각 대상 슬롯에 쓰고 싶은 이미지를 배정한 뒤 '선택 완료'를 누르세요.",
   request: "(사용자 요청 요약 — 스타일·필요 에셋·라이선스 제약)",
 
+  pageSize: 24,                                          // 갤러리 1페이지 개수. 더 있으면 "더 가져오기" 버튼.
+  submitUrl: "http://127.0.0.1:8770/__sprite_picker_submit",  // 선택 완료 POST 대상(기본은 같은 origin).
+                                                              //   컴패니언 서버 포트에 맞춰 절대 URL 로 두면 어느 탭에서든 회수됨.
+
   // 적용 대상(설명 포함). 사용자가 각 슬롯에 이미지를 직접 배정한다.
   targets: [
     { id: "player", name: "플레이어", description: "주인공 — 걷기/점프 애니가 있으면 좋음" },
