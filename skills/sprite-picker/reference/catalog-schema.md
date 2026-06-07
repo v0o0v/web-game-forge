@@ -112,7 +112,36 @@ sprite-picker 가 쓰는 3개 데이터 파일의 형식. 모두 JSON. **카탈�
 
 ## 피커 주입 데이터 (`picker/data.js`)
 
-위 3개 파일에서 **이번 요청에 맞는 부분집합**을 골라 Claude 가 한 객체로 합쳐 주입한다. 형식은
-[picker-protocol.md](./picker-protocol.md) 참고. 카드 정규화 필드는 `id,name,sourceName,license,
-safetyTier,style,contentTypes[],tags[],thumbnail?,previewUrl?,url?,downloadUrl?,notes?` 이며
-`group` 은 `catalog | library | candidate` 셋 중 하나로 배치된다.
+위 3개 파일에서 **이번 요청에 맞는 부분집합**을 골라 Claude 가 한 객체로 합쳐 주입한다(`window.SPRITE_PICKER_DATA`).
+형식·왕복은 [picker-protocol.md](./picker-protocol.md).
+
+```jsonc
+{
+  "title": "…", "subtitle": "…", "request": "…",
+  "tiers": { /* sources.json.tiers */ },
+  "targets": [                          // 있으면 "어사인 모드"(슬롯에 배정). 없으면 "프리 모드"(다중 선택)
+    { "id": "player", "name": "플레이어", "description": "주인공 — 걷기/점프", "hint": "" }
+  ],
+  "catalog":  [ /* 광범위 후보 카드(수십~수백) */ ],
+  "library":  [ /* 이전 사용분 */ ],
+  "candidate":[ /* 절차 제안·로컬 파일 */ ]
+}
+```
+
+- **카드 정규화 필드:** `id, name, sourceName, license, safetyTier, style, contentTypes[], tags[],
+  thumbnail?, previewUrl?, url?, downloadUrl?, notes?`. `group` 은 `catalog | library | candidate`.
+  `thumbnail` 에 실제 이미지 URL 을 넣으면 그대로 보이고, 없으면 메타데이터로 플레이스홀더 자동 렌더.
+- **targets 필드:** `id`(고유), `name`(표시), `description`(슬롯 설명 — 무엇을 적용할지), `hint?`.
+
+### 선택 출력 (`.sprite-picker-selection.json` / 토큰 / `window.__spritePickerSelection()`)
+
+```jsonc
+// 어사인 모드
+{ "version": 2, "request": "…", "note": "…",
+  "assignments": [ { "targetId": "player", "targetName": "플레이어", "image": { …카드 slim… } } ],
+  "unassignedTargets": [ { "targetId": "enemy", "targetName": "적" } ] }
+// 프리 모드
+{ "version": 2, "request": "…", "note": "…", "selected": [ { …카드 slim… } ] }
+```
+`image`/`selected[]` 의 slim 필드: `id, name, group, license, safetyTier, sourceName, url, downloadUrl,
+style, contentTypes`.

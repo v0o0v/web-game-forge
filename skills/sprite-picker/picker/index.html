@@ -12,7 +12,7 @@
       <span class="logo">🎨</span>
       <div class="titles">
         <h1 id="title">스프라이트 피커</h1>
-        <p id="subtitle" class="muted">고를 스프라이트를 클릭하세요. 선택은 자동 저장됩니다.</p>
+        <p id="subtitle" class="muted">적용 대상에 이미지를 배정하세요.</p>
       </div>
     </div>
     <div class="tabs" id="tabs">
@@ -22,32 +22,51 @@
     </div>
   </header>
 
+  <!-- 어사인 보드: data.targets 가 있으면 노출. 대상(슬롯)에 이미지를 배정한다. -->
+  <section class="assign-board" id="assignBoard" hidden>
+    <div class="assign-head">
+      <strong>적용 대상 <span id="assignProgress" class="pill-progress">0/0</span></strong>
+      <span class="muted small">슬롯을 클릭해 선택한 뒤 아래 이미지를 클릭(또는 이미지를 슬롯으로 드래그)하면 배정됩니다.</span>
+    </div>
+    <div class="slots" id="slots"></div>
+  </section>
+
   <section class="filters" id="filters">
-    <input type="search" id="search" placeholder="이름·태그·소스 검색 (예: 캐릭터, run, kenney)" autocomplete="off" />
+    <input type="search" id="search" placeholder="이름·태그·소스 검색 (예: 캐릭터, gem, kenney)" autocomplete="off" />
     <div class="chips" id="styleChips" data-facet="style"></div>
     <div class="chips" id="typeChips" data-facet="contentType"></div>
     <div class="chips" id="tierChips" data-facet="safetyTier"></div>
+    <span class="shown-count muted small" id="shownCount"></span>
   </section>
 
   <main id="gallery" class="gallery" aria-live="polite"></main>
 
   <footer class="tray" id="tray">
     <div class="tray-head">
-      <strong>선택됨 <span id="selCount">0</span>개</strong>
+      <strong id="trayLabel">선택됨 <span id="selCount">0</span>개</strong>
       <div class="tray-actions">
         <button id="clearBtn" class="btn ghost" type="button">전체 해제</button>
-        <button id="copyBtn" class="btn primary" type="button">선택 코드 복사</button>
+        <button id="completeBtn" class="btn primary big" type="button">✓ 선택 완료</button>
       </div>
     </div>
     <div id="selList" class="sel-list"></div>
-    <label class="note-label" for="note">메모(선택) — 어디에 쓸지·요청사항을 적으면 Claude가 함께 읽습니다.</label>
-    <textarea id="note" rows="2" placeholder="예: 첫 줄 캐릭터를 플레이어로, 슬라임을 적으로. 코인은 노란색으로 톤 맞춰줘."></textarea>
-    <details class="token-wrap">
-      <summary>선택 코드(복사·붙여넣기 폴백)</summary>
-      <textarea id="token" rows="5" readonly aria-label="선택 코드 JSON"></textarea>
-      <p class="muted small">Claude가 브라우저를 직접 읽지 못하면, 이 코드를 복사해 채팅창에 붙여넣어 주세요.</p>
+    <label class="note-label" for="note">메모(선택) — 색 보정·세부 요청을 적으면 Claude가 함께 읽습니다.</label>
+    <textarea id="note" rows="2" placeholder="예: 코인은 노란 톤으로, 적은 살짝 작게."></textarea>
+    <details class="token-wrap" id="tokenWrap">
+      <summary>선택 코드(붙여넣기 폴백)</summary>
+      <textarea id="token" rows="6" readonly aria-label="선택 코드 JSON"></textarea>
+      <p class="muted small">자동 전송이 안 되면(정적 서버), 이 코드를 복사해 채팅창에 붙여넣어 주세요.</p>
+      <button id="copyBtn" class="btn ghost" type="button">선택 코드 복사</button>
     </details>
   </footer>
+
+  <div class="done-overlay" id="doneOverlay" hidden>
+    <div class="done-card">
+      <div class="done-icon" id="doneIcon">✅</div>
+      <div class="done-msg" id="doneMsg"></div>
+      <button class="btn ghost" id="doneClose" type="button">계속 고르기</button>
+    </div>
+  </div>
 
   <script src="data.js" onerror="window.__noData=true"></script>
   <script src="picker.js"></script>

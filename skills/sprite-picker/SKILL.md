@@ -58,16 +58,23 @@ web-game-builder 워크플로의 제작요소 스킬.
 요청이 한 줄·모호하거나 SP2(스타일)·SP3(에셋 목록)가 비면 [reference/sprite-interview.md](./reference/sprite-interview.md)
 온디맨드 Read 후 탑다운 1문1답으로 끈질기게 캔다. **준비도 게이트(SP1·SP2·SP3) 충족 전엔 피커를 안 띄운다.**
 
-### 2) 후보 추림 → 피커 주입 → 서빙
-- 좁힌 조건으로 `catalog/packs.json` + `assets-library/library.json` 에서 20~40개로 추리고, 절차 제안·로컬
-  파일은 `candidate` 그룹으로 합쳐 `skills/sprite-picker/picker/data.js` 를 쓴다(`data.example.js` 템플릿).
-- 로컬 서버로 띄운다: `python -m http.server 8766` → `http://127.0.0.1:8766/skills/sprite-picker/picker/index.html`
-  (또는 preview MCP). 프로토콜·경로는 [reference/picker-protocol.md](./reference/picker-protocol.md).
+### 2) 대상(targets) + 광범위 후보 → 피커 주입 → 서빙
+- **적용 대상 슬롯(targets)** 을 만든다 — 각 대상에 이름+설명(예: `{id:"player",name:"플레이어",
+  description:"주인공 걷기/점프"}`). 사용자는 *순서를 외워 찍는 대신* 슬롯에 이미지를 배정한다(SP3·SP6에서 도출).
+- **후보는 광범위하게.** `catalog/packs.json` + `assets-library` + 후보를 **수십~수백 개** 넣고
+  사용자가 검색·필터로 좁히게 한다(너무 적게 주지 말 것). 실제 이미지 `thumbnail` URL을 최대한 채운다.
+- `skills/sprite-picker/picker/data.js` 로 주입(`data.example.js` 템플릿).
+- **컴패니언 서버로 서빙(자동 회수용):** `node skills/sprite-picker/picker/serve.mjs` (background) →
+  `http://127.0.0.1:8770/`. (POST 회수 불필요하면 정적 `python -m http.server` 도 가능 — 그땐 붙여넣기 폴백.)
+  프로토콜·경로는 [reference/picker-protocol.md](./reference/picker-protocol.md).
 
-### 3) 사용자 클릭 선택 → 회수
-사용자가 카드를 클릭해 고르면 선택이 `localStorage` 에 자동 저장된다. 다 골랐다고 하면 회수한다:
-- **MCP 우선:** preview 로 `window.__spritePickerSelection()` 를 eval(또는 스냅샷으로 토큰 textarea 읽기).
-- **폴백:** "선택 코드 복사" 버튼 → 사용자가 채팅창에 붙여넣기.
+### 3) 사용자 슬롯 배정 → "선택 완료" 자동 회수
+사용자가 슬롯을 클릭해 활성화하고 이미지를 클릭(또는 드래그)하면 그 대상에 배정된다(다음 빈 슬롯 자동 이동).
+**"✓ 선택 완료"** 를 누르면 회수한다:
+- **자동(권장):** 피커가 `POST /__sprite_picker_submit` → `serve.mjs` 가 선택을
+  `.sprite-picker-selection.json` 에 저장 → **그 파일을 Read** 한다(없으면 잠깐 대기 후 재시도).
+  preview MCP 환경이면 `window.__spritePickerSelection()` eval 로도 읽는다.
+- **폴백:** 정적 서버면 피커가 선택 코드를 클립보드 복사+노출 → 사용자가 채팅에 붙여넣기.
 
 ### 4) 소싱·적용 ([reference/sourcing.md](./reference/sourcing.md))
 - 웹 카탈로그/후보 → 라이선스 재확인 → **온디맨드 다운로드** → `games/<slug>/assets/` 벤더링 →
@@ -75,7 +82,8 @@ web-game-builder 워크플로의 제작요소 스킬.
 - 로컬 파일 → 출처/라이선스 확인 후 벤더링·등록.
 - 이전 사용분 → 다운로드 없이 즉시 참조.
 - 절차 생성 → [`sprite-forge`](../sprite-forge/SKILL.md)/[`vector-graphics`](../vector-graphics/SKILL.md) 위임.
-- 선택의 `note`(어느 스프라이트를 어느 객체에·색 보정 등, SP6 매핑)를 반영.
+- **배정대로 적용:** `assignments[].targetId` → 그 대상에 해당 `image` 를 적용(슬롯 설명이 곧 적용처).
+  `unassignedTargets` 는 절차 생성으로 채우거나 다시 묻는다. 선택의 `note`(색 보정 등 SP6 세부)를 반영.
 
 ### 5) 라이브러리 누적 + 검증
 - 적용한 에셋을 `assets-library/` 에 복사 + `library.json` 갱신([reference/library.md](./reference/library.md)).

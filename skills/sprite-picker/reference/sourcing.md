@@ -4,6 +4,10 @@
 경로의 공통 원칙: **CC0/IP-safe 우선 · `games/<slug>/assets/` 벤더링 · `assets.json` 등록 ·
 `assets-library/` 누적 · Phaser 4 로드 · 검증.**
 
+> **배정대로 적용한다.** 어사인 모드 선택은 `assignments[].targetId`(적용 대상)에 그 `image` 를 매핑한다 —
+> 슬롯 설명이 곧 "어디에 쓸지"다. 각 이미지의 `safetyTier`/소스(group)에 따라 아래 경로 중 하나로 처리하고,
+> `unassignedTargets` 는 절차 생성으로 채우거나 다시 묻는다.
+
 ## 경로 A — 웹 카탈로그 (catalog/candidate-web)
 
 1. **라이선스 재확인.** 선택의 `safetyTier` 가 `cc0` 면 통과. `permissive-attribution` 이면

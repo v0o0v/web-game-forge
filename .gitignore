@@ -16,3 +16,5 @@ node_modules/
 
 # sprite-picker 세션 산출물 (피커에 주입하는 후보 데이터 — 매 요청마다 새로 생성)
 skills/sprite-picker/picker/data.js
+# sprite-picker "선택 완료" 핸드오프 파일 (serve.mjs 가 사용자 선택을 여기에 저장)
+.sprite-picker-selection.json
