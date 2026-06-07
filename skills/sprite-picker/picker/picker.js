@@ -58,12 +58,15 @@
       activeTarget: null,
       pageSize: pageSize, shownLimit: pageSize, recommendLimit: data.recommendLimit || pageSize,
       expandedSources: new Set(), expandedPacks: new Set(),
+      // 다운로드 큐 상태: packId → 'queued'|'downloading'|'analyzing'|'done'|'failed'. 낙관적 갱신 + 서버 폴.
+      dlStatus: {},
       _data: data, _byId: byId, _items: items
     };
     restore(state);
     if (state.targets.length) state.activeTarget = (firstEmpty(state) || state.targets[0]).id;
     state.view = defaultView(items, state);
     render(data, items, state);
+    fetchDownloads(state); // 부팅 시 큐 상태 동기화(비차단). 정적 서버면 조용히 무시.
   }
 
   function defaultView(items, state) {
@@ -91,7 +94,13 @@
           preview: raw.preview || '', previewUrl: raw.previewUrl || '', animated: !!raw.animated,
           url: raw.url || raw.packUrl || '', downloadUrl: raw.downloadUrl || '', notes: raw.notes || '',
           downloaded: !!raw.downloaded || group === 'library',
-          full: raw.full || '', thumbnail: raw.thumbnail || '', frameConfig: raw.frameConfig || null
+          full: raw.full || '', thumbnail: raw.thumbnail || '', frameConfig: raw.frameConfig || null,
+          // ★분석버전2 확장: 다운로드 출처 팩 id / 비균일 프레임 / 명명 애니 / 그리드 제외칸 보존.
+          sourcePackId: raw.sourcePackId || '',
+          frames: Array.isArray(raw.frames) ? raw.frames : null,
+          anims: Array.isArray(raw.anims) ? raw.anims : [],
+          excludedFrames: Array.isArray(raw.excludedFrames) ? raw.excludedFrames : [],
+          files: Array.isArray(raw.files) ? raw.files : []
         });
       });
     });
@@ -112,7 +121,17 @@
     return '';
   }
   function fullUrl(it) { return assetUrl('library', it.full || it.thumbnail || ''); }
-  function isSheet(it) { return it.group === 'library' && it.frameConfig && it.frameConfig.frameWidth && /\.(png|jpe?g|webp|gif)$/i.test(it.full || ''); }
+  function hasFrames(it) { return !!(it.frames && it.frames.length); }  // 비균일/아틀라스 영역 보유
+  function isSheet(it) {
+    if (it.group !== 'library' || !/\.(png|jpe?g|webp|gif)$/i.test(it.full || '')) return false;
+    return hasFrames(it) || !!(it.frameConfig && it.frameConfig.frameWidth);  // frames[] 우선, 없으면 그리드
+  }
+  // 라이브러리에 이 카탈로그 팩이 이미 받아져 있는지(=sourcePackId 일치 항목 존재).
+  function isDownloaded(it, state) {
+    return state._items.some(function (x) { return x.group === 'library' && x.sourcePackId && x.sourcePackId === it.id; });
+  }
+  // 현재 다운로드 큐 상태(낙관적 dlStatus). 없으면 ''.
+  function dlStatusOf(it, state) { return state.dlStatus[it.id] || ''; }
 
   // ── 추천 점수 ───────────────────────────────────────────────────
   function recoTokens(state) {
@@ -295,6 +314,10 @@
     var liveUrl = it.previewUrl || it.url;
     if (liveUrl) { var live = document.createElement('a'); live.className = 'live'; live.href = liveUrl; live.target = '_blank'; live.rel = 'noopener'; live.textContent = '원본 ↗'; live.addEventListener('click', function (e) { e.stopPropagation(); }); el.appendChild(live); }
     el.appendChild(metaEl(it));
+    // 다운로드 버튼/뱃지(카탈로그·CC0·미보유). Claude 위임 큐로 요청.
+    if (it.group === 'catalog' && it.safetyTier === 'cc0' && !isDownloaded(it, state)) {
+      el.appendChild(downloadControl(it, state));
+    }
     // 팩 펼치기(카탈로그) — 대형 미리보기 토글
     if (it.group === 'catalog') {
       var exp = document.createElement('button'); exp.type = 'button'; exp.className = 'expand-btn';
@@ -317,6 +340,67 @@
     return wrap;
   }
 
+  // ── 다운로드(Claude 위임 큐) ────────────────────────────────────
+  // 제출 엔드포인트와 같은 origin 을 쓴다(submitUrl 절대경로면 그 origin, 상대면 상대경로 그대로).
+  function endpointUrl(state, path) {
+    var su = (state._data && state._data.submitUrl) || '';
+    if (/^https?:/.test(su)) { try { return new URL(path, su).href; } catch (e) {} }
+    return path; // 상대경로 — 피커를 서빙한 origin 기준
+  }
+  function downloadControl(it, state) {
+    var st = dlStatusOf(it, state);
+    if (st && st !== 'failed') {
+      // 요청됨/진행/완료 — 버튼 대신 상태 뱃지(비활성).
+      var labels = { queued: '요청됨', downloading: '받는 중…', analyzing: '분석 중…', done: '분석 완료' };
+      var b = document.createElement('span'); b.className = 'dl-state ' + st;
+      b.textContent = labels[st] || '요청됨'; b.title = '채팅으로 돌아가면 Claude 가 처리합니다';
+      return b;
+    }
+    var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'dl-btn';
+    btn.textContent = (st === 'failed' ? '다시 요청 ⬇' : '⬇ 다운로드');
+    btn.addEventListener('click', function (e) { e.stopPropagation(); requestDownload(it, state, btn); });
+    return btn;
+  }
+  function requestDownload(it, state, btn) {
+    if (btn) { btn.disabled = true; }
+    var payload = {
+      packId: it.id, name: it.name, sourceId: it.sourceId, safetyTier: it.safetyTier,
+      downloadUrl: it.downloadUrl || it.url || '', url: it.url || it.downloadUrl || ''
+    };
+    var url = endpointUrl(state, '/__sprite_picker_download_request');
+    var done = false;
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    if (ctl) setTimeout(function () { try { ctl.abort(); } catch (e) {} }, 3000);
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: ctl && ctl.signal })
+      .then(function (r) { return r.json().catch(function () { throw new Error('bad'); }); })
+      .then(function (res) {
+        done = true;
+        if (res && res.ok === false) { toast('받을 수 없는 항목이에요: ' + (res.error || '거부됨'), 3000, 'warn'); if (btn) btn.disabled = false; return; }
+        state.dlStatus[it.id] = 'queued'; // 낙관적
+        toast('받아서 분석할게요 — 채팅으로 돌아가세요', 4200, 'ok');
+        renderBody(state._items, state);
+      })
+      .catch(function () {
+        if (done) return;
+        if (btn) btn.disabled = false;
+        toast('자동 다운로드 요청은 서버가 필요해요 — 채팅에서 "' + it.name + ' 받아줘" 라고 해주세요', 6000, 'warn');
+      });
+  }
+  // 부팅 시 큐 상태를 받아 카드 뱃지에 반영(비차단). 정적 서버면 조용히 무시.
+  function fetchDownloads(state) {
+    var url = endpointUrl(state, '/__sprite_picker_downloads');
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    if (ctl) setTimeout(function () { try { ctl.abort(); } catch (e) {} }, 3000);
+    fetch(url, { signal: ctl && ctl.signal })
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (q) {
+        if (!q || !Array.isArray(q.requests)) return;
+        q.requests.forEach(function (req) { if (req && req.packId) state.dlStatus[req.packId] = req.status || 'queued'; });
+        renderBody(state._items, state);
+      })
+      .catch(function () {}); // 엔드포인트 없음(정적) — 버튼은 클릭 시 안내 토스트.
+  }
+
   // ── 다운로드 카드(풀 렌더) ──────────────────────────────────────
   function downloadedCard(it, state, assignedSet) {
     var el = document.createElement('article');
@@ -331,17 +415,26 @@
     var check = document.createElement('div'); check.className = 'check'; check.textContent = '✓'; el.appendChild(check);
     var dl = document.createElement('span'); dl.className = 'dl-badge'; dl.textContent = '다운로드됨'; el.appendChild(dl);
     el.appendChild(metaEl(it));
+    var actions = document.createElement('div'); actions.className = 'card-actions';
     if (isSheet(it)) {
       var fb = document.createElement('button'); fb.type = 'button'; fb.className = 'expand-btn';
       fb.textContent = '프레임 전체 보기 ▸';
       fb.addEventListener('click', function (e) { e.stopPropagation(); openFull(it, state); });
-      el.appendChild(fb);
+      actions.appendChild(fb);
     } else if (it.full) {
       var vb = document.createElement('button'); vb.type = 'button'; vb.className = 'expand-btn';
       vb.textContent = '전체 보기 ▸';
       vb.addEventListener('click', function (e) { e.stopPropagation(); openFull(it, state); });
-      el.appendChild(vb);
+      actions.appendChild(vb);
     }
+    // 편집 — 시트/단일 모두 프레임·애니·이름을 다듬는 에디터 모달.
+    if (it.full) {
+      var eb = document.createElement('button'); eb.type = 'button'; eb.className = 'expand-btn edit';
+      eb.textContent = '편집 ✎';
+      eb.addEventListener('click', function (e) { e.stopPropagation(); openEditor(it, state); });
+      actions.appendChild(eb);
+    }
+    if (actions.childNodes.length) el.appendChild(actions);
     el.addEventListener('click', function () { act(state, it); });
     el.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(state, it); } });
     return el;
@@ -417,19 +510,49 @@
     if (frame != null && isSheet(it)) return frameCanvas(it, frame);
     return previewEl(it);
   }
+  // 프레임 인덱스 → 시트 내 사각 {x,y,w,h}. frames[] 있으면 그 영역, 없으면 frameConfig 그리드(margin/spacing 반영).
+  // 그리드 시 img(또는 imgW/imgH) 로 열 수를 계산한다.
+  function frameRect(it, frame, imgW, imgH) {
+    if (hasFrames(it)) {
+      var f = it.frames[frame];
+      if (!f) return null;
+      return { x: f.x || 0, y: f.y || 0, w: f.w || 0, h: f.h || 0 };
+    }
+    var fc = it.frameConfig || {};
+    var fw = fc.frameWidth, fh = fc.frameHeight;
+    if (!fw || !fh) return null;
+    var mg = fc.margin || 0, sp = fc.spacing || 0;
+    var cols = Math.max(1, Math.floor((imgW - mg + sp) / (fw + sp)));
+    var c = frame % cols, r = Math.floor(frame / cols);
+    return { x: mg + c * (fw + sp), y: mg + r * (fh + sp), w: fw, h: fh };
+  }
+  // 시트 총 프레임 수(frames[] 길이 또는 그리드 칸 수).
+  function frameCount(it, imgW, imgH) {
+    if (hasFrames(it)) return it.frames.length;
+    var fc = it.frameConfig || {}; var fw = fc.frameWidth, fh = fc.frameHeight;
+    if (!fw || !fh) return 0;
+    var mg = fc.margin || 0, sp = fc.spacing || 0;
+    var cols = Math.max(1, Math.floor((imgW - mg + sp) / (fw + sp)));
+    var rows = Math.max(1, Math.floor((imgH - mg + sp) / (fh + sp)));
+    return cols * rows;
+  }
   function frameCanvas(it, frame) {
-    var fw = it.frameConfig.frameWidth, fh = it.frameConfig.frameHeight;
-    var cv = document.createElement('canvas'); cv.width = fw; cv.height = fh; cv.className = 'thumb';
+    var cv = document.createElement('canvas'); cv.className = 'thumb';
     if (it.style === 'pixel') cv.style.imageRendering = 'pixelated';
     var img = new Image();
-    img.onload = function () { var cols = Math.max(1, Math.floor(img.width / fw)); var c = frame % cols, r = Math.floor(frame / cols); try { cv.getContext('2d').drawImage(img, c * fw, r * fh, fw, fh, 0, 0, fw, fh); } catch (e) {} };
+    img.onload = function () {
+      var rect = frameRect(it, frame, img.width, img.height);
+      if (!rect || !rect.w || !rect.h) return;
+      cv.width = rect.w; cv.height = rect.h;
+      try { cv.getContext('2d').drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h); } catch (e) {}
+    };
     img.src = fullUrl(it);
     return cv;
   }
 
   // ── 풀뷰 라이트박스 ─────────────────────────────────────────────
   function bindLightbox(state) {
-    var close = function () { els.lightbox.hidden = true; document.getElementById('lightboxBody').innerHTML = ''; };
+    var close = function () { cleanupEditor(); els.lightbox.hidden = true; document.getElementById('lightboxBody').innerHTML = ''; };
     document.getElementById('lightboxClose').addEventListener('click', close);
     document.getElementById('lightboxBackdrop').addEventListener('click', close);
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !els.lightbox.hidden) close(); });
@@ -442,17 +565,20 @@
     if (isSheet(it)) {
       var img = new Image();
       img.onload = function () {
-        var fw = it.frameConfig.frameWidth, fh = it.frameConfig.frameHeight;
-        var cols = Math.max(1, Math.floor(img.width / fw)), rows = Math.max(1, Math.floor(img.height / fh));
-        var grid = document.createElement('div'); grid.className = 'frame-grid'; var idx = 0;
-        for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) {
-          var fi = idx++;
+        var n = frameCount(it, img.width, img.height);
+        var excl = {}; (it.excludedFrames || []).forEach(function (i) { excl[i] = true; });
+        var grid = document.createElement('div'); grid.className = 'frame-grid';
+        for (var fi = 0; fi < n; fi++) {
+          if (excl[fi]) continue; // 제외 프레임은 그리지 않음
+          var rect = frameRect(it, fi, img.width, img.height);
+          if (!rect || !rect.w || !rect.h) continue;
           var cell = document.createElement('button'); cell.type = 'button'; cell.className = 'frame-cell';
-          var cv = document.createElement('canvas'); cv.width = fw; cv.height = fh; cv.className = 'frame-canvas';
+          var cv = document.createElement('canvas'); cv.width = rect.w; cv.height = rect.h; cv.className = 'frame-canvas';
           if (it.style === 'pixel') cv.style.imageRendering = 'pixelated';
-          try { cv.getContext('2d').drawImage(img, c * fw, r * fh, fw, fh, 0, 0, fw, fh); } catch (e) {}
+          try { cv.getContext('2d').drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h); } catch (e) {}
           cell.appendChild(cv);
-          var lab = document.createElement('span'); lab.className = 'frame-idx'; lab.textContent = '#' + fi; cell.appendChild(lab);
+          var nm = (hasFrames(it) && it.frames[fi] && it.frames[fi].name) ? it.frames[fi].name : ('#' + fi);
+          var lab = document.createElement('span'); lab.className = 'frame-idx'; lab.textContent = nm; cell.appendChild(lab);
           (function (frame) { cell.addEventListener('click', function () { if (assignMode(state)) assignToActive(state, it, frame); else toggleSelect(state, it, frame); state._closeLightbox(); }); })(fi);
           grid.appendChild(cell);
         }
@@ -466,6 +592,460 @@
       big.onerror = function () { body.innerHTML = '<p class="muted">이미지를 불러오지 못했습니다: ' + fullUrl(it) + '</p>'; };
       body.appendChild(big);
     }
+  }
+
+  // ── 에디터 모달(전부 canvas·무의존성) ───────────────────────────
+  // 작업 사본(ed)에서 편집 → 저장 시에만 state·서버 반영(비파괴).
+  //   ed: { it, img, scale, mode, frameConfig, frames[], excludedFrames[], anims[],
+  //         name, sel(선택 인덱스), multi(Set 다중선택), drag, anim(미리보기 타이머) }
+  function openEditor(it, state) {
+    var lb = els.lightbox;
+    var body = document.getElementById('lightboxBody'); var title = document.getElementById('lightboxTitle');
+    title.textContent = '편집 — ' + it.name;
+    body.innerHTML = '<p class="muted">이미지를 불러오는 중…</p>'; lb.hidden = false;
+    var img = new Image();
+    img.onerror = function () { body.innerHTML = '<p class="muted">이미지를 불러오지 못했습니다: ' + fullUrl(it) + '</p>'; };
+    img.onload = function () {
+      var ed = {
+        it: it, img: img, state: state,
+        // 깊은 복사(저장 전까지 원본 불변)
+        frameConfig: it.frameConfig ? { frameWidth: it.frameConfig.frameWidth, frameHeight: it.frameConfig.frameHeight, margin: it.frameConfig.margin || 0, spacing: it.frameConfig.spacing || 0 } : null,
+        frames: hasFrames(it) ? it.frames.map(function (f) { return { name: f.name || '', x: f.x || 0, y: f.y || 0, w: f.w || 0, h: f.h || 0 }; }) : null,
+        excludedFrames: (it.excludedFrames || []).slice(),
+        anims: (it.anims || []).map(function (a) { return { name: a.name, frames: (a.frames || []).slice(), frameRate: a.frameRate || 8, repeat: (a.repeat != null ? a.repeat : -1) }; }),
+        name: it.name,
+        mode: hasFrames(it) ? 'free' : (it.frameConfig ? 'grid' : 'free'),
+        sel: -1, multi: [], drag: null, animTimer: null, animIdx: 0, animPlaying: null
+      };
+      buildEditorUI(ed, body, state);
+    };
+    img.src = fullUrl(it);
+  }
+
+  // 작업 사본의 프레임 사각 계산(grid/free 모드 통합) — frameRect 와 동일 규칙이나 ed 기준.
+  function edRect(ed, i) {
+    if (ed.mode === 'free' && ed.frames) {
+      var f = ed.frames[i]; if (!f) return null; return { x: f.x, y: f.y, w: f.w, h: f.h };
+    }
+    var fc = ed.frameConfig || {}; var fw = fc.frameWidth, fh = fc.frameHeight;
+    if (!fw || !fh) return null;
+    var mg = fc.margin || 0, sp = fc.spacing || 0;
+    var cols = Math.max(1, Math.floor((ed.img.width - mg + sp) / (fw + sp)));
+    var c = i % cols, r = Math.floor(i / cols);
+    return { x: mg + c * (fw + sp), y: mg + r * (fh + sp), w: fw, h: fh };
+  }
+  function edCount(ed) {
+    if (ed.mode === 'free' && ed.frames) return ed.frames.length;
+    var fc = ed.frameConfig || {}; var fw = fc.frameWidth, fh = fc.frameHeight;
+    if (!fw || !fh) return 0;
+    var mg = fc.margin || 0, sp = fc.spacing || 0;
+    var cols = Math.max(1, Math.floor((ed.img.width - mg + sp) / (fw + sp)));
+    var rows = Math.max(1, Math.floor((ed.img.height - mg + sp) / (fh + sp)));
+    return cols * rows;
+  }
+  function edFrameName(ed, i) {
+    if (ed.mode === 'free' && ed.frames && ed.frames[i] && ed.frames[i].name) return ed.frames[i].name;
+    return '#' + i;
+  }
+
+  function buildEditorUI(ed, body, state) {
+    body.innerHTML = '';
+    var wrap = document.createElement('div'); wrap.className = 'editor';
+
+    // ── 좌: 캔버스 스테이지 ──
+    var stage = document.createElement('div'); stage.className = 'ed-stage';
+    var cw = document.createElement('div'); cw.className = 'ed-canvas-wrap';
+    // 표시 배율: 너무 작은 시트는 확대, 큰 시트는 패널 폭에 맞춤.
+    var maxW = 520;
+    var scale = Math.max(1, Math.min(8, Math.floor(maxW / ed.img.width) || 1));
+    if (ed.img.width * scale > maxW) scale = Math.max(1, maxW / ed.img.width);
+    ed.scale = scale;
+    var base = document.createElement('canvas'); base.className = 'ed-base';
+    base.width = ed.img.width; base.height = ed.img.height;
+    base.style.width = (ed.img.width * scale) + 'px'; base.style.height = (ed.img.height * scale) + 'px';
+    if (ed.it.style === 'pixel') base.style.imageRendering = 'pixelated';
+    base.getContext('2d').drawImage(ed.img, 0, 0);
+    var overlay = document.createElement('canvas'); overlay.className = 'ed-overlay';
+    overlay.width = ed.img.width * scale; overlay.height = ed.img.height * scale;
+    overlay.style.width = (ed.img.width * scale) + 'px'; overlay.style.height = (ed.img.height * scale) + 'px';
+    cw.appendChild(base); cw.appendChild(overlay);
+    stage.appendChild(cw);
+    var hint = document.createElement('p'); hint.className = 'muted small ed-hint'; stage.appendChild(hint);
+    ed._overlay = overlay; ed._hint = hint;
+
+    // ── 우: 컨트롤 패널 ──
+    var panel = document.createElement('div'); panel.className = 'ed-panel';
+
+    // 항목 이름
+    panel.appendChild(edField('항목 이름', (function () {
+      var inp = document.createElement('input'); inp.type = 'text'; inp.className = 'ed-input'; inp.value = ed.name;
+      inp.addEventListener('input', function () { ed.name = inp.value; });
+      return inp;
+    })()));
+
+    // 모드 전환(그리드 ↔ 자유 영역)
+    var modeRow = document.createElement('div'); modeRow.className = 'ed-row';
+    ['grid', 'free'].forEach(function (m) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'ed-tab' + (ed.mode === m ? ' on' : '');
+      b.textContent = m === 'grid' ? '그리드' : '자유 영역';
+      b.addEventListener('click', function () {
+        if (m === 'free' && !ed.frames) ed.frames = gridToFrames(ed); // 그리드→자유 변환 시 현재 칸을 frames[] 로 구체화
+        if (m === 'grid' && !ed.frameConfig) ed.frameConfig = { frameWidth: 16, frameHeight: 16, margin: 0, spacing: 0 };
+        ed.mode = m; ed.sel = -1; ed.multi = [];
+        buildEditorUI(ed, body, state);
+      });
+      modeRow.appendChild(b);
+    });
+    panel.appendChild(edLabeled('분해 방식', modeRow));
+
+    if (ed.mode === 'grid') {
+      var fc = ed.frameConfig || (ed.frameConfig = { frameWidth: 16, frameHeight: 16, margin: 0, spacing: 0 });
+      var gridGrid = document.createElement('div'); gridGrid.className = 'ed-grid-fields';
+      [['frameWidth', '폭'], ['frameHeight', '높이'], ['margin', '여백'], ['spacing', '간격']].forEach(function (pair) {
+        var k = pair[0];
+        var inp = document.createElement('input'); inp.type = 'number'; inp.min = (k === 'margin' || k === 'spacing') ? '0' : '1';
+        inp.className = 'ed-input num'; inp.value = fc[k] || 0;
+        inp.addEventListener('input', function () { fc[k] = Math.max(0, parseInt(inp.value, 10) || 0); drawOverlay(ed); });
+        gridGrid.appendChild(edLabeled(pair[1], inp));
+      });
+      panel.appendChild(gridGrid);
+      var et = document.createElement('p'); et.className = 'muted small'; et.textContent = '칸을 클릭하면 빈 프레임으로 제외/포함 토글됩니다.'; panel.appendChild(et);
+    } else {
+      var ft = document.createElement('p'); ft.className = 'muted small';
+      ft.textContent = '캔버스에서 드래그해 새 영역을 만들고, 영역을 클릭해 선택하세요.';
+      panel.appendChild(ft);
+    }
+
+    // 선택 영역 편집(이름·삭제·병합)
+    var selBox = document.createElement('div'); selBox.className = 'ed-selbox'; ed._selBox = selBox;
+    panel.appendChild(selBox);
+
+    // 애니메이션
+    var animBox = document.createElement('div'); animBox.className = 'ed-animbox'; ed._animBox = animBox;
+    panel.appendChild(animBox);
+
+    // 저장 / 닫기
+    var foot = document.createElement('div'); foot.className = 'ed-foot';
+    var saveBtn = document.createElement('button'); saveBtn.type = 'button'; saveBtn.className = 'btn primary'; saveBtn.textContent = '저장';
+    saveBtn.addEventListener('click', function () { saveEditor(ed, saveBtn); });
+    var cancelBtn = document.createElement('button'); cancelBtn.type = 'button'; cancelBtn.className = 'btn ghost'; cancelBtn.textContent = '닫기';
+    cancelBtn.addEventListener('click', function () { stopAnimPreview(ed); state._closeLightbox(); });
+    foot.appendChild(cancelBtn); foot.appendChild(saveBtn);
+    panel.appendChild(foot);
+
+    wrap.appendChild(stage); wrap.appendChild(panel);
+    body.appendChild(wrap);
+
+    bindEditorCanvas(ed);
+    renderSelBox(ed); renderAnimBox(ed);
+    drawOverlay(ed);
+    setEdHint(ed);
+  }
+
+  // 폼 헬퍼
+  function edField(label, control) { return edLabeled(label, control); }
+  function edLabeled(label, control) {
+    var f = document.createElement('label'); f.className = 'ed-field';
+    var s = document.createElement('span'); s.className = 'ed-flabel'; s.textContent = label; f.appendChild(s);
+    f.appendChild(control); return f;
+  }
+  function setEdHint(ed) {
+    var n = edCount(ed), nExcl = ed.excludedFrames.length, nAnim = ed.anims.length;
+    ed._hint.textContent = '프레임 ' + n + (ed.mode === 'grid' && nExcl ? ' (제외 ' + nExcl + ')' : '') + ' · 애니 ' + nAnim +
+      (ed.sel >= 0 ? ' · 선택 ' + edFrameName(ed, ed.sel) : '');
+  }
+
+  // 그리드 칸을 frames[] 로 구체화(자유 모드 진입용). 제외칸은 빼고, 이름은 인덱스로.
+  function gridToFrames(ed) {
+    var n = edCount(ed), excl = {}; ed.excludedFrames.forEach(function (i) { excl[i] = true; });
+    var out = [];
+    for (var i = 0; i < n; i++) { if (excl[i]) continue; var r = edRect(ed, i); if (r) out.push({ name: '', x: r.x, y: r.y, w: r.w, h: r.h }); }
+    ed.excludedFrames = [];
+    return out;
+  }
+
+  // 오버레이 렌더: 프레임 외곽선 + 인덱스 + 선택/제외/다중 표시.
+  function drawOverlay(ed) {
+    var ov = ed._overlay, x = ov.getContext('2d'), sc = ed.scale;
+    x.clearRect(0, 0, ov.width, ov.height);
+    var n = edCount(ed);
+    var excl = {}; ed.excludedFrames.forEach(function (i) { excl[i] = true; });
+    var multi = {}; ed.multi.forEach(function (i) { multi[i] = true; });
+    for (var i = 0; i < n; i++) {
+      var r = edRect(ed, i); if (!r) continue;
+      var px = r.x * sc, py = r.y * sc, pw = r.w * sc, ph = r.h * sc;
+      if (excl[i]) { x.fillStyle = 'rgba(255,107,107,.28)'; x.fillRect(px, py, pw, ph); }
+      else if (multi[i]) { x.fillStyle = 'rgba(255,210,63,.22)'; x.fillRect(px, py, pw, ph); }
+      x.lineWidth = (i === ed.sel) ? 2 : 1;
+      x.strokeStyle = (i === ed.sel) ? '#5ad1ff' : (excl[i] ? 'rgba(255,107,107,.7)' : 'rgba(255,255,255,.35)');
+      x.strokeRect(px + .5, py + .5, pw - 1, ph - 1);
+      if (sc >= 2 && (r.w * sc) > 22) {
+        x.fillStyle = 'rgba(0,0,0,.55)'; x.fillRect(px + 1, py + 1, 16, 11);
+        x.fillStyle = '#cfe'; x.font = '9px monospace'; x.textBaseline = 'top'; x.fillText(String(i), px + 2, py + 2);
+      }
+    }
+    // 드래그 중 신규 영역 미리보기
+    if (ed.drag && ed.drag.kind === 'new') {
+      var d = ed.drag, nx = Math.min(d.x0, d.x1), ny = Math.min(d.y0, d.y1), nw = Math.abs(d.x1 - d.x0), nh = Math.abs(d.y1 - d.y0);
+      x.strokeStyle = '#ffd23f'; x.lineWidth = 2; x.setLineDash([4, 3]);
+      x.strokeRect(nx * sc + .5, ny * sc + .5, nw * sc, nh * sc); x.setLineDash([]);
+    }
+    setEdHint(ed);
+  }
+
+  // 캔버스 좌표(표시px) → 시트 픽셀 좌표.
+  function edPos(ed, e) {
+    var rect = ed._overlay.getBoundingClientRect();
+    var x = (e.clientX - rect.left) / ed.scale, y = (e.clientY - rect.top) / ed.scale;
+    return { x: Math.max(0, Math.min(ed.img.width, Math.round(x))), y: Math.max(0, Math.min(ed.img.height, Math.round(y))) };
+  }
+  function frameAt(ed, px, py) {
+    var n = edCount(ed);
+    for (var i = n - 1; i >= 0; i--) { var r = edRect(ed, i); if (r && px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h) return i; }
+    return -1;
+  }
+
+  function bindEditorCanvas(ed) {
+    var ov = ed._overlay;
+    // 모드 전환 시 buildEditorUI 가 재호출되므로, 이전에 붙인 document 핸들러를 먼저 제거(누수 방지).
+    detachEditorDocHandlers(ed);
+    ov.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      var p = edPos(ed, e); var hit = frameAt(ed, p.x, p.y);
+      if (ed.mode === 'grid') {
+        // 그리드: 칸 클릭 = 제외 토글
+        if (hit >= 0) { toggleExcluded(ed, hit); ed.sel = hit; drawOverlay(ed); renderSelBox(ed); }
+        return;
+      }
+      // 자유: 기존 영역이면 선택+(모서리면 리사이즈/내부면 이동), 빈 곳이면 새 영역 드래그
+      if (hit >= 0) {
+        var r = edRect(ed, hit); var edge = nearEdge(p, r, 6 / ed.scale);
+        if (e.shiftKey) { toggleMulti(ed, hit); drawOverlay(ed); renderSelBox(ed); renderAnimBox(ed); return; }
+        ed.sel = hit;
+        ed.drag = { kind: edge ? 'resize' : 'move', i: hit, edge: edge, sx: p.x, sy: p.y, orig: { x: r.x, y: r.y, w: r.w, h: r.h } };
+      } else {
+        ed.drag = { kind: 'new', x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+        ed.sel = -1;
+      }
+      drawOverlay(ed); renderSelBox(ed);
+    });
+    document.addEventListener('mousemove', ed._mm = function (e) {
+      if (!ed.drag) return;
+      var p = edPos(ed, e); var d = ed.drag;
+      if (d.kind === 'new') { d.x1 = p.x; d.y1 = p.y; }
+      else if (d.kind === 'move') { var f = ed.frames[d.i]; f.x = clamp(d.orig.x + (p.x - d.sx), 0, ed.img.width - f.w); f.y = clamp(d.orig.y + (p.y - d.sy), 0, ed.img.height - f.h); }
+      else if (d.kind === 'resize') { resizeFrame(ed.frames[d.i], d.orig, d.edge, p.x - d.sx, p.y - d.sy, ed.img.width, ed.img.height); }
+      drawOverlay(ed);
+    });
+    document.addEventListener('mouseup', ed._mu = function () {
+      if (!ed.drag) return; var d = ed.drag; ed.drag = null;
+      if (d.kind === 'new') {
+        var nx = Math.min(d.x0, d.x1), ny = Math.min(d.y0, d.y1), nw = Math.abs(d.x1 - d.x0), nh = Math.abs(d.y1 - d.y0);
+        if (nw >= 2 && nh >= 2) { ed.frames.push({ name: '', x: nx, y: ny, w: nw, h: nh }); ed.sel = ed.frames.length - 1; }
+      }
+      drawOverlay(ed); renderSelBox(ed);
+    });
+    ov.style.cursor = (ed.mode === 'free') ? 'crosshair' : 'pointer';
+    // 현재 ed 를 라이트박스 닫기 정리 대상으로 등록.
+    _activeEditor = ed;
+  }
+  var _activeEditor = null;
+  function detachEditorDocHandlers(ed) {
+    if (ed && ed._mm) { document.removeEventListener('mousemove', ed._mm); ed._mm = null; }
+    if (ed && ed._mu) { document.removeEventListener('mouseup', ed._mu); ed._mu = null; }
+  }
+  function cleanupEditor() {
+    if (!_activeEditor) return;
+    stopAnimPreview(_activeEditor); detachEditorDocHandlers(_activeEditor);
+    _activeEditor = null;
+  }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function nearEdge(p, r, tol) {
+    var rt = (Math.abs(p.x - (r.x + r.w)) <= tol), lf = (Math.abs(p.x - r.x) <= tol);
+    var bt = (Math.abs(p.y - (r.y + r.h)) <= tol), tp = (Math.abs(p.y - r.y) <= tol);
+    if (rt && bt) return 'se'; if (rt) return 'e'; if (bt) return 's'; if (lf) return 'w'; if (tp) return 'n';
+    return null;
+  }
+  function resizeFrame(f, orig, edge, dx, dy, maxW, maxH) {
+    if (edge.indexOf('e') !== -1) f.w = clamp(orig.w + dx, 1, maxW - orig.x);
+    if (edge.indexOf('s') !== -1) f.h = clamp(orig.h + dy, 1, maxH - orig.y);
+    if (edge.indexOf('w') !== -1) { var nx = clamp(orig.x + dx, 0, orig.x + orig.w - 1); f.x = nx; f.w = orig.x + orig.w - nx; }
+    if (edge.indexOf('n') !== -1) { var ny = clamp(orig.y + dy, 0, orig.y + orig.h - 1); f.y = ny; f.h = orig.y + orig.h - ny; }
+  }
+  function toggleExcluded(ed, i) {
+    var k = ed.excludedFrames.indexOf(i);
+    if (k === -1) ed.excludedFrames.push(i); else ed.excludedFrames.splice(k, 1);
+  }
+  function toggleMulti(ed, i) {
+    var k = ed.multi.indexOf(i);
+    if (k === -1) ed.multi.push(i); else ed.multi.splice(k, 1);
+    ed.multi.sort(function (a, b) { return a - b; });
+  }
+
+  // 선택 영역 편집 패널(이름·삭제·병합·다중선택 토글).
+  function renderSelBox(ed) {
+    var box = ed._selBox; box.innerHTML = '';
+    var head = document.createElement('div'); head.className = 'ed-subhead'; head.textContent = '선택 프레임';
+    box.appendChild(head);
+    if (ed.sel < 0) { var m = document.createElement('p'); m.className = 'muted small'; m.textContent = '캔버스에서 프레임을 선택하세요.'; box.appendChild(m); return; }
+    var i = ed.sel;
+    // 자유 모드만 이름/삭제/병합 가능(그리드는 제외토글 위주)
+    if (ed.mode === 'free' && ed.frames && ed.frames[i]) {
+      var nameInp = document.createElement('input'); nameInp.type = 'text'; nameInp.className = 'ed-input'; nameInp.placeholder = '프레임 이름(예: idle_0)';
+      nameInp.value = ed.frames[i].name || '';
+      nameInp.addEventListener('input', function () { ed.frames[i].name = nameInp.value; });
+      box.appendChild(edLabeled('이름', nameInp));
+      var coords = document.createElement('p'); coords.className = 'muted small';
+      var r = ed.frames[i]; coords.textContent = 'x' + r.x + ' y' + r.y + ' · ' + r.w + '×' + r.h; box.appendChild(coords);
+      var row = document.createElement('div'); row.className = 'ed-row';
+      var del = document.createElement('button'); del.type = 'button'; del.className = 'ed-btn danger'; del.textContent = '삭제';
+      del.addEventListener('click', function () { ed.frames.splice(i, 1); ed.sel = -1; ed.multi = []; reindexAnims(ed, i); drawOverlay(ed); renderSelBox(ed); renderAnimBox(ed); });
+      row.appendChild(del);
+      var mtoggle = document.createElement('button'); mtoggle.type = 'button'; mtoggle.className = 'ed-btn';
+      mtoggle.textContent = (ed.multi.indexOf(i) === -1) ? '다중선택 추가' : '다중선택 해제';
+      mtoggle.addEventListener('click', function () { toggleMulti(ed, i); drawOverlay(ed); renderSelBox(ed); renderAnimBox(ed); });
+      row.appendChild(mtoggle);
+      box.appendChild(row);
+      // 병합: 다중선택 2개 이상이면 bounding-box 로 합치기
+      if (ed.multi.length >= 2) {
+        var merge = document.createElement('button'); merge.type = 'button'; merge.className = 'ed-btn'; merge.textContent = '선택 ' + ed.multi.length + '개 병합';
+        merge.addEventListener('click', function () { mergeFrames(ed); drawOverlay(ed); renderSelBox(ed); renderAnimBox(ed); });
+        box.appendChild(merge);
+      }
+    } else {
+      // 그리드 모드 선택칸 — 제외 토글만.
+      var excluded = ed.excludedFrames.indexOf(i) !== -1;
+      var p = document.createElement('p'); p.className = 'muted small'; p.textContent = '칸 #' + i + (excluded ? ' (제외됨)' : ''); box.appendChild(p);
+      var tg = document.createElement('button'); tg.type = 'button'; tg.className = 'ed-btn'; tg.textContent = excluded ? '포함하기' : '빈 프레임으로 제외';
+      tg.addEventListener('click', function () { toggleExcluded(ed, i); drawOverlay(ed); renderSelBox(ed); });
+      box.appendChild(tg);
+    }
+  }
+  function mergeFrames(ed) {
+    var idx = ed.multi.slice().sort(function (a, b) { return b - a; }); // 큰 인덱스부터 제거
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, names = [];
+    ed.multi.forEach(function (i) { var r = ed.frames[i]; if (!r) return; minX = Math.min(minX, r.x); minY = Math.min(minY, r.y); maxX = Math.max(maxX, r.x + r.w); maxY = Math.max(maxY, r.y + r.h); if (r.name) names.push(r.name); });
+    if (minX === Infinity) return;
+    idx.forEach(function (i) { ed.frames.splice(i, 1); });
+    ed.frames.push({ name: names[0] || '', x: minX, y: minY, w: maxX - minX, h: maxY - minY });
+    ed.sel = ed.frames.length - 1; ed.multi = [];
+    // 인덱스가 흐트러졌으므로 애니 참조는 사용자가 다시 잡도록 비움 경고는 생략(인덱스 기반 anims 는 깨질 수 있음).
+  }
+  // 프레임 삭제 시 그 인덱스를 참조하는 anims[] 보정(삭제분 제거, 큰 인덱스 -1).
+  function reindexAnims(ed, removed) {
+    ed.anims.forEach(function (a) {
+      a.frames = a.frames.filter(function (f) { return f !== removed; }).map(function (f) { return f > removed ? f - 1 : f; });
+    });
+    ed.anims = ed.anims.filter(function (a) { return a.frames.length; });
+  }
+
+  // 애니 정의 패널: 다중선택 → 이름+frameRate → anims[] 추가. 각 애니 미리보기 재생.
+  function renderAnimBox(ed) {
+    var box = ed._animBox; box.innerHTML = '';
+    var head = document.createElement('div'); head.className = 'ed-subhead'; head.textContent = '애니메이션';
+    box.appendChild(head);
+    // 신규 애니 추가 폼(다중선택 기반)
+    var add = document.createElement('div'); add.className = 'ed-anim-add';
+    var nameInp = document.createElement('input'); nameInp.type = 'text'; nameInp.className = 'ed-input'; nameInp.placeholder = '애니 이름(예: run)';
+    var rateInp = document.createElement('input'); rateInp.type = 'number'; rateInp.className = 'ed-input num'; rateInp.min = '1'; rateInp.value = '10'; rateInp.title = 'frameRate';
+    var addBtn = document.createElement('button'); addBtn.type = 'button'; addBtn.className = 'ed-btn';
+    addBtn.textContent = ed.multi.length ? ('선택 ' + ed.multi.length + '프레임으로 추가') : '프레임 다중선택 필요';
+    addBtn.disabled = !ed.multi.length;
+    addBtn.addEventListener('click', function () {
+      if (!ed.multi.length) return;
+      var nm = (nameInp.value || '').trim() || ('anim_' + (ed.anims.length + 1));
+      ed.anims.push({ name: nm, frames: ed.multi.slice(), frameRate: Math.max(1, parseInt(rateInp.value, 10) || 10), repeat: -1 });
+      nameInp.value = ''; ed.multi = [];
+      drawOverlay(ed); renderSelBox(ed); renderAnimBox(ed);
+    });
+    add.appendChild(nameInp); add.appendChild(rateInp); add.appendChild(addBtn);
+    box.appendChild(add);
+    var ht = document.createElement('p'); ht.className = 'muted small'; ht.textContent = 'Shift+클릭(자유) 또는 다중선택 버튼으로 프레임을 모은 뒤 추가하세요.'; box.appendChild(ht);
+
+    ed.anims.forEach(function (a, ai) {
+      var row = document.createElement('div'); row.className = 'ed-anim-row';
+      var nm = document.createElement('input'); nm.type = 'text'; nm.className = 'ed-input mini'; nm.value = a.name;
+      nm.addEventListener('input', function () { a.name = nm.value; });
+      var info = document.createElement('span'); info.className = 'muted small'; info.textContent = '[' + a.frames.join(',') + '] @' + a.frameRate + 'fps';
+      var play = document.createElement('button'); play.type = 'button'; play.className = 'ed-btn mini';
+      play.textContent = (ed.animPlaying === ai) ? '■' : '▶';
+      play.addEventListener('click', function () { if (ed.animPlaying === ai) stopAnimPreview(ed); else playAnimPreview(ed, ai); renderAnimBox(ed); });
+      var del = document.createElement('button'); del.type = 'button'; del.className = 'ed-btn mini danger'; del.textContent = '✕';
+      del.addEventListener('click', function () { if (ed.animPlaying === ai) stopAnimPreview(ed); ed.anims.splice(ai, 1); renderAnimBox(ed); });
+      row.appendChild(nm); row.appendChild(info); row.appendChild(play); row.appendChild(del);
+      box.appendChild(row);
+    });
+
+    // 미리보기 캔버스(재생 중일 때)
+    if (ed.animPlaying != null) {
+      var prev = document.createElement('canvas'); prev.className = 'ed-anim-prev'; if (ed.it.style === 'pixel') prev.style.imageRendering = 'pixelated';
+      ed._animCanvas = prev; box.appendChild(prev);
+    } else { ed._animCanvas = null; }
+  }
+  function playAnimPreview(ed, ai) {
+    stopAnimPreview(ed);
+    ed.animPlaying = ai; ed.animIdx = 0;
+    renderAnimBox(ed); // 캔버스 생성
+    var a = ed.anims[ai]; if (!a || !a.frames.length) return;
+    var draw = function () {
+      var cvs = ed._animCanvas; if (!cvs) return;
+      var fi = a.frames[ed.animIdx % a.frames.length];
+      var r = edRect(ed, fi); if (!r) return;
+      var disp = Math.max(1, Math.min(6, Math.floor(96 / Math.max(r.w, r.h)) || 1));
+      cvs.width = r.w; cvs.height = r.h; cvs.style.width = (r.w * disp) + 'px'; cvs.style.height = (r.h * disp) + 'px';
+      try { cvs.getContext('2d').clearRect(0, 0, r.w, r.h); cvs.getContext('2d').drawImage(ed.img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h); } catch (e) {}
+      ed.animIdx++;
+    };
+    draw();
+    ed.animTimer = setInterval(draw, 1000 / Math.max(1, a.frameRate));
+  }
+  function stopAnimPreview(ed) {
+    if (ed.animTimer) { clearInterval(ed.animTimer); ed.animTimer = null; }
+    ed.animPlaying = null;
+  }
+
+  // 저장 — patch 를 서버에 POST. 성공 시 working item·state 갱신·재렌더.
+  function saveEditor(ed, btn) {
+    stopAnimPreview(ed);
+    var patch = { name: ed.name };
+    if (ed.mode === 'grid') {
+      patch.frameConfig = ed.frameConfig;
+      patch.frames = null; // 그리드 모드는 frames 비움(grid 우선 규칙은 frames 가 null 일 때)
+      patch.excludedFrames = ed.excludedFrames.slice();
+    } else {
+      patch.frames = (ed.frames || []).map(function (f) { return { name: f.name || '', x: f.x, y: f.y, w: f.w, h: f.h }; });
+      patch.excludedFrames = [];
+    }
+    patch.anims = ed.anims.map(function (a) { return { name: a.name, frames: a.frames.slice(), frameRate: a.frameRate, repeat: (a.repeat != null ? a.repeat : -1) }; });
+
+    var apply = function () {
+      // working state 의 항목에 반영(저장 성공/폴백 공통).
+      var it = ed.it;
+      it.name = patch.name; it.frameConfig = patch.frameConfig != null ? patch.frameConfig : it.frameConfig;
+      it.frames = patch.frames; it.excludedFrames = patch.excludedFrames; it.anims = patch.anims;
+      renderBody(ed.state._items, ed.state);
+      if (assignMode(ed.state)) renderSlots(ed.state);
+    };
+
+    if (btn) btn.disabled = true;
+    var url = endpointUrl(ed.state, '/__sprite_picker_library_edit');
+    var body = JSON.stringify({ id: ed.it.id, patch: patch }), done = false;
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    if (ctl) setTimeout(function () { try { ctl.abort(); } catch (e) {} }, 3000);
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body, signal: ctl && ctl.signal })
+      .then(function (r) { return r.json().catch(function () { throw new Error('bad'); }); })
+      .then(function (res) {
+        done = true; if (btn) btn.disabled = false;
+        if (res && res.ok === false) { toast('저장 실패: ' + (res.error || '서버 오류'), 3000, 'warn'); return; }
+        apply(); ed.state._closeLightbox();
+        toast('✅ 편집 저장됨', 2400, 'ok');
+      })
+      .catch(function () {
+        if (done) return; if (btn) btn.disabled = false;
+        // 정적 서버: 서버 저장 불가 → 메모리에만 반영하고 안내.
+        apply(); ed.state._closeLightbox();
+        toast('서버에 저장하지 못해 화면에만 반영했어요(정적 서버) — 채팅으로 편집 내용을 전달해 주세요', 6000, 'warn');
+      });
   }
 
   // ── 플레이스홀더(오프라인) ──────────────────────────────────────
@@ -538,7 +1118,14 @@
   function slim(it, frame) {
     if (!it) return null;
     var o = { id: it.id, name: it.name, group: it.group, license: it.license, safetyTier: it.safetyTier, sourceId: it.sourceId, sourceName: it.sourceName, url: it.url, downloadUrl: it.downloadUrl, style: it.style, contentTypes: it.contentTypes };
-    if (it.group === 'library') { o.full = it.full; if (it.frameConfig) o.frameConfig = it.frameConfig; }
+    if (it.group === 'library') {
+      o.full = it.full;
+      if (it.frameConfig) o.frameConfig = it.frameConfig;
+      if (it.frames && it.frames.length) o.frames = it.frames;
+      if (it.anims && it.anims.length) o.anims = it.anims;
+      if (it.excludedFrames && it.excludedFrames.length) o.excludedFrames = it.excludedFrames;
+      if (it.sourcePackId) o.sourcePackId = it.sourcePackId;
+    }
     if (frame !== undefined && frame !== null) o.frame = frame;
     return o;
   }

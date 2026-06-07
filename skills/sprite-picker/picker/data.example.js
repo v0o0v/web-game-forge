@@ -114,22 +114,59 @@ window.SPRITE_PICKER_DATA = {
   // 경로이며 피커가 /ws/ 로 로드한다(assets-library/ 든 games/<slug>/assets/ 든 무관).
   //   - SVG/단일 이미지: 그대로 인라인 렌더(풀해상도).
   //   - 스프라이트시트(frameConfig 有): 피커가 canvas 로 프레임을 분해해 개별 프레임을 보여주고 개별 선택 가능.
+  //
+  // analysisVersion 2 확장 필드(analyze-pack.mjs 가 채우고, 피커 "편집" 모달이 다듬음):
+  //   - sourcePackId: 이 항목이 나온 카탈로그 packs.json 팩 id. 같으면 '전체' 탭의 그 팩 다운로드 버튼이 사라진다.
+  //   - frames[]:     비균일/아틀라스/수동 영역 [{name,x,y,w,h}]. 있으면 frameConfig 보다 우선해 그 영역을 프레임으로 분해.
+  //   - anims[]:      명명 애니 [{name,frames:[idx…],frameRate,repeat}]. 프레임 인덱스(또는 frames[].name)를 참조.
+  //   - excludedFrames[]: 그리드 모드에서 빈/제외 칸 인덱스(프레임 그리드·라이트박스에서 숨김).
   library: [
     {
-      id: "kenney-pixel-hero",
-      name: "픽셀 러너",
+      id: "kenney-pixel-platformer__characters",
+      name: "Pixel Platformer — 캐릭터",
       sourceId: "kenney",
       sourceName: "Kenney.nl",
+      sourcePackId: "kenney-pixel-platformer",   // ← 카탈로그 팩 id. 받아진 팩은 '전체' 탭에서 다운로드 버튼 대신 노출.
       license: "CC0-1.0",
       safetyTier: "cc0",
       style: "pixel",
       contentTypes: ["character"],
       tags: ["player", "run"],
       downloaded: true,
-      // 작업공간 루트 기준 경로(→ /ws/ 로 서빙). 시트면 frameConfig 로 분해해 개별 프레임 선택.
-      full: "assets-library/kenney-pixel-hero/sheet.png",
-      frameConfig: { frameWidth: 18, frameHeight: 18 },
-      thumbnail: "assets-library/kenney-pixel-hero/thumb.png"
+      analysisVersion: 2,
+      // 작업공간 루트 기준 경로(→ /ws/ 로 서빙). 시트면 frameConfig/frames 로 분해해 개별 프레임 선택.
+      full: "assets-library/kenney-pixel-platformer/characters.png",
+      frameConfig: { frameWidth: 18, frameHeight: 18, margin: 0, spacing: 0 },
+      excludedFrames: [],                         // 그리드 모드 빈칸 제외(선택)
+      anims: [
+        { name: "walk", frames: [0, 1, 2, 3], frameRate: 10, repeat: -1 }
+      ],
+      thumbnail: "assets-library/kenney-pixel-platformer/characters.thumb.png"
+    },
+    {
+      id: "demo-atlas__hero",
+      name: "아틀라스 데모 — 히어로",
+      sourceId: "demo",
+      sourceName: "Demo Atlas",
+      sourcePackId: "demo-atlas",
+      license: "CC0-1.0",
+      safetyTier: "cc0",
+      style: "pixel",
+      contentTypes: ["character"],
+      tags: ["hero", "atlas"],
+      downloaded: true,
+      analysisVersion: 2,
+      full: "assets-library/demo-atlas/hero.png",
+      frameConfig: null,                          // 비균일 — frames[] 사용
+      frames: [                                   // 아틀라스/수동 영역(grid 보다 우선)
+        { name: "idle", x: 0, y: 0, w: 24, h: 32 },
+        { name: "run_0", x: 24, y: 0, w: 24, h: 32 },
+        { name: "run_1", x: 48, y: 0, w: 24, h: 32 }
+      ],
+      anims: [
+        { name: "run", frames: [1, 2], frameRate: 12, repeat: -1 }
+      ],
+      thumbnail: "assets-library/demo-atlas/hero.thumb.png"
     },
     {
       id: "gameicons-lorc-emerald",

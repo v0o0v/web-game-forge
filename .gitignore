@@ -20,3 +20,21 @@ skills/sprite-picker/picker/data.js
 .sprite-picker-selection.json
 # sprite-picker 세션 후보 썸네일(애니 SVG 등 — 매 요청마다 생성)
 skills/sprite-picker/picker/_session/
+
+# sprite-picker 다운로드 큐 (런타임 상태 파일 — 커밋 불필요)
+/.sprite-picker-downloads.json
+
+# assets-library 팩 원본 (fetch-pack.mjs 가 받은 압축 해제 결과 — 분석에만 쓰고 커밋 안 함)
+assets-library/*/raw/
+
+# assets-library 분석 산출 바이너리 (analyze-pack.mjs 가 생성 — 재생성 가능하므로 커밋 안 함)
+assets-library/*/*.png
+assets-library/*/*.jpg
+assets-library/*/*.jpeg
+assets-library/*/*.gif
+assets-library/*/*.thumb.png
+
+# 단, 라이브러리 메타데이터는 커밋 유지 (재생성 기준점 + 편집기 변경사항 보존)
+!assets-library/library.json
+!assets-library/*/README.md
+!assets-library/*/analysis.json
