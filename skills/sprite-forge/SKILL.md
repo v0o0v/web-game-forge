@@ -98,6 +98,8 @@ this.tweens.add({ targets: star, y: 72, duration: 800, yoyo: true, repeat: -1, e
 - 형태가 겹쳐도 팔레트·외형·이름을 다르게 하면 메카닉은 자유롭게 구현 가능.
 
 ## 연계 / 원칙
+- **실제 CC0 스프라이트/스프라이트시트를 골라 쓰려면** [`sprite-picker`](../sprite-picker/SKILL.md)(카탈로그·로컬·이전 사용분
+  시각 선택). 이 스킬은 *코드 절차 생성* 담당이고, sprite-picker 가 "절차 생성 vs 실제 에셋"에서 절차 생성을 이쪽에 위임한다.
 - web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(CC0/절차적).
 - `PixelForge.buildAll` 내장 키: `hero`, `enemy`, `coin`, `ground`, `dirt`, `brick`, `qblock`, `pipeTop`, `pipeBody`, `mushroom`, `flag`, `pole`, `cloud`, `hill`, `bush`.
 - config에 `pixelArt: true, roundPixels: true` 필수 — 확대 시 또렷한 픽셀.

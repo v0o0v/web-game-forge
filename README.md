@@ -4,14 +4,14 @@
 
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Phaser](https://img.shields.io/badge/engine-Phaser%204.1-blueviolet)
-![Skills](https://img.shields.io/badge/skills-18-orange)
+![Skills](https://img.shields.io/badge/skills-20-orange)
 ![Phaser refs](https://img.shields.io/badge/phaser--refs-28-informational)
 ![Assets](https://img.shields.io/badge/assets-CC0%20%2F%20IP--safe-success)
 ![Mobile](https://img.shields.io/badge/mobile--webview-ready-success)
 
 기존 클로드 코드에 "웹 게임 만들어줘"라고 하면 바닐라 JS 수준의 투박한 결과가 나옵니다.
 **WebGameForge는 게임 제작 의도를 자동 감지**해, 검증된 엔진 스택(Phaser 4(4.1.0) + 절차적 에셋/사운드 +
-모바일 하니스)과 전문 스킬 14종으로 **스프라이트 애니메이션·HUD·터치 컨트롤·8비트 사운드까지 갖춘
+모바일 하니스)과 전문 스킬 19종으로 **스프라이트 애니메이션·HUD·터치 컨트롤·8비트 사운드까지 갖춘
 게임**을 만들어 줍니다.
 
 > 플러그인 내부 식별자는 `web-game-builder` 입니다(슬래시 커맨드·스킬 네임스페이스에 사용).
@@ -38,7 +38,10 @@
   게이트(`assets.json`, CC0만)로 로딩합니다. 닌텐도 등 타사 에셋·이름·시그니처 조합을 쓰지 않습니다.
 - **🔊 8비트 사운드** — `ChipAudio`가 Web Audio API로 효과음과 **오리지널** BGM을 코드 합성합니다.
   오디오 파일 0개, 100% CC0.
-- **🧩 18종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 8 + 품질·운영 4 + 메인 오케스트레이터.
+- **🧩 20종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 9 + 품질·운영 5 + 메인 오케스트레이터.
+- **🖼 스프라이트 시각 선택** — 화면 비주얼은 재미의 핵심이라 사용자가 **직접 고르게** 합니다.
+  `sprite-picker`가 라이선스-안전(CC0) 스프라이트/스프라이트시트를 **브라우저 갤러리에서 클릭 선택**하게
+  하고(카탈로그·로컬 파일·이전 사용분), 캐싱으로 매번 웹을 뒤지지 않습니다. 카탈로그 갱신은 `sprite-catalog-refresh`.
 - **🧬 게임 DNA 템플릿** — 인기 2D 게임 35종의 재미 요소를 분석한 레퍼런스(`reference/game-dna/`).
   명확화 단계에서 "어떤 게임 만들지" 제안하고, 재미요소를 조합해 새 게임으로 녹입니다(메카닉만 차용, IP-safe).
 - **✅ 실제 실행 검증** — 헤드리스 step 하니스로 이동·충돌·메카닉을 결정적 검증. 데모 `super-runner`
@@ -148,9 +151,28 @@ http://127.0.0.1:8766/games/super-runner/index.html
 
 필요하면 외부 HD CC0 아트(SVG/래스터)도 `assets.json` 라이선스 게이트로 로딩합니다.
 
+### 🖼 스프라이트 직접 고르기 — `sprite-picker`
+
+화면에 보이는 이미지·애니메이션은 게임의 재미를 가장 크게 좌우하므로, **사용자가 직접 고를 수 있게**
+합니다. `sprite-picker` 스킬은:
+
+- **시각적 선택** — 라이선스-안전(CC0) 스프라이트/스프라이트시트/애니메이션을 **브라우저 갤러리**에서
+  눈으로 구분해 **클릭 선택**합니다(`skills/sprite-picker/picker/`). 선택은 preview MCP 로 읽거나
+  복사-붙여넣기로 전달됩니다.
+- **3가지 출처** — ① 큐레이션된 CC0 카탈로그(Kenney·OpenGameArt 등, 라이선스 적대적 검증), ② 사용자
+  로컬 파일, ③ `assets-library/`에 쌓인 **이전 사용분** — 또는 ④ 설명을 받아 `sprite-forge`/`vector-graphics`
+  로 **절차 생성**(위임). 게임 생성 시 "실제 에셋 vs 절차 생성"을 먼저 묻습니다.
+- **캐싱 우선** — 카탈로그는 미리 조사·검증해 `skills/sprite-picker/catalog/`에 캐싱되어 **매번 웹을
+  뒤지지 않습니다.** 외부 재조사는 `sprite-catalog-refresh`로 사용자가 명시 요청할 때만.
+- **로컬 라이브러리** — 한 번 쓴 스프라이트는 `assets-library/`에 보관해 언제든 다시 고릅니다.
+- **끈질긴 인터뷰** — 의도가 모호하면 탑다운 1문1답으로 스타일·에셋 목록·애니·라이선스·적용 매핑을 캐묻습니다.
+
+> 안전 티어(`cc0`/`permissive-attribution`/`mixed-per-item`/`avoid`)로 라이선스를 등급화하며, 최종
+> 게이트는 `ip-license-guard`·루트 `assets.json`입니다. 닌텐도 등 상용 IP 리핑 소스는 카탈로그에 넣지 않습니다.
+
 ---
 
-## 🧩 스킬 카탈로그 (18종)
+## 🧩 스킬 카탈로그 (20종)
 
 메인 `web-game-builder`가 전체 흐름을 조율하고, 요청 성격에 따라 전문 스킬이 자동 발동합니다.
 **장르로 스캐폴드 → 제작요소로 살붙이기 → 품질로 검증·최적화** 순서로 협력합니다.
@@ -163,8 +185,9 @@ http://127.0.0.1:8766/games/super-runner/index.html
 | | `arcade-classic` | 벽돌깨기·뱀·퐁·인베이더 |
 | | `puzzle-game` | 테트리스·매치3·2048 |
 | | `endless-runner` | 무한 러너·플래피류 |
-| 🛠 제작요소 | `sprite-forge` | PixelForge 픽셀아트 스프라이트·애니메이션 |
-| | `vector-graphics` | VectorForge 미려한 스무스/벡터 그래픽 + 외부 HD CC0 로딩 |
+| 🛠 제작요소 | `sprite-picker` | **실제 스프라이트/시트/애니를 브라우저 갤러리에서 시각적으로 골라 적용**(CC0 카탈로그·로컬·이전 사용분) + 캐싱·로컬 라이브러리 |
+| | `sprite-forge` | PixelForge 픽셀아트 스프라이트·애니메이션(절차 생성) |
+| | `vector-graphics` | VectorForge 미려한 스무스/벡터 그래픽 + 외부 HD CC0 로딩(절차 생성) |
 | | `chip-sound` | ChipAudio 효과음·BGM |
 | | `world-map-architect` | 스테이지를 잇는 **진행 맵 위상**(선형·사가·분기 노드맵·액트·허브·무한) 설계 + 맵 화면 빌드 |
 | | `level-architect` | 게임 분석·의도 인터뷰·난이도 곡선·재미 극대화 레벨 **설계** |
@@ -175,6 +198,7 @@ http://127.0.0.1:8766/games/super-runner/index.html
 | | `game-qa` | 헤드리스 step 하니스 동작 검증 |
 | | `ip-license-guard` | 저작권·라이선스 안전 점검 |
 | | `perf-60fps` | 60fps 성능 최적화 |
+| | `sprite-catalog-refresh` | sprite-picker의 CC0 소스 카탈로그 웹 재조사·갱신(사용자 명시 요청 시) |
 
 각 전문 스킬은 tight한 description으로 관련 요청에만 발동하도록 설계해 스킬 listing 예산
 (컨텍스트 ~1%)을 관리합니다(총 ≈2.4k자, 개별 캡 1,536자 내).
@@ -268,19 +292,22 @@ Web Audio API만으로 8비트 효과음과 **오리지널** BGM을 코드 합�
 ```
 web-game-forge/
 ├── .claude-plugin/  plugin.json · marketplace.json   # 플러그인 매니페스트
-├── skills/                                            # 18종 스킬 (메인 1 + 전문 17)
+├── skills/                                            # 20종 스킬 (메인 1 + 전문 19)
 │   ├── web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 분석 + game-dna/puzzle/ 퍼즐 20종 심화)
 │   ├── platformer-game/  topdown-shooter/  arcade-classic/  puzzle-game/  endless-runner/
 │   ├── world-map-architect/  (+ reference/map-interview · map-design/ MAP-* 원칙 + 위상 카탈로그 + 빌드 패턴)
 │   ├── level-architect/  (+ reference/level-interview · level-design/ LD-* 원칙 + 장르별 레벨 설계)  level-designer/
+│   ├── sprite-picker/  (+ catalog/ 검증된 CC0 소스 캐시 · picker/ 브라우저 갤러리 · reference/ 인터뷰·소싱·프로토콜·라이브러리)
+│   ├── sprite-catalog-refresh/  (sprite-picker 카탈로그 웹 재조사·갱신)
 │   ├── sprite-forge/  vector-graphics/  chip-sound/  game-ui-hud/  juice-fx/
 │   └── mobile-webview-tune/  game-qa/  ip-license-guard/  perf-60fps/
 ├── hooks/hooks.json                                   # UserPromptSubmit 의도 감지 등록
-├── scripts/detect-game-intent.{js,ps1,sh}            # 한/영 의도 감지(크로스플랫폼)
+├── scripts/detect-game-intent.{js,ps1,sh}            # 한/영 게임·에셋 의도 감지(크로스플랫폼)
 ├── commands/make-game.md                              # /web-game-builder:make-game
 ├── engine/  phaser.min.js · pixelforge.js · vectorforge.js · audio.js · mobile.js   # 재사용 엔진
 ├── games/  super-runner/(픽셀 데모) · style-preview/(스무스 4스타일 쇼케이스)
-├── assets.json                                        # CC0 라이선스 게이트 매니페스트
+├── assets-library/                                    # 이전 사용 스프라이트 로컬 보관(사용자 자산)
+├── assets.json                                        # CC0 라이선스 게이트 매니페스트 (+ sprite-picker 카탈로그 포인터)
 ├── docs/  설계.md · img/                              # 아키텍처 명세 · 스크린샷
 ├── README.md · LICENSE
 ```
