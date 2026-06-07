@@ -57,16 +57,21 @@ node skills/sprite-picker/picker/serve.mjs
 ### ⑤ 선택 완료 — 자동 회수 (2-way)
 사용자가 **"✓ 선택 완료"** 를 누르면:
 
-**A. 자동(권장).** 피커가 `POST /__sprite_picker_submit` → `serve.mjs` 가 선택 JSON 을
+**A. 자동(권장).** 피커가 `POST` (data.`submitUrl` 또는 `/__sprite_picker_submit`) → `serve.mjs` 가 선택 JSON 을
 `SPRITE_PICKER_OUT`(기본 `.sprite-picker-selection.json`)에 저장 → **Claude 가 그 파일을 Read** 한다.
-사용자에게 "✅ 전송됨" 오버레이가 뜬다. 붙여넣기 불필요.
+사용자에게는 **비차단 토스트**("✅ 전송됨")만 잠깐 뜨고 사라진다(화면을 막는 팝업 없음). 붙여넣기 불필요.
+> `submitUrl` 을 컴패니언 서버 절대 URL(예: `http://127.0.0.1:8770/__sprite_picker_submit`)로 두면 정적
+> 서버 탭에서 열려 있어도 제출이 컴패니언 서버로 가 회수된다(CORS 허용됨).
 
 > 회수: 사용자가 "다 골랐어/선택 완료"라고 하면 `.sprite-picker-selection.json` 을 Read 한다(없으면
 > 잠깐 대기 후 재시도, 또는 `GET /__sprite_picker_status` 로 저장 여부 확인). preview MCP 환경이면
 > `window.__spritePickerSelection()` eval 로도 읽을 수 있다.
 
-**B. 폴백.** 컴패니언 서버가 아니라 정적 서버로 띄웠거나 POST 가 막히면, 피커가 자동으로 선택 코드를
-**클립보드에 복사**하고 토큰 박스를 열며 "📋 붙여넣어 주세요" 오버레이를 띄운다 → 사용자가 채팅에 붙여넣기.
+**B. 폴백.** POST 가 막히면 피커가 자동으로 선택 코드를 **클립보드에 복사**하고 토큰 박스를 펼치며
+비차단 토스트("📋 붙여넣어 주세요")로 안내한다 → 사용자가 채팅에 붙여넣기. (막는 오버레이는 쓰지 않는다.)
+
+> **갤러리 페이지네이션:** 후보가 `pageSize`(기본 24)보다 많으면 **"더 가져오기"** 버튼으로 더 로드한다.
+> 후보를 광범위하게 넣어도 한 번에 다 렌더하지 않아 가볍다. 필터/탭/검색 변경 시 페이지는 처음으로 리셋된다.
 
 선택 JSON (v2, 어사인 모드):
 ```json

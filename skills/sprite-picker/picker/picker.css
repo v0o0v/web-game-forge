@@ -211,16 +211,16 @@ body {
 .btn.primary.big { box-shadow: 0 4px 16px rgba(90,209,255,.3); }
 #copyBtn { margin-top: 8px; }
 
-/* 완료 오버레이 */
-.done-overlay {
-  position: fixed; inset: 0; z-index: 30;
-  background: rgba(8,10,16,.72); display: flex; align-items: center; justify-content: center;
+/* 더 가져오기 (페이지네이션) */
+.load-more {
+  grid-column: 1 / -1; justify-self: center; margin: 6px 0 2px;
+  background: var(--panel-2); color: var(--txt); border: 1px solid var(--line);
+  border-radius: 999px; padding: 11px 22px; font-size: 14px; cursor: pointer; font-weight: 600;
 }
-.done-card {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
-  padding: 26px 30px; text-align: center; max-width: 360px;
-  box-shadow: 0 16px 50px rgba(0,0,0,.5);
-}
-.done-icon { font-size: 40px; }
-.done-msg { margin: 12px 0 18px; font-size: 15px; line-height: 1.5; }
-.done-card.warn .done-icon { filter: none; }
+.load-more:hover { border-color: var(--accent); color: var(--accent); }
+.load-more:active { transform: translateY(1px); }
+
+/* 토스트 변형 (비차단 알림) */
+.toast { max-width: min(86vw, 560px); text-align: center; }
+.toast.warn { background: var(--warn); }
+.toast.ok { background: var(--ok); }
