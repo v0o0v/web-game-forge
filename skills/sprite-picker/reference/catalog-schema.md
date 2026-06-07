@@ -129,8 +129,11 @@ sprite-picker 가 쓰는 3개 데이터 파일의 형식. 모두 JSON. **카탈�
 ```
 
 - **카드 정규화 필드:** `id, name, sourceName, license, safetyTier, style, contentTypes[], tags[],
-  thumbnail?, previewUrl?, url?, downloadUrl?, notes?`. `group` 은 `catalog | library | candidate`.
+  thumbnail?, animated?, previewUrl?, url?, downloadUrl?, notes?`. `group` 은 `catalog | library | candidate`.
   `thumbnail` 에 실제 이미지 URL 을 넣으면 그대로 보이고, 없으면 메타데이터로 플레이스홀더 자동 렌더.
+  `animated: true` 면 thumbnail(SMIL/CSS 애니 SVG)을 `<object>` 로 렌더해 **움직이는 미리보기**가 된다
+  (`<img>` 는 SVG 애니가 안 돌아감). 애니메이션 스프라이트 후보에 쓴다.
+- **빈 탭 자동 회피:** 피커는 항목이 있는 첫 그룹(catalog→candidate→library)을 기본 탭으로 연다.
 - **targets 필드:** `id`(고유), `name`(표시), `description`(슬롯 설명 — 무엇을 적용할지), `hint?`.
 
 ### 선택 출력 (`.sprite-picker-selection.json` / 토큰 / `window.__spritePickerSelection()`)
