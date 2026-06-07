@@ -57,7 +57,7 @@
     ring:   ['XXXXXXX', 'XXXXXXX', 'XX...XX', 'XX...XX', 'XX...XX', 'XXXXXXX', 'XXXXXXX']
   };
 
-  // --- 레벨 데이터 (12레벨 — 기믹을 하나씩 가르치며 모양 분배) -------------
+  // --- 레벨 데이터 (13레벨 — 기믹을 하나씩 가르치며 모양 분배) -------------
   var LEVELS = [
     { name: '첫 별빛',     shape: 'square',  colors: 5, moves: 20, goal: 1000, win: { type: 'score', target: 1000 }, seed: 1001 },
     { name: '연쇄의 맛',   shape: 'square',  colors: 5, moves: 18, goal: 1600, win: { type: 'score', target: 1600 }, seed: 1002 },
@@ -70,6 +70,8 @@
     { name: '암흑물질',    shape: 'ring',    colors: 6, moves: 24, goal: 2600, win: { type: 'jelly' }, jelly: 1, spreaders: 2, seed: 1009 },
     { name: '조합 폭발',   shape: 'star',    colors: 6, moves: 20, goal: 3600, win: { type: 'score', target: 3600 }, overload: true, seed: 1010 },
     { name: '색을 모아라', shape: 'cross',   colors: 6, moves: 18, goal: 2400, win: { type: 'collect', color: 0, count: 24 }, seed: 1011 },
+    // 종합 시험(피날 앞): 미사용 jelly:2(2겹 성운) 첫 도입 + 기습득 ice 조합 — LD-4BEAT 비틀기 · LD-ONE-IDEA(새 개념 1개) · LD-FAIR(moves 넉넉)
+    { name: '겹성운의 시련', shape: 'hourglass', colors: 6, moves: 26, goal: 3400, win: { type: 'jelly' }, jelly: 2, ice: 6, seed: 1013 },
     { name: '마지막 한 수', shape: 'diamond', colors: 6, moves: 22, goal: 4200, win: { type: 'score', target: 4200 }, overload: true, ice: 6, seed: 1012 }
   ];
 
