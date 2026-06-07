@@ -39,9 +39,30 @@
    > **검증 메모(2026-06-08).** kenney 리졸버는 라이브로 검증됨(`kenney-pixel-platformer` 실제
    > 다운로드→ZIP 해제→분석: alpha BFS 가 `tilemap`=180·`tilemap-characters`=27·`tilemap-backgrounds`=24
    > 프레임을 정확히 검출). gameart2d/opengameart/generic 리졸버는 구현돼 있으나 라이브 미검증 —
-   > 첫 사용 시 페이지 마크업 변동에 대비해 결과를 확인하라. itch.io 정적 페이지는 직접 링크가 없어
-   > `exit 3` 으로 명확히 실패하니, 그런 팩은 사용자가 받아 `assets-library/<packId>/raw/` 에 둔 뒤
-   > `analyze-pack.mjs` 만 돌린다.
+   > 첫 사용 시 페이지 마크업 변동에 대비해 결과를 확인하라.
+
+   **off-catalog 수동 핸드오프 (itch.io 등 게이트·미카탈로그 팩).** itch.io 는 매일 새 에셋이 올라오고
+   pay-what-you-want·JS 게이트라 자동 다운로드/자동 발견을 하지 않는다(`fetch-pack` 의 카탈로그 경로는
+   itch 호스트에서 `exit 3`). 대신 **사용자가 직접 고른 팩을 받아오는 수동 경로**를 쓴다:
+
+   1. 사용자가 itch 등에서 팩을 고르고, (a) ZIP 을 내려받거나 (b) 게이트를 통과해 얻은 **직접 파일 URL** 을 준다.
+   2. `fetch-pack.mjs` 수동 모드로 `raw/` 에 푼다(카탈로그·리졸버·CC0-by-packId 게이트 우회):
+      ```
+      node skills/sprite-picker/catalog/fetch-pack.mjs --id <slug> --zip <로컬ZIP경로>
+      node skills/sprite-picker/catalog/fetch-pack.mjs --id <slug> --url <직접파일URL>
+      ```
+   3. `analyze-pack.mjs` 로 분석하되, **off-catalog 는 라이선스를 가정하지 않으므로 `--license` 필수**
+      (CC0 자동 가정 금지 — IP 안전). 라이선스로 `safetyTier` 를 보수적으로 추론(CC0→cc0,
+      CC-BY/OFL/MIT 등→permissive-attribution, 불명→mixed-per-item):
+      ```
+      node skills/sprite-picker/catalog/analyze-pack.mjs --pack <slug> --license <CC0-1.0|CC-BY-4.0|...> \
+        [--name "표시명"] [--source itch] [--tier <safetyTier>] [--style pixel] [--tags "a,b"]
+      ```
+   4. 이후는 카탈로그 팩과 동일 — 분석된 시트가 `library.json`(다운로드 탭)에 들어가고 편집기로 다듬는다.
+      `permissive-attribution` 이면 적용 시 `CREDITS.txt` 표기, 라이선스 불명이면 게이트에서 막힌다.
+
+   > 발견(discovery)은 의도적으로 자동화하지 않는다 — itch 의 churn·항목별 라이선스 때문에 사용자가
+   > 직접 고르는 편이 안전하다. 우리는 "받아서 시트별로 분류·편집·영속"만 책임진다.
 
 3. **`assets.json` 등록(라이선스 게이트).** 루트 `assets.json` 의 `entries[]` 에 추가:
    ```json

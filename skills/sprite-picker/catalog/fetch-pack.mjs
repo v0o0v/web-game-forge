@@ -36,11 +36,16 @@ const argv = process.argv.slice(2);
 function flagVal(name) { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; }
 const opt = {
   pack: flagVal('--pack'),
+  id: flagVal('--id'),                 // 수동 모드: 카탈로그에 없는 팩의 슬러그(assets-library/<id>/)
+  zip: flagVal('--zip'),               // 수동 모드: 로컬 ZIP/이미지 파일 경로
+  url: flagVal('--url'),               // 수동 모드: 해석된 직접 파일 URL(itch 게이트 통과 후 등)
   out: flagVal('--out') || 'assets-library',
   dry: argv.includes('--dry'),
   maxMb: (function () { const v = flagVal('--max-mb'); return v ? parseInt(v, 10) : 40; })(),
   help: argv.includes('--help') || argv.includes('-h')
 };
+// 수동(off-catalog) 모드: --id 와 (--zip | --url) 가 주어지면 packs.json·리졸버를 건너뛴다.
+opt.manual = !!(opt.id && (opt.zip || opt.url));
 
 // stdout 마지막 줄에 JSON 한 줄을 보장하고 지정 코드로 종료.
 function done(obj, code) {
@@ -49,15 +54,27 @@ function done(obj, code) {
 }
 
 if (opt.help) {
-  console.log('사용법: node fetch-pack.mjs --pack <packId> [--out <dir=assets-library>] [--max-mb <n=40>] [--dry]');
-  console.log('  packs.json 에서 CC0 팩을 찾아 직접 다운로드 링크를 해석하고 <out>/<packId>/raw/ 로 받아 ZIP 을 푼다.');
+  console.log('사용법:');
+  console.log('  [카탈로그] node fetch-pack.mjs --pack <packId> [--out <dir=assets-library>] [--max-mb <n=40>] [--dry]');
+  console.log('     packs.json 에서 CC0 팩을 찾아 직접 다운로드 링크를 해석하고 <out>/<packId>/raw/ 로 받아 ZIP 을 푼다.');
+  console.log('  [수동]     node fetch-pack.mjs --id <slug> --zip <로컬ZIP경로>     # 로컬 파일을 raw/ 로 푼다');
+  console.log('             node fetch-pack.mjs --id <slug> --url <직접파일URL>    # 해석된 직링크(itch 게이트 통과 후 등)를 받아 raw/ 로 푼다');
+  console.log('     수동 모드는 카탈로그에 없는 off-catalog 팩용 — packs.json·리졸버·itch 차단을 건너뛴다.');
+  console.log('     라이선스 게이트는 다음 단계(analyze-pack --license ...) 와 벤더링(assets.json) 에서 적용된다.');
   process.exit(0);
 }
 if (typeof fetch !== 'function') {
   done({ ok: false, error: '글로벌 fetch 필요(Node 18+). 현재: ' + process.version }, 1);
 }
-if (!opt.pack) {
-  done({ ok: false, error: '--pack <packId> 가 필요합니다.' }, 1);
+// 입력 검증: 카탈로그 모드(--pack) 또는 수동 모드(--id + --zip|--url) 중 하나여야 한다.
+if (!opt.pack && !opt.manual) {
+  if (opt.id && !opt.zip && !opt.url) {
+    done({ ok: false, error: '수동 모드는 --zip <경로> 또는 --url <직접파일URL> 가 함께 필요합니다.' }, 1);
+  }
+  done({ ok: false, error: '--pack <packId> (카탈로그) 또는 --id <slug> --zip/--url (수동) 가 필요합니다.' }, 1);
+}
+if (opt.manual && opt.zip && opt.url) {
+  done({ ok: false, error: '--zip 와 --url 은 동시에 쓸 수 없습니다(하나만).' }, 1);
 }
 
 const MAX_BYTES = opt.maxMb * 1024 * 1024;
@@ -247,8 +264,58 @@ function unzip(buf, destDir) {
   return written;
 }
 
+// 버퍼 하나를 raw/ 에 materialize: zip 이면 원본 보존 + 해제, 이미지면 그대로 저장.
+// 반환 { files:[저장한 최상위 파일명], unzipped:[해제된 엔트리 상대경로] }. zip/이미지 아니면 throw.
+function materializeBuf(buf, srcName, rawDir) {
+  const out = { files: [], unzipped: [] };
+  if (isZip(buf)) {
+    const zipName = baseName(srcName) || 'pack.zip';
+    fs.writeFileSync(path.join(rawDir, zipName), buf);
+    out.files.push(zipName);
+    out.unzipped = unzip(buf, rawDir);
+  } else if (isImage(buf)) {
+    const imgName = baseName(srcName) || 'image';
+    fs.writeFileSync(path.join(rawDir, imgName), buf);
+    out.files.push(imgName);
+  } else {
+    throw new Error('zip/이미지 매직바이트 아님: ' + srcName);
+  }
+  return out;
+}
+
 // ── 메인 ──────────────────────────────────────────────────────────────────────
 (async function main() {
+  // ── 수동(off-catalog) 모드: --id + (--zip | --url) ───────────────────────────
+  // packs.json·리졸버·itch 차단을 건너뛴다. 사용자가 게이트를 통과해 받은 ZIP/직링크를 raw/ 로 푼다.
+  if (opt.manual) {
+    const rawDir = path.resolve(process.cwd(), opt.out, opt.id, 'raw');
+    const src = opt.zip || opt.url;
+    if (opt.dry) {
+      done({ ok: true, dry: true, manual: true, id: opt.id, source: src, rawDir: rawDir }, 0);
+    }
+    let buf;
+    if (opt.zip) {
+      try {
+        const stat = fs.statSync(opt.zip);
+        if (stat.size > MAX_BYTES) done({ ok: false, error: '로컬 파일이 너무 큼(' + Math.round(stat.size / 1048576) + 'MB > ' + opt.maxMb + 'MB): ' + opt.zip, id: opt.id }, 1);
+        buf = fs.readFileSync(opt.zip);
+      } catch (e) { done({ ok: false, error: '로컬 ZIP 읽기 실패: ' + (e && e.message || e), id: opt.id }, 1); }
+    } else {
+      try { buf = await fetchBuf(opt.url); }
+      catch (e) { done({ ok: false, error: '직링크 다운로드 실패: ' + (e && e.message || e), id: opt.id }, 3); }
+    }
+    fs.mkdirSync(rawDir, { recursive: true });
+    let mat;
+    try { mat = materializeBuf(buf, src, rawDir); }
+    catch (e) { done({ ok: false, error: String(e && e.message || e), id: opt.id }, 3); }
+    const allFiles = mat.files.concat(mat.unzipped.filter(function (f) { return mat.files.indexOf(f) === -1; }));
+    console.log('받은 파일/엔트리:', allFiles.length, '개 →', rawDir);
+    allFiles.slice(0, 40).forEach(function (f) { console.log('  ·', f); });
+    if (allFiles.length > 40) console.log('  · ... (+' + (allFiles.length - 40) + ' more)');
+    console.log('다음 단계(라이선스 필수): node skills/sprite-picker/catalog/analyze-pack.mjs --pack ' + opt.id + ' --license <CC0-1.0|CC-BY-4.0|...> --name "<표시명>" --source <itch|local|...>');
+    done({ ok: true, manual: true, packId: opt.id, rawDir: rawDir, files: allFiles }, 0);
+  }
+
   let doc;
   try { doc = JSON.parse(fs.readFileSync(PACKS, 'utf8')); }
   catch (e) { done({ ok: false, error: 'packs.json 읽기 실패: ' + e.message }, 1); }
@@ -304,18 +371,12 @@ function unzip(buf, destDir) {
     try { buf = await fetchBuf(url); }
     catch (e) { done({ ok: false, error: '다운로드 실패: ' + e.message, packId: pack.id }, 3); }
 
-    if (isZip(buf)) {
-      // raw/ 에 zip 원본도 남겨두고(추적용), 같은 raw/ 로 해제.
-      const zipName = baseName(url);
-      const zipPath = path.join(rawDir, zipName);
-      fs.writeFileSync(zipPath, buf);
-      try { unzipped = unzipped.concat(unzip(buf, rawDir)); }
-      catch (e) { done({ ok: false, error: 'ZIP 해제 실패: ' + e.message, packId: pack.id }, 3); }
-      files.push(zipName);
-    } else if (isImage(buf)) {
-      const imgName = baseName(url);
-      fs.writeFileSync(path.join(rawDir, imgName), buf);
-      files.push(imgName);
+    if (isZip(buf) || isImage(buf)) {
+      let mat;
+      try { mat = materializeBuf(buf, url, rawDir); }     // raw/ 에 원본 보존 + ZIP 해제
+      catch (e) { done({ ok: false, error: 'ZIP/이미지 처리 실패: ' + e.message, packId: pack.id }, 3); }
+      mat.files.forEach(function (f) { files.push(f); });
+      unzipped = unzipped.concat(mat.unzipped);
     } else {
       done({ ok: false, error: '받은 데이터가 zip/이미지 매직바이트 아님: ' + url, packId: pack.id }, 3);
     }

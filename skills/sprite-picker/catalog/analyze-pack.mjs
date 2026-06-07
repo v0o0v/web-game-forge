@@ -37,8 +37,23 @@ function flagVal(name) { const i = argv.indexOf(name); return i >= 0 ? argv[i + 
 const opt = {
   pack: flagVal('--pack'),
   lib: flagVal('--lib') || 'assets-library',
+  // off-catalog(packs.json 에 없는 수동 팩) 메타데이터 — itch 등 수동 핸드오프용.
+  name: flagVal('--name'),
+  license: flagVal('--license'),
+  source: flagVal('--source'),
+  tier: flagVal('--tier'),
+  style: flagVal('--style'),
+  tags: flagVal('--tags'),
   help: argv.includes('--help') || argv.includes('-h')
 };
+
+// 라이선스 문자열에서 보수적으로 safetyTier 추론(off-catalog 기본값 — 불명이면 mixed-per-item).
+function tierFromLicense(lic) {
+  const l = String(lic || '').toLowerCase();
+  if (/cc0|public[\s-]?domain|unlicense|\bpd\b/.test(l)) return 'cc0';
+  if (/cc[\s-]?by|ofl|\bmit\b|apache|bsd|zlib/.test(l)) return 'permissive-attribution';
+  return 'mixed-per-item';
+}
 
 function done(obj, code) {
   console.log(JSON.stringify(obj));
@@ -48,6 +63,8 @@ function done(obj, code) {
 if (opt.help) {
   console.log('사용법: node analyze-pack.mjs --pack <packId> [--lib <dir=assets-library>]');
   console.log('  <lib>/<packId>/raw/ 의 이미지를 atlas→grid→alpha 우선순위로 분석해 library.json 을 갱신한다.');
+  console.log('  [off-catalog 수동 팩] packs.json 에 없는 packId 면 라이선스 가정 금지 — --license 필수:');
+  console.log('    node analyze-pack.mjs --pack <slug> --license <CC0-1.0|CC-BY-4.0|...> [--name "표시명"] [--source itch] [--tier <safetyTier>] [--style pixel] [--tags "a,b"]');
   process.exit(0);
 }
 if (!opt.pack) { done({ ok: false, error: '--pack <packId> 가 필요합니다.' }, 1); }
@@ -391,7 +408,26 @@ function isCompositeSheet(width, height, unit) {
   let doc;
   try { doc = JSON.parse(fs.readFileSync(PACKS, 'utf8')); }
   catch (e) { done({ ok: false, error: 'packs.json 읽기 실패: ' + e.message }, 1); }
-  const pack = (doc.packs || []).find(function (p) { return p.id === opt.pack; }) || { id: opt.pack };
+  const foundPack = (doc.packs || []).find(function (p) { return p.id === opt.pack; });
+  let pack;
+  if (foundPack) {
+    pack = foundPack;                 // 카탈로그 팩 — 메타데이터는 packs.json 에서.
+  } else {
+    // off-catalog(수동 팩): IP 안전상 CC0 가정 금지 — 라이선스는 사용자가 명시해야 한다.
+    if (!opt.license) {
+      done({ ok: false, error: 'off-catalog 팩(packs.json 에 없음: ' + opt.pack + ')은 --license <id> 가 필수입니다. CC0 로 가정하지 않습니다. 예: --license CC0-1.0 (또는 CC-BY-4.0 등)', packId: opt.pack }, 1);
+    }
+    pack = {
+      id: opt.pack,
+      name: opt.name || opt.pack,
+      sourceId: opt.source || 'local',
+      license: opt.license,
+      safetyTier: opt.tier || tierFromLicense(opt.license),
+      style: opt.style || 'pixel',
+      contentTypes: [],
+      tags: opt.tags ? opt.tags.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : []
+    };
+  }
 
   const libDir = path.resolve(process.cwd(), opt.lib);
   const packDir = path.join(libDir, opt.pack);

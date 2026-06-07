@@ -6,8 +6,8 @@
 - [`sources.json`](./sources.json) — 소스(사이트) 목록 + 안전 티어.
 - [`packs.json`](./packs.json) — 팩(에셋 묶음) 인덱스 + 태그·미리보기.
 - [`thumbnails/`](./thumbnails/) — 오프라인 피커용 벤더링 썸네일(없으면 피커가 플레이스홀더 자동 렌더).
-- [`fetch-pack.mjs`](./fetch-pack.mjs) — CC0 팩을 `packs.json` 에서 찾아 `assets-library/<packId>/raw/` 에 다운로드·ZIP 해제하는 스크립트(`node fetch-pack.mjs --pack <packId>`).
-- [`analyze-pack.mjs`](./analyze-pack.mjs) — `raw/` 이미지를 분석(atlas/grid/alpha)해 시트·썸네일을 생성하고 `library.json` 에 항목을 upsert하는 스크립트(`node analyze-pack.mjs --pack <packId>`).
+- [`fetch-pack.mjs`](./fetch-pack.mjs) — CC0 팩을 `packs.json` 에서 찾아 `assets-library/<packId>/raw/` 에 다운로드·ZIP 해제하는 스크립트(`node fetch-pack.mjs --pack <packId>`). off-catalog 수동 모드도 지원: `--id <slug> --zip <로컬ZIP>` 또는 `--id <slug> --url <직접파일URL>`(itch 등 게이트 팩을 사용자가 받아온 뒤 푼다).
+- [`analyze-pack.mjs`](./analyze-pack.mjs) — `raw/` 이미지를 분석(atlas/grid/alpha)해 시트·썸네일을 생성하고 `library.json` 에 항목을 upsert하는 스크립트(`node analyze-pack.mjs --pack <packId>`). off-catalog(packs.json 에 없는 수동 팩)는 IP 안전상 `--license <id>` 필수(CC0 가정 금지) + `--name/--source/--tier/--style/--tags` 메타 플래그 수용.
 
 스키마: [../reference/catalog-schema.md](../reference/catalog-schema.md).
 
