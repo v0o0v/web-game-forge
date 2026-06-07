@@ -53,7 +53,8 @@
     var byId = {};
     items.forEach(function (it) { byId[it.id] = it; });
     var state = {
-      group: 'catalog',
+      // 항목이 있는 첫 그룹을 기본 탭으로(빈 카탈로그 탭 방지)
+      group: (['catalog', 'candidate', 'library'].filter(function (g) { return items.some(function (it) { return it.group === g; }); })[0] || 'catalog'),
       search: '',
       facets: { style: new Set(), contentType: new Set(), safetyTier: new Set() },
       selected: new Map(),                    // 프리 모드
@@ -101,6 +102,7 @@
           contentTypes: raw.contentTypes || [],
           tags: raw.tags || [],
           thumbnail: raw.thumbnail || null,
+          animated: !!raw.animated,
           previewUrl: raw.previewUrl || '',
           url: raw.url || raw.packUrl || '',
           downloadUrl: raw.downloadUrl || '',
@@ -135,6 +137,7 @@
 
     buildFacets(items, state);
     bindTabs(items, state);
+    document.querySelectorAll('.tab').forEach(function (t) { t.classList.toggle('active', t.getAttribute('data-group') === state.group); });
     bindFilters(items, state);
     bindTray(data, items, state);
 
@@ -286,6 +289,13 @@
   }
 
   function thumbEl(it) {
+    // 애니메이션 썸네일(SMIL/CSS SVG)은 <img> 로는 안 움직이므로 <object> 로 렌더(클릭은 카드로 통과).
+    if (it.thumbnail && it.animated) {
+      var obj = document.createElement('object');
+      obj.className = 'thumb anim'; obj.type = 'image/svg+xml'; obj.data = it.thumbnail;
+      obj.setAttribute('aria-label', it.name);
+      return obj;
+    }
     if (it.thumbnail) {
       var img = document.createElement('img');
       img.className = 'thumb'; img.alt = it.name; img.loading = 'lazy'; img.src = it.thumbnail;
