@@ -22,6 +22,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));     // 피커 디렉터리
 const PORT = parseInt(process.env.PORT || '8770', 10);
@@ -84,6 +85,18 @@ const server = http.createServer((req, res) => {
   });
 });
 
+function openBrowser(url) {
+  if (process.env.SPRITE_PICKER_NO_OPEN) return;
+  try {
+    const p = process.platform;
+    if (p === 'win32') spawn('cmd', ['/c', 'start', '""', url], { stdio: 'ignore', detached: true }).unref();
+    else if (p === 'darwin') spawn('open', [url], { stdio: 'ignore', detached: true }).unref();
+    else spawn('xdg-open', [url], { stdio: 'ignore', detached: true }).unref();
+  } catch (e) { /* 자동 오픈 실패는 무시 — URL 은 stderr 로 안내됨 */ }
+}
+
 server.listen(PORT, '127.0.0.1', () => {
-  process.stderr.write(`[sprite-picker] http://127.0.0.1:${PORT}/  (선택 저장 경로: ${OUT})\n`);
+  const url = `http://127.0.0.1:${PORT}/`;
+  process.stderr.write(`[sprite-picker] ${url}  (선택 저장 경로: ${OUT})\n`);
+  openBrowser(url);   // 준비되면 사용자 브라우저 자동 오픈 (SPRITE_PICKER_NO_OPEN 로 비활성화)
 });

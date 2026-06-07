@@ -44,8 +44,9 @@ Claude 가 못 읽음). 대신 POST 를 받는 컴패니언 서버를 띄운다:
 node skills/sprite-picker/picker/serve.mjs
 ```
 → `http://127.0.0.1:8770/` (피커). 환경변수 `PORT`, `SPRITE_PICKER_OUT`(선택 저장 경로, 기본
-`<cwd>/.sprite-picker-selection.json`). 이 서버는 피커를 서빙하고 `POST /__sprite_picker_submit` 을
-받아 선택을 **파일로 저장**한다. (background 로 실행.)
+`<cwd>/.sprite-picker-selection.json`), `SPRITE_PICKER_NO_OPEN`(자동 오픈 비활성화). 이 서버는 피커를
+서빙하고 `POST /__sprite_picker_submit` 을 받아 선택을 **파일로 저장**한다. (background 로 실행.)
+**준비되면 사용자 브라우저를 자동으로 연다** — 별도로 URL 을 열어달라고 하지 않아도 된다.
 
 ### ④ 사용자 슬롯 배정
 - **슬롯 클릭 → 활성화 → 갤러리 이미지 클릭** 하면 그 슬롯에 배정되고 다음 빈 슬롯으로 자동 이동.
