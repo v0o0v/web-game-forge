@@ -1,0 +1,9 @@
+sound-lab — SoundForge 데모 / 검증 하니스 (WebGameForge)
+
+엔진 / 라이브러리
+- Tone.js v15 (MIT, © 2014-2025 Yotam Mann) — vendored engine/tone.js · engine/tone.LICENSE.txt
+- Phaser 미사용(순수 SoundForge 데모)
+
+사운드
+- 전 트랙·SFX 절차 합성 오리지널. 오디오 파일 0개. 어떤 곡의 멜로디/진행도 인용하지 않음.
+- 100% CC0 / IP-safe (절차 합성 산출물).

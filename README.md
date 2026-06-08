@@ -4,15 +4,15 @@
 
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Phaser](https://img.shields.io/badge/engine-Phaser%204.1-blueviolet)
-![Skills](https://img.shields.io/badge/skills-26-orange)
+![Skills](https://img.shields.io/badge/skills-27-orange)
 ![Phaser refs](https://img.shields.io/badge/phaser--refs-28-informational)
 ![Assets](https://img.shields.io/badge/assets-CC0%20%2F%20IP--safe-success)
 ![Mobile](https://img.shields.io/badge/mobile--webview-ready-success)
 
 기존 클로드 코드에 "웹 게임 만들어줘"라고 하면 바닐라 JS 수준의 투박한 결과가 나옵니다.
 **WebGameForge는 게임 제작 의도를 자동 감지**해, 검증된 엔진 스택(Phaser 4(4.1.0) + 절차적 에셋/사운드 +
-모바일 하니스)과 전문 스킬 21종으로 **스프라이트 애니메이션·HUD·터치 컨트롤·8비트 사운드까지 갖춘
-게임**을 만들어 줍니다.
+모바일 하니스)과 전문 스킬 26종으로 **스프라이트 애니메이션·HUD·터치 컨트롤·장르별 사운드(8비트 칩튠부터
+신스웨이브·앰비언트·적응형 음악까지) 갖춘 게임**을 만들어 줍니다.
 
 > 플러그인 내부 식별자는 `web-game-builder` 입니다(슬래시 커맨드·스킬 네임스페이스에 사용).
 > **WebGameForge** 는 프로젝트/저장소 브랜드명입니다.
@@ -36,9 +36,11 @@
   그라데이션·글로우·소프트섀도우·글래스모피즘·곡선 캐릭터)를 모두 코드로 생성합니다. 게임당 한 스타일.
 - **⚖️ CC0 / IP-safe 에셋** — 외부 파일 없이 절차적으로 생성하거나, 외부 HD CC0 아트를 라이선스
   게이트(`assets.json`, CC0만)로 로딩합니다. 닌텐도 등 타사 에셋·이름·시그니처 조합을 쓰지 않습니다.
-- **🔊 8비트 사운드** — `ChipAudio`가 Web Audio API로 효과음과 **오리지널** BGM을 코드 합성합니다.
-  오디오 파일 0개, 100% CC0.
-- **🧩 26종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 11 + **Phaser 고급 4**(Matter 물리·포스트FX·라이팅·경로) + 품질·운영 5 + 메인 오케스트레이터.
+- **🔊 8비트 너머 사운드** — `sound-architect` 디렉터가 무드 인터뷰로 사운드를 설계하고, `SoundForge`(vendored
+  Tone.js v15)가 ADSR·필터·슈퍼소우·FM·노이즈 퍼커션·절차 리버브·**적응형 레이어드 음악**을 코드 합성합니다 —
+  칩튠·신스웨이브·앰비언트·로파이·아케이드. 아주 작은/레트로 게임은 `ChipAudio` 8비트 경량 레인(`chip-sound`).
+  오디오 파일 0개, 100% CC0(절차 합성 오리지널).
+- **🧩 27종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 12(서사·아이템·**사운드** 디렉터 포함) + **Phaser 고급 4**(Matter 물리·포스트FX·라이팅·경로) + 품질·운영 5 + 메인 오케스트레이터.
 - **📖 게임 서사 설계** — `story-architect`가 톤·스토리·목표·캐릭터·대사·반전을 탑다운 인터뷰로 설계해
   `STORY.md` 스토리 바이블로 산출하고 인트로/막간/엔딩·환경 단서·NPC 대사로 입힙니다(전형 vs 참신 선택, 대사 자동 작성, 연속성 린트).
 - **🎒 게임 아이템 설계** — `item-architect`가 소모품·장비·특수기능·통화·시너지 등 **습득·사용하는 모든 것**을
@@ -179,7 +181,7 @@ http://127.0.0.1:8766/games/super-runner/index.html
 
 ---
 
-## 🧩 스킬 카탈로그 (26종)
+## 🧩 스킬 카탈로그 (27종)
 
 메인 `web-game-builder`가 전체 흐름을 조율하고, 요청 성격에 따라 전문 스킬이 자동 발동합니다.
 **장르로 스캐폴드 → 제작요소로 살붙이기 → 품질로 검증·최적화** 순서로 협력합니다.
@@ -195,7 +197,8 @@ http://127.0.0.1:8766/games/super-runner/index.html
 | 🛠 제작요소 | `sprite-picker` | **실제 스프라이트/시트/애니를 브라우저 갤러리에서 시각적으로 골라 적용**(CC0 카탈로그·로컬·이전 사용분) + 캐싱·로컬 라이브러리 |
 | | `sprite-forge` | PixelForge 픽셀아트 스프라이트·애니메이션(절차 생성) |
 | | `vector-graphics` | VectorForge 미려한 스무스/벡터 그래픽 + 외부 HD CC0 로딩(절차 생성) |
-| | `chip-sound` | ChipAudio 효과음·BGM |
+| | `sound-architect` | 무드·BGM·효과음·**적응형 음악** 게임 **사운드 설계**(8비트 너머) + `SoundForge`(Tone.js v15)·`AUDIO.md` 바이블·`audio.json`·무드→음악 매핑·`lint-audio.mjs` 검증 |
+| | `chip-sound` | ChipAudio 8비트(칩튠) 경량 효과음·BGM (T0 레인) |
 | | `world-map-architect` | 스테이지를 잇는 **진행 맵 위상**(선형·사가·분기 노드맵·액트·허브·무한) 설계 + 맵 화면 빌드 |
 | | `level-architect` | 게임 분석·의도 인터뷰·난이도 곡선·재미 극대화 레벨 **설계** |
 | | `story-architect` | 톤·스토리·목표·**캐릭터·대사·반전** 게임 **서사 설계** + `STORY.md` 바이블·전형↔참신·대사 자동 작성·연속성 린트 |
@@ -275,9 +278,23 @@ VectorForge.bake(this, 'orb', { w:24, h:24, draw:(ctx,w,h,t,VF) => {
 }});
 ```
 
+### SoundForge (`soundforge.js` + vendored `tone.js`)
+**8비트 너머**의 게임 사운드 엔진. `Tone.js`(v15, MIT, vendored)를 감싸 ADSR·필터·슈퍼소우·FM·노이즈
+퍼커션·절차 IR 리버브/딜레이·**적응형 레이어드 BGM**(인텐시티별 수직 레이어 크로스페이드)·레이어드
+SFX(트랜지언트+바디+테일)를 코드 합성. 오디오 파일 0, 100% CC0(절차 합성 오리지널). `Tone.Transport`
+샘플정확 스케줄러로 박자 지터 제거. **`ChipAudio`와 동일 인터페이스**(`unlock/resume/suspend/toggleMute/
+startBgm/stopBgm/sfx`)라 `mobile.js`가 무수정 동작. `audio.json`을 데이터로 로드, 디렉터 스킬
+[`sound-architect`](skills/sound-architect/SKILL.md)가 무드 인터뷰로 설계.
+
+```js
+var GAME_AUDIO = new SoundForge(AUDIO_SPEC);  window.GAME_AUDIO = GAME_AUDIO;
+GAME_AUDIO.unlock(); GAME_AUDIO.startBgm();           // 첫 제스처(Tap to start)
+GAME_AUDIO.sfx('explosion'); GAME_AUDIO.setIntensity(0.8); GAME_AUDIO.setSection('boss');
+```
+
 ### ChipAudio (`audio.js`)
-Web Audio API만으로 8비트 효과음과 **오리지널** BGM을 코드 합성. 오디오 파일 0, 100% CC0.
-첫 사용자 제스처에서 `audio.unlock()`으로 모바일 오디오 언락.
+Web Audio API만으로 8비트(칩튠) 효과음과 **오리지널** BGM을 코드 합성. 오디오 파일 0, 100% CC0.
+첫 사용자 제스처에서 `audio.unlock()`으로 모바일 오디오 언락. 아주 작은/레트로 게임의 경량 레인(`chip-sound`).
 
 ### MobileHarness (`mobile.js`)
 모바일 웹뷰 베스트프랙티스를 한 곳에: `scaleConfig()`(FIT+CENTER), `installDomGuards()`(iOS 줌/스크롤
@@ -356,7 +373,7 @@ PathKit.follower(this, PathKit.loop(this, pts), 'lantern', { duration:8000 });
 ```
 web-game-forge/
 ├── .claude-plugin/  plugin.json · marketplace.json   # 플러그인 매니페스트
-├── skills/                                            # 26종 스킬 (메인 1 + 전문 25)
+├── skills/                                            # 27종 스킬 (메인 1 + 전문 26)
 │   ├── web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 분석 + game-dna/puzzle/ 퍼즐 20종 심화)
 │   ├── platformer-game/  topdown-shooter/  arcade-classic/  puzzle-game/  endless-runner/
 │   ├── world-map-architect/  (+ reference/map-interview · map-design/ MAP-* 원칙 + 위상 카탈로그 + 빌드 패턴)
@@ -365,13 +382,13 @@ web-game-forge/
 │   ├── item-architect/  (+ reference/item-interview · item-design/ SCOPE~UX-* 원칙 100여종 + tools/lint-items.mjs 밸런스 validator)
 │   ├── sprite-picker/  (+ catalog/ 검증된 CC0 소스 캐시 · picker/ 브라우저 갤러리 · reference/ 인터뷰·소싱·프로토콜·라이브러리)
 │   ├── sprite-catalog-refresh/  (sprite-picker 카탈로그 웹 재조사·갱신)
-│   ├── sprite-forge/  vector-graphics/  chip-sound/  game-ui-hud/  juice-fx/
+│   ├── sprite-forge/  vector-graphics/  sound-architect/(+reference/sound-design 8종·lint-audio.mjs)  chip-sound/  game-ui-hud/  juice-fx/
 │   ├── matter-physics/  screen-fx/  lighting-mood/  path-motion/       # Phaser 고급 4종 킷 스킬
 │   └── mobile-webview-tune/  game-qa/  ip-license-guard/  perf-60fps/
 ├── hooks/hooks.json                                   # UserPromptSubmit 의도 감지 등록
 ├── scripts/detect-game-intent.{js,ps1,sh}            # 한/영 게임·에셋 의도 감지(크로스플랫폼)
 ├── commands/make-game.md                              # /web-game-builder:make-game
-├── engine/  phaser.min.js · pixelforge · vectorforge · audio · mobile · tiled · matterkit · screenfx · lightingkit · pathkit   # 재사용 엔진(+Phaser 고급 4종 킷)
+├── engine/  phaser.min.js · pixelforge · vectorforge · audio · soundforge · tone(Tone.js v15) · mobile · tiled · matterkit · screenfx · lightingkit · pathkit   # 재사용 엔진(+Phaser 고급 4종 킷)
 ├── games/  super-runner/(픽셀 플랫포머·?tiled=1) · runeburst/ · is-rule/ · style-preview/
 │          · tiled-topdown/(GEM DUNGEON) · tiled-iso/(등각·육각, ?orient=hex) · tiled-pack/(GPU+CC0팩 임포트)
 │          · nocturne/(야간 물리 슬링볼 — Matter+포스트FX+라이팅+경로 통합 데모)
@@ -385,7 +402,7 @@ web-game-forge/
 
 ## ⚖️ 라이선스 및 IP 안전 정책
 
-- **코드**: MIT (`LICENSE`) · **Phaser 4.1.0**: MIT (vendored, `engine/phaser.LICENSE.txt`)
+- **코드**: MIT (`LICENSE`) · **Phaser 4.1.0**: MIT (vendored, `engine/phaser.LICENSE.txt`) · **Tone.js v15**: MIT (vendored, `engine/tone.LICENSE.txt` — 사운드 합성, 오디오 파일 0)
 - **에셋**: 전부 CC0 또는 절차적 생성 (외부 저작물 미사용)
 - **닌텐도 미사용 원칙**: 마리오 스프라이트·사운드·이름 'Mario'·시그니처 조합(빨간모자+콧수염+
   파란 멜빵+배관공+이탈리안)을 절대 사용하지 않습니다.

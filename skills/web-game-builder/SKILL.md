@@ -40,7 +40,10 @@ ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
   (아트를 어떻게 채울지 = **실제 에셋 소싱 vs 절차 생성** 결정 게이트. 카탈로그 갱신은 `sprite-catalog-refresh`)
 - 스프라이트/타일/애니메이션 (픽셀아트, **절차 생성**) → `sprite-forge`
 - 미려한 스무스/벡터 그래픽 (그라데이션·글로우·글래스·곡선 캐릭터, **절차 생성**) → `vector-graphics`
-- 효과음/BGM → `chip-sound`
+- 사운드 설계(무드·BGM·효과음·적응형 음악) → `sound-architect`
+  (8비트를 넘는 **사운드 디렉터** 레인. `engine/soundforge.js`(Tone.js v15 vendored)로 ADSR·필터·슈퍼소우·FM·노이즈 퍼커션·절차 리버브·적응형 레이어드 음악을 절차 합성. 사운드 적용 여부는 아이템 게이트 직후 사용자에게 **반드시 묻는다** — **무드부터** 가르고, 아주 작은/레트로 게임은 chip-sound로 충분하다고 안내. `games/<slug>/AUDIO.md` 바이블 + `audio.json` 산출, `tools/lint-audio.mjs` 로 무드정합·보이스예산·믹스 검수. 초·중반 어디서든 사운드 추가/수정 가능, 빈 SFX 슬롯 자동 개입)
+- 8비트(칩튠) 경량 효과음/BGM → `chip-sound`
+  (아주 작은/레트로 게임이나 사운드가 부차적일 때의 경량 레인(T0, `engine/audio.js`). sound-architect가 디렉터, chip-sound가 8비트 구현 레인)
 - 레벨 설계(게임 분석·의도 인터뷰·난이도 곡선·재미 극대화) → `level-architect`
 - 게임 서사 설계(톤·스토리·목표·캐릭터·대사·반전) → `story-architect`
   (game-dna `FE-NARRATIVE` 의 본격 설계 레인. 스토리 적용 여부는 청사진 인터뷰 직후 사용자에게 **반드시 묻는다**. 초·중반 어디서든 스토리 수정·캐릭터 추가/삭제 가능. 빌드 중 인트로/막간/승패/대사 카피가 placeholder·빈 슬롯으로 남으면 `story-architect` 의 대사 자동 개입을 호출해 채운다)
@@ -115,7 +118,7 @@ ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
 2. **C2 코어 루프/장르** ★필수 — 플레이어가 매 순간 하는 행동 한 문장(플랫포머·슈팅·아케이드·퍼즐·러너 등 코어 + game-dna 아키타입).
 3. **C3 재미 요소 조합(`FE-*`)** ★★핵심·사용자 주도 — `FE-*` 팔레트를 펼쳐(multiSelect) 사용자가 직접 2~4개 조합. 받으면 **구체적 한 컷 반영 → 검증 → 대안 제시**.
 4. **C4 아트 스타일·테마** ★필수 — 픽셀(`PixelForge`) vs 미려한 스무스/벡터(`VectorForge`) + 결(플랫·네온글로우·글래스·카툰) + 테마/마스코트.
-5. **C5 사운드·음악 결** — BGM 무드(칩튠·앰비언트·리듬 동기화) + SFX 톤. `ChipAudio` 기본, BGM은 오리지널.
+5. **C5 사운드·음악 결** — 무드 토큰(유쾌/긴박/쓸쓸/평온…) + 음색 패밀리(칩튠/신스웨이브/앰비언트/로파이/아케이드) + SFX 톤. 결만 잡고 본격 설계는 `sound-architect`(SoundForge=Tone.js, 8비트 너머) 게이트로 위임. 아주 작은/레트로면 `ChipAudio` 8비트. BGM은 오리지널(절차 합성·CC0).
 6. **C6 승패·진행·분량/난이도** — 승리/실패, 1레벨 vs 레벨팩, 난도 곡선, 점수·별점·베스트·시드 공유. 타깃 유저에서 기본값 도출.
 7. **C7 조작** — 입력(키보드/스와이프/탭/드래그). 보통 C1에서 파생 → 자동 확정.
 
@@ -156,6 +159,9 @@ games/<slug>/
 **Phaser 고급 4종 킷**(`matterkit`·`screenfx`·`lightingkit`·`pathkit`)을 쓰는 게임은 그 킷의
 `engine/*.js` 를 **phaser 다음·game 이전**에 추가한다(미사용 게임엔 넣지 않는다). 통합 예시는
 `games/nocturne/index.html`(스무스/벡터 스타일, Matter+포스트FX+라이팅+경로) 참고.
+**`sound-architect`(SoundForge) 사운드**를 쓰는 게임은 `engine/tone.js` → `engine/soundforge.js` 를
+**phaser 다음·game 이전**(soundforge 는 tone 다음)에 추가한다. 8비트 ChipAudio(`engine/audio.js`)만
+쓰는 게임엔 tone/soundforge 를 넣지 않는다(게임당 한 오디오 엔진).
 
 ### 3) 에셋 생성 / 소싱
 - **먼저 아트 출처를 가른다(결정 게이트).** 비주얼은 재미의 핵심이므로, 인터뷰(C4)에서 **실제 에셋을
@@ -169,11 +175,21 @@ games/<slug>/
 - 애니메이션은 `scene.anims.create({ key, frames:[{key, frame}], frameRate, repeat })`.
 - 자세한 API 는 `reference/engine-api.md` 참고.
 
-### 4) 사운드 (`engine/audio.js`)
-- `var audio = new ChipAudio()` → 전역 `window.GAME_AUDIO = audio`(음소거 버튼이 참조).
-- 첫 사용자 제스처('Tap to start')에서 `audio.unlock()` + `audio.startBgm()`.
-- 효과음 `audio.sfx('jump'|'coin'|'stomp'|'powerup'|'die'|'flag'|...)`.
-- **BGM 멜로디는 반드시 오리지널**(기존 게임 음악 인용 금지).
+### 4) 사운드 — 두 레인 (게임당 하나)
+사운드는 **디렉터 스킬 [`sound-architect`](../sound-architect/SKILL.md) 가 무드 인터뷰로 설계**한다(make-game 사운드 게이트). 엔진은 둘 중 하나:
+
+**A. SoundForge (8비트 너머 · `engine/soundforge.js` = Tone.js v15)** — 기본. 장르·무드 음악·적응형 레이어드·풍부한 SFX.
+- 로드: `index.html` 에 `engine/tone.js` → `engine/soundforge.js`(phaser 다음·game 이전).
+- `var GAME_AUDIO = new SoundForge(AUDIO_SPEC)` → 전역 `window.GAME_AUDIO = GAME_AUDIO`(음소거/가시성 가드가 참조). `AUDIO_SPEC` = `games/<slug>/audio.json`.
+- 첫 제스처('Tap to start')에서 `GAME_AUDIO.unlock()` + `GAME_AUDIO.startBgm()`. 효과음 `GAME_AUDIO.sfx('jump'|'coin'|'hit'|'explosion'|...)`.
+- 적응형: `GAME_AUDIO.setIntensity(0..1)`(전투 격화)·`GAME_AUDIO.setSection('explore'|'combat'|'boss')`(섹션 전환).
+- 검수: `node skills/sound-architect/tools/lint-audio.mjs games/<slug>/audio.json`.
+
+**B. ChipAudio (8비트 경량 · `engine/audio.js`)** — 아주 작은/레트로 게임(T0, [`chip-sound`](../chip-sound/SKILL.md)).
+- `var audio = new ChipAudio()` → 전역 `window.GAME_AUDIO = audio`. 첫 제스처에서 `audio.unlock()` + `audio.startBgm()`. 효과음 `audio.sfx('jump'|'coin'|'stomp'|...)`.
+
+두 엔진 모두 **인터페이스 동일**(`unlock/resume/suspend/toggleMute/startBgm/stopBgm/sfx`)이라 `mobile.js`(음소거·가시성 가드)가 무수정으로 동작한다.
+- **BGM 멜로디·SFX 는 반드시 오리지널**(절차 합성, 기존 게임 음악 인용 금지 · 100% CC0).
 
 ### 5) 모바일 하니스 (`engine/mobile.js`)
 - config.scale 에 `MobileHarness.scaleConfig(DESIGN_W, DESIGN_H)` 를 펼친다(FIT+CENTER).
