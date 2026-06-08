@@ -20,7 +20,10 @@
     "phaser4",
     "canvas",
     "mobile-webview",
-    "html5"
+    "html5",
+    "items",
+    "loot",
+    "inventory"
   ],
   "defaultEnabled": true
 }
