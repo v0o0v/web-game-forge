@@ -133,3 +133,92 @@ buildMap: function () {
   경로(절차 경로와 동치). 변환기 `level-to-tmj.mjs`.
 - **탑다운**: [`games/tiled-topdown/`](../../../../games/tiled-topdown/) — GEM DUNGEON. `map.mjs`(ASCII)
   → `level.tmj`, 벽 타일 충돌 + 4방향 이동 + 보석/적/포털. 저작 도구 `ascii-to-tmj.mjs`.
+- **등각/육각**: [`games/tiled-iso/`](../../../../games/tiled-iso/) — FORGE ISO. `?orient=hex`로 전환.
+- **GPU 레이어 + 외부 팩**: [`games/tiled-pack/`](../../../../games/tiled-pack/) — FORGE PACK.
+
+---
+
+## 7. 애니메이션 타일
+
+타일 def에 다중 프레임을 주면 베이커가 **프레임마다 연속 칸**으로 굽고, embedded tileset의 `tiles[]`에
+`animation:[{tileid,duration}]`을 자동으로 단다. Phaser 파서가 CPU·GPU 레이어 양쪽에서 자동 재생한다.
+GID는 **첫 프레임 칸**이 되며, 맵 `data`는 그 GID만 참조한다.
+
+```js
+// 런타임 베이커(아트 포함): animFrames = [grid|{frame}|{draw}, ...]
+{ name:'water', collides:false, animDuration:240, animFrames:[
+  { draw: waterFrame(0) }, { draw: waterFrame(1) }, { draw: waterFrame(2) }
+] }
+
+// 저작 도구(ascii-to-tmj, 아트 없이 개수만): anim:{frames, duration|durations}
+TILES: [
+  { name:'floor', collides:false },                                 // GID 1
+  { name:'water', collides:false, anim:{ frames:3, duration:240 } }, // GID 2 (칸 2,3,4)
+  { name:'wall',  collides:true }                                   // GID 5  ← 애니로 GID 밀림 주의!
+]
+```
+
+> ⚠ 애니 타일은 N칸을 차지하므로 **뒤 타일 GID가 밀린다**(위 예: wall=GID 5). `expandTileDefs`(엔진)
+> 계약을 단일 소스로 쓰면(베이커·`buildTilesetBlock`·`ascii-to-tmj`가 `createRequire`로 공유) 자동 정합.
+
+## 8. 등각/육각 맵 (isometric / hexagonal / staggered)
+
+`ascii-to-tmj`의 맵 모듈에 `ORIENTATION` + 비정방형 타일 크기를 준다. Phaser `createLayer`가
+`orientation`으로 좌표 투영을 자동 선택한다.
+
+```js
+// 등각(다이아몬드 32x16)
+export default { ORIENTATION:'isometric', TILE_WIDTH:32, TILE_HEIGHT:16, TILES, LEGEND, GRID, FLOOR:'floor' }
+// 육각(32x32, 행 스태거)
+export default { ORIENTATION:'hexagonal', TILE_WIDTH:32, TILE_HEIGHT:32,
+  HEX:{ sideLength:16, staggerAxis:'y', staggerIndex:'odd' }, TILES, LEGEND, GRID, FLOOR:'floor' }
+```
+
+- **타일 아트**: iso는 다이아몬드, hex는 육각형을 `bakeTileset`의 `draw` 콜백으로 그린다
+  (`tileWidth`/`tileHeight`를 베이커에도 동일하게 전달).
+- **이동/충돌**: arcade 물리는 AABB라 iso/hex 타일 모양과 맞지 않는다. **타일 좌표 논리 이동**을 쓴다 —
+  `layer.tileToWorldXY(col,row)`로 칸 중심을 구하고, `layer.getTileAt(col,row).index`로 통행 가능 판정.
+  ([`games/tiled-iso/game.js`](../../../../games/tiled-iso/game.js)의 `walkable`/`tryMove` 참고.)
+- iso/hex는 **GPU 레이어 미지원** → CPU 레이어(엔진이 자동 가드).
+
+## 9. TilemapGPULayer (대형 직교 맵 최적화)
+
+`loadTiledMap(scene, key, { gpu:true })` 면 타일 레이어를 `TilemapGPULayer`(WebGL 단일 quad 셰이더)로
+렌더한다. 대형 맵에서 거의 GPU 바운드.
+
+```js
+var res = TiledForge.loadTiledMap(this, 'map', { tilesetKey:'forge', tilesetName:'forge', gpu:true });
+// res.gpu === true 면 GPU 레이어. 타일을 런타임에 바꿨다면:
+res.layers['Ground'].putTileAt(5, 10, 10);
+res.regenerate(); // GPU 데이터 텍스처 재생성(필수)
+```
+
+- **제약**: WebGL 전용 · **직교 전용**(iso/hex 불가) · 단일 타일셋 · 최대 4096×4096. 위반 시 엔진이
+  **CPU 레이어로 자동 폴백 + 경고**(`res.gpu===false`로 확인).
+- **애니 타일·arcade 충돌**은 GPU 레이어에서도 동작(`setCollisionByProperty` + `physics.add.collider`).
+- 편집 후 `res.regenerate()`를 부르지 않으면 변경이 화면에 반영되지 않는다.
+
+## 10. 외부 CC0 Tiled 팩 임포트 (`assets.json` 게이트)
+
+절차 베이크 대신 **외부 타일셋 이미지(PNG) + .tmj + `pack.json`(라이선스 매니페스트)** 를 임포트하는
+경로. 라이선스는 루트 [`assets.json`](../../../../assets.json)의 `policy`로 게이트한다(CC0/MIT/… 허용,
+ARR/unknown 거부, CC-BY는 attribution 필수).
+
+```js
+// 런타임 게이트: 거부 라이선스면 loadTiledMap 이 throw 로 로드를 막는다.
+var policy = this.cache.json.get('assets-policy').policy;     // ../../assets.json 로드
+var manifest = this.cache.json.get('pack-manifest');          // pack/pack.json
+var res = TiledForge.loadTiledMap(this, 'pack-map', {
+  tilesetKey:'forge-pack', tilesetName: manifest.tilesetName, // this.load.image 로 임포트한 PNG 키
+  gpu:true, licenseGate:{ policy:policy, manifest:manifest }
+});
+```
+
+**도구**(둘 다 무의존성 Node):
+- `bake-tiled-pack.mjs <outDir>` — 문자 그리드 타일을 **PNG로 직접 인코딩**(내장 `zlib`) + `.tmj` +
+  `pack.json`(CC0) 생성. 우리 절차 저작 → 제3자 다운로드 0, 100% CC0.
+- `verify-tiled-pack.mjs <pack.json> [--register]` — `assets.json` 정책으로 게이트(위반 시 exit 1),
+  `--register`면 통과 시 `assets.json.entries`에 자동 등록.
+
+> ⚠ 실제 제3자 CC0 팩(Kenney 등)을 들일 때도 **반드시 `verify-tiled-pack`을 먼저** 통과시키고
+> `CREDITS.txt`/attribution을 기록한다. 닌텐도 등 상용 IP는 `denyAlways`로 영구 차단.

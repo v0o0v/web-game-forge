@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a1622">
+<link rel="icon" href="data:,">
+<title>FORGE PACK — Tiled GPU 레이어 + CC0 팩 임포트</title>
+<style>
+  html, body {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    overflow: hidden;
+    position: fixed; inset: 0;
+    background: #000;
+    overscroll-behavior: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: none;
+  }
+  #game { width: 100%; height: 100dvh; height: 100svh; }
+  #game canvas { display: block; touch-action: none; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<!-- vendored Phaser 4.1.0 (MIT) + 엔진(전부 로컬, 오프라인 동작) -->
+<script src="../../engine/phaser.min.js"></script>
+<script src="../../engine/pixelforge.js"></script>
+<script src="../../engine/mobile.js"></script>
+<script src="../../engine/tiled.js"></script>
+<!-- 외부 CC0 팩(tileset.png + level.tmj + pack.json)은 Phaser 로더가 임포트(http 서빙 필요) -->
+<script src="game.js"></script>
+</body>
+</html>

@@ -191,10 +191,55 @@ chrome-devtools/preview MCP 실측:
 ## 8. IP / 라이선스
 
 - 타일셋은 100% 절차 베이크(`PixelForge`/`VectorForge`) → 외부 파일 0, CC0/IP-safe 정체성 유지.
-- 후속 옵션(범위 밖): 외부 CC0 Tiled 팩을 `assets.json` 게이트로 로딩하는 인터롭 경로.
+- 외부 CC0 Tiled 팩 임포트 경로(§9.1)도 **우리가 절차 저작한 CC0 팩**으로 실증 → 제3자 다운로드 0.
 
-## 9. 범위 밖 (후속 과제)
+## 9. 고급 기능 (2026-06-08 추가 — 기존 "범위 밖" 4종 구현 완료)
 
-- 외부 CC0 타일셋 팩 임포트(`assets.json` 게이트).
-- 등각/육각/스태거드 맵, 애니메이션 타일, `TilemapGPULayer` 최적화.
+설계 원칙은 §1~§5와 동일(타일 레이어=정적 지형 / 오브젝트=행동, GID=칸 index+1 계약). 4종은
+`engine/tiled.js`에 후방호환으로 얹었다(기존 super-runner `?tiled=1`·tiled-topdown 출력 불변 —
+`ascii-to-tmj` 재생성 결과 바이트 동일 검증).
+
+### 9.1 외부 CC0 Tiled 팩 임포트 (`assets.json` 게이트)
+- **게이트 단일 소스 = 루트 `assets.json`의 `policy`**. `TiledForge.assertPackLicense(policy, manifest)`가
+  순수 함수로 판정(`allow`/`denyAlways`/`ccByRequiresAttribution`). `loadTiledMap({licenseGate})`에 주면
+  거부 라이선스는 로드 자체를 throw로 막는다.
+- **Node 검증기** `verify-tiled-pack.mjs <pack.json> [--register]` — 위반 시 exit 1, 통과 시
+  `assets.json.entries`에 자동 등록. CI/사전점검용.
+- **실증 팩 생성기** `bake-tiled-pack.mjs` — 문자 그리드 타일을 **PNG로 직접 인코딩**(Node 내장 `zlib`,
+  외부 npm 0) + `.tmj` + `pack.json`(license CC0)을 emit. 저작자=WebGameForge → 진짜 외부 파일이지만
+  100% 우리 CC0. 데모 `games/tiled-pack`이 이 PNG를 **Phaser 로더로 임포트**(절차 베이크 아님)하고
+  런타임 게이트를 통과시킨 뒤 렌더한다.
+
+### 9.2 애니메이션 타일
+- **GID 펼침 계약 확장**: 타일 def에 `animFrames:[...]`(런타임 아트) 또는 `anim:{frames:N,duration}`
+  (저작 도구, 아트 없이 개수만)를 주면 **프레임마다 연속 칸**으로 굽고, embedded tileset의 `tiles[]`에
+  `animation:[{tileid,duration}]`을 단다. Phaser 파서가 자동 재생. GID는 첫 프레임 칸.
+- `TiledForge.expandTileDefs`를 단일 소스로 두고 `bakeTileset`/`buildTilesetBlock` + Node `ascii-to-tmj`가
+  `createRequire`로 **같은 함수를 공유**(계약 드리프트 차단).
+- 실증: tiled-iso 물 타일(3프레임, CPU 레이어), tiled-pack 용암(GPU 레이어) — 양쪽 재생 확인.
+
+### 9.3 등각/육각 맵 (isometric / hexagonal / staggered)
+- `ascii-to-tmj`에 `ORIENTATION` + `TILE_WIDTH/HEIGHT` + `HEX:{sideLength,staggerAxis,staggerIndex}` 추가.
+  iso는 32×16 다이아몬드, hex는 32×32 육각. Phaser `createLayer`가 `orientation`으로 투영 자동 선택.
+- **Phaser는 `map.orientation`을 숫자 상수로 저장** → `orientationName()`이 정규 문자열로 변환(가드/리포트).
+- **이동/충돌**: arcade는 AABB라 iso/hex 타일 모양과 불일치 → 데모는 **타일 좌표 논리 이동**
+  (`tileToWorldXY`/`getTileAt`/walkable 판정). 정석 접근(arcade 우회 안 함).
+- 실증: `games/tiled-iso`(iso 기본, `?orient=hex`로 hex). 둘 다 렌더·이동·물 차단·골 동작 확인.
+
+### 9.4 `TilemapGPULayer` 최적화
+- `loadTiledMap`이 `opts.gpu`를 `createLayer(name, tileset, x, y, gpu)` 5번째 인자로 전달(기존엔 누락된
+  버그였음). **가드**: GPU 레이어는 WebGL + 직교 전용 + 단일 타일셋 → 위반(Canvas/iso/hex) 시 CPU 폴백 +
+  경고. 편집 후 `result.regenerate()`(→ `generateLayerDataTexture`) 헬퍼 노출.
+- arcade 충돌은 `TilemapLayerBase` 공통이라 GPU 레이어에서도 동작(데모서 벽 충돌 실측).
+- 실증: `games/tiled-pack`(`LAYER GPU`, 벽 충돌·애니 용암·콘솔 에러 0).
+
+### 9.5 검증 (2026-06-08, chrome-devtools MCP 실측)
+- **tiled-pack**: 게이트 OK(CC0) · `gpu:true`(WebGL) · 애니타일 1 · 벽 충돌(통과 안 함) · 콘솔 에러 0.
+- **tiled-iso (iso)**: orientation `isometric` · CPU 폴백 · 애니 물 재생(캔버스 스냅샷 차이로 확정) ·
+  논리 이동/물 차단/골 클리어 · 콘솔 에러 0.
+- **tiled-iso (hex)**: orientation `hexagonal` · 육각 테셀레이션 렌더 · 콘솔 에러 0.
+- **회귀**: super-runner `?tiled=1`·tiled-topdown 정상(에러 0), `ascii-to-tmj` 재생성 바이트 동일.
+
+## 10. 남은 범위 밖 (후속)
 - 실제 Tiled 앱 왕복 편집 UX 다듬기(현재는 포맷 호환까지).
+- iso/hex 타일의 입체(높이 있는 큐브) 타일셋, 외부 제3자 CC0 팩 실제 벤더링(현재는 우리 절차 CC0로 실증).
