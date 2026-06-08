@@ -1,12 +1,14 @@
 ---
 name: chip-sound
-description: "ChipAudio로 8비트 효과음과 BGM을 코드 합성(CC0, 오리지널)합니다. 게임 사운드/효과음/배경음악 추가·수정 요청 시 사용. sound, SFX, BGM, music, audio, 점프음, 효과음."
+description: "ChipAudio로 **8비트(칩튠) 경량** 효과음과 BGM을 코드 합성(CC0, 오리지널)합니다 — 아주 작은/레트로 게임이나 사운드가 부차적일 때의 경량 레인(T0). 8비트를 넘어 장르·무드에 맞는 풍부한 BGM/적응형 음악·레이어드 SFX가 필요하면 디렉터 스킬 `sound-architect`(engine/soundforge.js, Tone.js)를 쓴다. 단순 8비트 효과음/배경음 추가·수정 요청 시 사용. sound, SFX, BGM, music, audio, 점프음, 효과음, 8비트, 칩튠, chiptune."
 allowed-tools: Read, Write, Edit
 ---
 
 # chip-sound — ChipAudio 효과음·BGM 코드 합성
 
 Web Audio만으로 8비트 효과음과 BGM을 합성한다. 오디오 파일 없이 CC0/오리지널 사운드만 생성한다. web-game-builder의 전문 스킬. `engine/audio.js`를 사용한다.
+
+> **이 스킬은 8비트 경량 레인(T0)이다.** 아주 작은/레트로 게임이나 사운드가 부차적일 때 쓴다. 8비트 구조 자체의 한계를 넘어 **장르·무드에 어울리는 풍부한 BGM·적응형 레이어드 음악·트랜지언트/바디/테일 레이어드 SFX**가 필요하면 디렉터 스킬 [`sound-architect`](../sound-architect/SKILL.md)(`engine/soundforge.js` = Tone.js v15 래퍼)를 쓴다. sound-architect가 무드 인터뷰로 사운드를 설계하는 상위 디렉터, chip-sound는 그 아래 8비트 구현 레인이다.
 
 ## 언제 사용
 - 점프·코인·타격 등 효과음을 추가하거나 커스텀 톤으로 새 SFX를 만들 때

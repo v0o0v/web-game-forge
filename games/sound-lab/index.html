@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>SoundForge Lab — sound-architect 데모</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #0c0e1a; color: #e8ecff;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #app { max-width: 560px; margin: 0 auto; padding: 18px 16px 40px; }
+  h1 { font-size: 18px; margin: 6px 0 2px; }
+  .sub { color: #8b93c4; font-size: 12px; margin-bottom: 14px; }
+  .start { width: 100%; padding: 18px; font-size: 18px; font-weight: 700; border: 0; border-radius: 12px;
+    background: linear-gradient(135deg,#5b6cff,#9b5bff); color: #fff; cursor: pointer; }
+  .grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin: 12px 0; }
+  button.b { padding: 12px 6px; font-size: 13px; border: 1px solid #2a2f54; border-radius: 10px;
+    background: #161a30; color: #cdd4ff; cursor: pointer; }
+  button.b:active { background: #232a4f; }
+  .row { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
+  .row label { font-size: 12px; color: #8b93c4; width: 84px; }
+  input[type=range] { flex: 1; }
+  .seg button { flex:1; }
+  .seg { display:flex; gap:8px; }
+  h2 { font-size: 12px; color:#8b93c4; margin: 16px 0 4px; text-transform: uppercase; letter-spacing: .5px; }
+  #log { background:#080a14; border:1px solid #1c2140; border-radius:10px; padding:10px;
+    font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; color:#9fe7b0; height:170px; overflow:auto; white-space:pre-wrap; }
+  .err { color:#ff8c8c; }
+  .meta { color:#6f77a8; }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>🔊 SoundForge Lab</h1>
+  <div class="sub">sound-architect 디렉터 스킬의 엔진(<code>engine/soundforge.js</code> · Tone.js v15) 데모/검증 하니스. 오디오 파일 0개, 100% CC0.</div>
+
+  <button id="start" class="start">▶ Tap to start (오디오 언락 + BGM)</button>
+
+  <h2>SFX</h2>
+  <div class="grid" id="sfxGrid"></div>
+
+  <h2>적응형 — 인텐시티 (수직 레이어)</h2>
+  <div class="row"><label>intensity</label><input id="intensity" type="range" min="0" max="100" value="45"><span id="intVal" class="meta">0.45</span></div>
+
+  <h2>섹션 (수평 리시퀀싱)</h2>
+  <div class="seg">
+    <button class="b" data-sec="explore">탐험(calm)</button>
+    <button class="b" data-sec="combat">전투(drive)</button>
+    <button class="b" data-sec="boss">보스(boss)</button>
+  </div>
+
+  <h2>믹스</h2>
+  <div class="seg">
+    <button class="b" id="mute">음소거 토글</button>
+    <button class="b" id="stop">BGM 정지</button>
+  </div>
+
+  <h2>상태 로그</h2>
+  <div id="log"></div>
+</div>
+
+<!-- 로드 순서: tone → soundforge (phaser 미사용 데모) -->
+<script src="../../engine/tone.js"></script>
+<script src="../../engine/soundforge.js"></script>
+<script>
+(function () {
+  var logEl = document.getElementById('log');
+  var trail = [];
+  function log(msg, cls) {
+    var line = msg;
+    trail.push(line);
+    var div = document.createElement('div');
+    if (cls) div.className = cls;
+    div.textContent = line;
+    logEl.appendChild(div); logEl.scrollTop = logEl.scrollHeight;
+  }
+  window.__SL = { trail: trail, errors: [] };
+  window.onerror = function (m, s, l) { window.__SL.errors.push(m + ' @' + l); log('window.onerror: ' + m, 'err'); };
+
+  // 환경 점검(헤드리스 검증용)
+  log('Tone 로드: ' + (typeof window.Tone !== 'undefined' ? 'OK (v' + (window.Tone.version || '?') + ')' : 'MISSING'), typeof window.Tone === 'undefined' ? 'err' : null);
+  log('SoundForge 로드: ' + (typeof window.SoundForge !== 'undefined' ? 'OK' : 'MISSING'), typeof window.SoundForge === 'undefined' ? 'err' : null);
+
+  var GAME_AUDIO = null;
+  var SFX_NAMES = ['jump', 'coin', 'hit', 'explosion', 'powerup', 'laser', 'chime', 'stomp', 'flag'];
+
+  // SFX 버튼 생성
+  var grid = document.getElementById('sfxGrid');
+  SFX_NAMES.forEach(function (n) {
+    var b = document.createElement('button'); b.className = 'b'; b.textContent = n;
+    b.onclick = function () { if (GAME_AUDIO) { GAME_AUDIO.sfx(n); log('sfx(' + n + ')'); } else log('먼저 Tap to start', 'err'); };
+    grid.appendChild(b);
+  });
+
+  // audio.json 로드 → SoundForge 구성
+  fetch('./audio.json').then(function (r) { return r.json(); }).then(function (spec) {
+    log('audio.json fetch: OK (tier ' + spec.meta.tier + ', mood ' + spec.meta.mood + ', tracks ' + Object.keys(spec.bgm.tracks).length + ')');
+    try {
+      GAME_AUDIO = new SoundForge(spec);
+      window.GAME_AUDIO = GAME_AUDIO;          // mobile.js 호환 전역
+      window.__SL.audio = GAME_AUDIO;
+      log('new SoundForge(spec): OK (enabled=' + GAME_AUDIO._enabled + ', maxVoices=' + GAME_AUDIO.maxVoices + ')');
+    } catch (e) { log('SoundForge 생성 실패: ' + e.message, 'err'); window.__SL.errors.push(e.message); }
+  }).catch(function (e) { log('audio.json fetch 실패: ' + e.message, 'err'); window.__SL.errors.push(e.message); });
+
+  // 컨트롤
+  document.getElementById('start').onclick = function () {
+    if (!GAME_AUDIO) { log('아직 spec 로딩 중', 'err'); return; }
+    try {
+      GAME_AUDIO.unlock();
+      GAME_AUDIO.startBgm();
+      var ctx = window.Tone && window.Tone.getContext ? window.Tone.getContext() : null;
+      log('unlock + startBgm: OK (ctx.state=' + (ctx ? ctx.state : '?') + ', ready=' + GAME_AUDIO.ready + ', bgmOn=' + GAME_AUDIO._bgmOn + ')');
+      window.__SL.started = true;
+    } catch (e) { log('start 실패: ' + e.message, 'err'); window.__SL.errors.push(e.message); }
+  };
+  var intEl = document.getElementById('intensity'), intVal = document.getElementById('intVal');
+  intEl.oninput = function () {
+    var v = intEl.value / 100; intVal.textContent = v.toFixed(2);
+    if (GAME_AUDIO) { GAME_AUDIO.setIntensity(v); log('setIntensity(' + v.toFixed(2) + ')'); }
+  };
+  document.querySelectorAll('[data-sec]').forEach(function (b) {
+    b.onclick = function () { if (GAME_AUDIO) { GAME_AUDIO.setSection(b.dataset.sec); log('setSection(' + b.dataset.sec + ')'); } };
+  });
+  document.getElementById('mute').onclick = function () { if (GAME_AUDIO) log('toggleMute -> ' + GAME_AUDIO.toggleMute()); };
+  document.getElementById('stop').onclick = function () { if (GAME_AUDIO) { GAME_AUDIO.stopBgm(); log('stopBgm'); } };
+
+  // 가시성 가드(모바일 라이프사이클 — mobile.js 없이도 데모가 자체 처리)
+  document.addEventListener('visibilitychange', function () {
+    if (!GAME_AUDIO) return;
+    if (document.hidden) { GAME_AUDIO.suspend(); log('visibilitychange: suspend', 'meta'); }
+    else { GAME_AUDIO.resume(); log('visibilitychange: resume', 'meta'); }
+  });
+
+  log('준비 완료 — Tap to start 를 누르세요.', 'meta');
+})();
+</script>
+</body>
+</html>

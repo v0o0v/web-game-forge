@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "meta": {
+    "slug": "sound-lab",
+    "tier": 3,
+    "mood": "tense",
+    "genre": "demo",
+    "renderStyle": "smooth",
+    "engine": "soundforge",
+    "originalityNote": "전 트랙·SFX 절차 합성 오리지널 — 어떤 곡의 멜로디/진행도 인용하지 않음(스케일+진행에서 절차 생성). 100% CC0."
+  },
+  "master": { "volume": -6, "limiter": -1, "reverb": { "decay": 2.2, "send": 0.18 }, "delay": { "send": 0.12 } },
+  "budget": { "maxVoices": 16 },
+  "bgm": {
+    "defaultTrack": "drive",
+    "defaultIntensity": 0.45,
+    "tracks": {
+      "drive": {
+        "mood": "tense", "scale": "phrygian", "key": "E", "bpm": 132,
+        "progression": ["i", "bII", "i", "VII"],
+        "layers": [
+          { "id": "pad",   "preset": "pad",      "pattern": "chords",     "minIntensity": 0,   "vol": -16 },
+          { "id": "bass",  "preset": "saw-bass", "pattern": "root8",      "minIntensity": 0.2, "vol": -12 },
+          { "id": "drums", "preset": "kit",      "pattern": "four-floor", "minIntensity": 0.4, "vol": -11 },
+          { "id": "lead",  "preset": "supersaw", "pattern": "arp",        "minIntensity": 0.7, "vol": -13 }
+        ]
+      },
+      "calm": {
+        "mood": "calm", "scale": "major-pentatonic", "key": "A", "bpm": 76,
+        "progression": ["i", "VI", "III", "VII"],
+        "layers": [
+          { "id": "pad",   "preset": "pad",   "pattern": "chords", "minIntensity": 0,   "vol": -14 },
+          { "id": "bells", "preset": "pluck", "pattern": "arp",    "minIntensity": 0.3, "vol": -15 }
+        ]
+      },
+      "boss": {
+        "mood": "tense", "scale": "harmonic-minor", "key": "E", "bpm": 150,
+        "progression": ["i", "VI", "V", "i"],
+        "layers": [
+          { "id": "pad",   "preset": "pad",      "pattern": "chords",     "minIntensity": 0,   "vol": -14 },
+          { "id": "bass",  "preset": "saw-bass", "pattern": "pulse",      "minIntensity": 0,   "vol": -10 },
+          { "id": "drums", "preset": "kit",      "pattern": "four-floor", "minIntensity": 0,   "vol": -9 },
+          { "id": "lead",  "preset": "supersaw", "pattern": "arp",        "minIntensity": 0.3, "vol": -12 }
+        ]
+      }
+    },
+    "sections": { "explore": "calm", "combat": "drive", "boss": "boss" }
+  },
+  "sfx": {
+    "jump":      { "layers": [ { "kind": "tone", "wave": "square", "freq": 320, "to": 760, "dur": 0.14, "vol": 0.5 } ] },
+    "coin":      { "layers": [ { "kind": "tone", "wave": "square", "freq": 988, "dur": 0.06, "vol": 0.5 },
+                               { "kind": "tone", "wave": "square", "freq": 1319, "dur": 0.12, "vol": 0.5, "delay": 0.06 } ] },
+    "hit":       { "layers": [ { "kind": "noise", "filter": 1200, "dur": 0.12, "vol": 0.6 },
+                               { "kind": "tone", "wave": "square", "freq": 180, "dur": 0.1, "vol": 0.4 } ] },
+    "explosion": { "layers": [ { "kind": "noise", "filter": 6000, "dur": 0.05, "vol": 0.7 },
+                               { "kind": "boom", "freq": "C2", "dur": 0.4, "vol": 0.9, "delay": 0.01 },
+                               { "kind": "noise", "filter": 800, "dur": 0.3, "vol": 0.5, "delay": 0.04 } ] },
+    "powerup":   { "layers": [ { "kind": "tone", "wave": "square", "freq": 523, "dur": 0.5, "vol": 0.45 } ] },
+    "laser":     { "layers": [ { "kind": "tone", "wave": "sawtooth", "freq": 1200, "to": 300, "dur": 0.18, "vol": 0.4 } ] },
+    "chime":     { "layers": [ { "kind": "fm", "freq": 880, "harmonicity": 3, "modIndex": 12, "dur": 0.5, "vol": 0.4 } ] }
+  },
+  "balanceConfig": { "maxReverbDecay": 4, "bpmTolerance": 12 }
+}
