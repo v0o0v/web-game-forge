@@ -4,7 +4,7 @@
 
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Phaser](https://img.shields.io/badge/engine-Phaser%204.1-blueviolet)
-![Skills](https://img.shields.io/badge/skills-22-orange)
+![Skills](https://img.shields.io/badge/skills-26-orange)
 ![Phaser refs](https://img.shields.io/badge/phaser--refs-28-informational)
 ![Assets](https://img.shields.io/badge/assets-CC0%20%2F%20IP--safe-success)
 ![Mobile](https://img.shields.io/badge/mobile--webview-ready-success)
@@ -38,7 +38,7 @@
   게이트(`assets.json`, CC0만)로 로딩합니다. 닌텐도 등 타사 에셋·이름·시그니처 조합을 쓰지 않습니다.
 - **🔊 8비트 사운드** — `ChipAudio`가 Web Audio API로 효과음과 **오리지널** BGM을 코드 합성합니다.
   오디오 파일 0개, 100% CC0.
-- **🧩 22종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 11 + 품질·운영 5 + 메인 오케스트레이터.
+- **🧩 26종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 11 + **Phaser 고급 4**(Matter 물리·포스트FX·라이팅·경로) + 품질·운영 5 + 메인 오케스트레이터.
 - **📖 게임 서사 설계** — `story-architect`가 톤·스토리·목표·캐릭터·대사·반전을 탑다운 인터뷰로 설계해
   `STORY.md` 스토리 바이블로 산출하고 인트로/막간/엔딩·환경 단서·NPC 대사로 입힙니다(전형 vs 참신 선택, 대사 자동 작성, 연속성 린트).
 - **🎒 게임 아이템 설계** — `item-architect`가 소모품·장비·특수기능·통화·시너지 등 **습득·사용하는 모든 것**을
@@ -179,7 +179,7 @@ http://127.0.0.1:8766/games/super-runner/index.html
 
 ---
 
-## 🧩 스킬 카탈로그 (22종)
+## 🧩 스킬 카탈로그 (26종)
 
 메인 `web-game-builder`가 전체 흐름을 조율하고, 요청 성격에 따라 전문 스킬이 자동 발동합니다.
 **장르로 스캐폴드 → 제작요소로 살붙이기 → 품질로 검증·최적화** 순서로 협력합니다.
@@ -203,6 +203,10 @@ http://127.0.0.1:8766/games/super-runner/index.html
 | | `level-designer` | 레벨·맵(타일맵) **빌드**(구현 패턴) |
 | | `game-ui-hud` | HUD·메뉴·UI 화면 |
 | | `juice-fx` | 파티클·스크린셰이크·게임필 |
+| 🧩 Phaser 고급 | `matter-physics` | Matter 강체 물리(슬링샷·쌓기·물리퍼즐·래그돌) — Arcade 로 못 하는 회전·충격·무너짐 |
+| | `screen-fx` | 포스트FX 화면 룩(블룸·비네트·CRT·네온 글로우·컬러그레이딩) — v4 Filter, 전 장르 폴리시 |
+| | `lighting-mood` | 동적 라이팅·분위기(PointLight·Simplex Noise 안개·Gradient 밤하늘·앰비언트) |
+| | `path-motion` | 경로·모션(스플라인 패트롤·방사 탄막·타워디펜스 크립·앰비언트 드리프트) |
 | ✅ 품질·운영 | `mobile-webview-tune` | 모바일 웹뷰 최적화·감사 |
 | | `game-qa` | 헤드리스 step 하니스 동작 검증 |
 | | `ip-license-guard` | 저작권·라이선스 안전 점검 |
@@ -210,7 +214,7 @@ http://127.0.0.1:8766/games/super-runner/index.html
 | | `sprite-catalog-refresh` | sprite-picker의 CC0 소스 카탈로그 웹 재조사·갱신(사용자 명시 요청 시) |
 
 각 전문 스킬은 tight한 description으로 관련 요청에만 발동하도록 설계해 스킬 listing 예산
-(컨텍스트 ~1%)을 관리합니다(총 ≈2.4k자, 개별 캡 1,536자 내).
+(컨텍스트 ~1%)을 관리합니다(개별 캡 1,536자 내).
 
 ### 📚 Phaser 4 API 레퍼런스 라이브러리
 
@@ -244,7 +248,7 @@ Phaser 4 API 의 정확한 사용법(씬 라이프사이클·물리·스케일·
 
 ---
 
-## ⚙️ 엔진 라이브러리 5종 (`engine/`)
+## ⚙️ 엔진 라이브러리 9종 (`engine/`)
 
 ### PixelForge (`pixelforge.js`)
 문자 그리드로 정의한 스프라이트를 Phaser 텍스처로 굽는 절차적 픽셀아트 생성기. 외부 이미지 0,
@@ -313,6 +317,25 @@ var res = TiledForge.loadTiledMap(this, 'pack-map', {
 > 자세한 API는 [skills/web-game-builder/reference/engine-api.md](skills/web-game-builder/reference/engine-api.md).
 > Tiled 저작 가이드: [skills/level-designer/reference/tiled/authoring.md](skills/level-designer/reference/tiled/authoring.md).
 
+### Phaser 고급 4종 킷 (`matterkit.js` · `screenfx.js` · `lightingkit.js` · `pathkit.js`)
+Phaser 4 의 고급 기능을 한 줄 API 로 감싼 **선택적 킷**. 게임이 필요할 때만 `index.html` 에 스크립트로 추가한다(phaser 다음). 미사용 게임엔 부담 0.
+
+- **MatterKit (`matterkit.js`)** — 번들된 Matter.js(`this.matter`) 위에 config·바디 팩토리·상자 스택·슬링샷. Arcade 로 못 하는 강체 물리(물리퍼즐·쌓기·래그돌·로프). → `matter-physics`
+- **ScreenFX (`screenfx.js`)** — v4 Filter 체계(블룸·비네트·글로우·컬러그레이딩·CRT). 전 장르 폴리시. WebGL 전용, Canvas 면 graceful no-op. → `screen-fx`
+- **LightingKit (`lightingkit.js`)** — PointLight 발광·Simplex Noise 안개·Gradient 밤하늘·앰비언트 어둠. 호러·던전·밤 무드. WebGL 전용. → `lighting-mood`
+- **PathKit (`pathkit.js`)** — Curves/Path/PathFollower 로 스플라인 루프·패트롤·방사 탄막·타워디펜스 크립 경로. → `path-motion`
+
+데모 **`nocturne`**(야간 물리 슬링볼)가 네 킷을 한 화면에 통합한다 — Matter 슬링샷+상자 스택, 스플라인 등불, 점광원+절차 안개, 블룸+비네트. WebGL 헤드리스 검증 통과(상자 토폴·등불 명중·승리 파이프라인).
+
+```js
+// game config: Matter 물리
+physics: MatterKit.config({ gravity:{x:0,y:1}, bounds:true })
+// 카메라 포스트FX + 점광원 + 경로추종
+ScreenFX.preset(this.cameras.main, 'night');
+LightingKit.attach(this, orb, { color:0x8fe9ff, radius:80 });
+PathKit.follower(this, PathKit.loop(this, pts), 'lantern', { duration:8000 });
+```
+
 ---
 
 ## 🔌 자동 트리거 동작 방식
@@ -333,7 +356,7 @@ var res = TiledForge.loadTiledMap(this, 'pack-map', {
 ```
 web-game-forge/
 ├── .claude-plugin/  plugin.json · marketplace.json   # 플러그인 매니페스트
-├── skills/                                            # 21종 스킬 (메인 1 + 전문 20)
+├── skills/                                            # 26종 스킬 (메인 1 + 전문 25)
 │   ├── web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 분석 + game-dna/puzzle/ 퍼즐 20종 심화)
 │   ├── platformer-game/  topdown-shooter/  arcade-classic/  puzzle-game/  endless-runner/
 │   ├── world-map-architect/  (+ reference/map-interview · map-design/ MAP-* 원칙 + 위상 카탈로그 + 빌드 패턴)
@@ -343,13 +366,15 @@ web-game-forge/
 │   ├── sprite-picker/  (+ catalog/ 검증된 CC0 소스 캐시 · picker/ 브라우저 갤러리 · reference/ 인터뷰·소싱·프로토콜·라이브러리)
 │   ├── sprite-catalog-refresh/  (sprite-picker 카탈로그 웹 재조사·갱신)
 │   ├── sprite-forge/  vector-graphics/  chip-sound/  game-ui-hud/  juice-fx/
+│   ├── matter-physics/  screen-fx/  lighting-mood/  path-motion/       # Phaser 고급 4종 킷 스킬
 │   └── mobile-webview-tune/  game-qa/  ip-license-guard/  perf-60fps/
 ├── hooks/hooks.json                                   # UserPromptSubmit 의도 감지 등록
 ├── scripts/detect-game-intent.{js,ps1,sh}            # 한/영 게임·에셋 의도 감지(크로스플랫폼)
 ├── commands/make-game.md                              # /web-game-builder:make-game
-├── engine/  phaser.min.js · pixelforge.js · vectorforge.js · audio.js · mobile.js · tiled.js   # 재사용 엔진
+├── engine/  phaser.min.js · pixelforge · vectorforge · audio · mobile · tiled · matterkit · screenfx · lightingkit · pathkit   # 재사용 엔진(+Phaser 고급 4종 킷)
 ├── games/  super-runner/(픽셀 플랫포머·?tiled=1) · runeburst/ · is-rule/ · style-preview/
 │          · tiled-topdown/(GEM DUNGEON) · tiled-iso/(등각·육각, ?orient=hex) · tiled-pack/(GPU+CC0팩 임포트)
+│          · nocturne/(야간 물리 슬링볼 — Matter+포스트FX+라이팅+경로 통합 데모)
 ├── assets-library/                                    # 이전 사용 스프라이트 로컬 보관(사용자 자산)
 ├── assets.json                                        # CC0 라이선스 게이트 매니페스트 (+ sprite-picker 카탈로그 포인터)
 ├── docs/  설계.md · img/                              # 아키텍처 명세 · 스크린샷
@@ -377,6 +402,12 @@ chrome-devtools MCP로 실제 실행 검증 (super-runner):
 - 코인(+100)·적 밟기(+100)·물음표블록 코인팝(+200) 메카닉 결정적 검증 통과
 - 600프레임 연속 플레이 **콘솔 에러 0**
 - 검증 중 실버그 2건 발견·수정(TouchControls 포인터 배열, 목숨 registry 영속화)
+
+chrome-devtools MCP로 실제 실행 검증 (nocturne — Phaser 고급 4종 통합 데모, **WebGL**):
+- 부팅 콘솔 에러 0(favicon 제외), Game+UI 씬 정상, Matter 월드 가동
+- **Matter** 슬링샷 한 발에 상자 7개 토폴(결정적 스텝 검증) — 터널링 방지(maxVel·반복수 튜닝)
+- **경로** 스플라인 등불 4종 경로추종 + 명중 판정·점수 파이프라인 정상(4/4 명중)
+- **라이팅** 점광원·Simplex 안개, **포스트FX** 블룸·비네트 WebGL 렌더 정상, 승리 배너 표시
 
 ---
 

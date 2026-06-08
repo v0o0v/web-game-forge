@@ -1,0 +1,16 @@
+NOCTURNE — 야간 물리 슬링볼 (web-game-builder 데모)
+=====================================================
+
+이 게임의 모든 그래픽·사운드는 코드로 절차 생성됩니다(외부 파일 0). 100% CC0 / IP-safe.
+
+엔진 / 라이브러리
+- Phaser 4.1.0 — MIT License (vendored: engine/phaser.min.js)
+- VectorForge / ChipAudio / MobileHarness — web-game-builder 자체 엔진 (MIT)
+- MatterKit / ScreenFX / LightingKit / PathKit — web-game-builder Phaser 고급 4종 킷 (MIT)
+- Matter.js 물리 — Phaser 4 에 번들됨 (MIT License)
+
+에셋
+- 스프라이트(구슬·상자·등불·바닥·하늘): VectorForge 로 코드 생성한 스무스/벡터 그래픽.
+- 효과음·BGM: ChipAudio 가 Web Audio API 로 합성한 오리지널 칩튠(어떤 곡도 인용하지 않음).
+
+타사 IP(스프라이트·이름·사운드·폰트) 미사용.
