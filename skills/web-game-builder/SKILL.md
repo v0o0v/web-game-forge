@@ -42,6 +42,8 @@ ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
 - 미려한 스무스/벡터 그래픽 (그라데이션·글로우·글래스·곡선 캐릭터, **절차 생성**) → `vector-graphics`
 - 효과음/BGM → `chip-sound`
 - 레벨 설계(게임 분석·의도 인터뷰·난이도 곡선·재미 극대화) → `level-architect`
+- 게임 서사 설계(톤·스토리·목표·캐릭터·대사·반전) → `story-architect`
+  (game-dna `FE-NARRATIVE` 의 본격 설계 레인. 스토리 적용 여부는 청사진 인터뷰 직후 사용자에게 **반드시 묻는다**. 초·중반 어디서든 스토리 수정·캐릭터 추가/삭제 가능. 빌드 중 인트로/막간/승패/대사 카피가 placeholder·빈 슬롯으로 남으면 `story-architect` 의 대사 자동 개입을 호출해 채운다)
 - 레벨/맵/타일맵 빌드(구현 패턴) → `level-designer`
 - HUD/메뉴/UI → `game-ui-hud`
 - 파티클/스크린셰이크/게임필 → `juice-fx`
