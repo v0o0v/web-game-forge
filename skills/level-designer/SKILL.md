@@ -149,11 +149,19 @@ this.physics.add.collider(this.hero, res.solids[0]); // 충돌 설정된 타일 
 
 **.tmj 작성은 도구로**(손으로 GID 배열 쓰지 말 것, 무의존성 Node):
 - `tools/level-to-tmj.mjs` — 자체 `LEVEL` 피처리스트 → `.tmj`(super-runner 이전·라운드트립).
-- `tools/ascii-to-tmj.mjs` — ASCII 격자 → `.tmj`(LLM 친화, 탑다운·던전·퍼즐).
+- `tools/ascii-to-tmj.mjs` — ASCII 격자 → `.tmj`(LLM 친화, 탑다운·던전·퍼즐). `ORIENTATION`으로
+  **등각/육각/스태거드** + `anim:{frames,duration}`으로 **애니메이션 타일** 지원.
+- `tools/bake-tiled-pack.mjs` — 절차 CC0 팩(PNG+`.tmj`+`pack.json`) 생성(외부 팩 임포트 실증).
+- `tools/verify-tiled-pack.mjs` — 외부 팩을 루트 `assets.json` 정책으로 라이선스 게이트(`--register`).
 
-> 전체 저작 가이드(타일셋 계약·오브젝트 type·로딩·게처·실증): [`reference/tiled/authoring.md`](reference/tiled/authoring.md).
+**고급 기능**: 애니메이션 타일 · 등각/육각 맵 · `TilemapGPULayer`(`loadTiledMap({gpu:true})`) ·
+외부 CC0 팩 임포트(`licenseGate`). 자세한 건 아래 authoring 가이드 §7~§10.
+
+> 전체 저작 가이드(타일셋 계약·오브젝트 type·로딩·애니·iso/hex·GPU·팩 게이트·게처·실증):
+> [`reference/tiled/authoring.md`](reference/tiled/authoring.md).
 > 실증: [`games/super-runner`](../../games/super-runner/)(`?tiled=1`, 절차 경로와 동치) ·
-> [`games/tiled-topdown`](../../games/tiled-topdown/)(GEM DUNGEON).
+> [`games/tiled-topdown`](../../games/tiled-topdown/)(GEM DUNGEON) ·
+> [`games/tiled-iso`](../../games/tiled-iso/)(등각/육각) · [`games/tiled-pack`](../../games/tiled-pack/)(GPU+팩 임포트).
 
 ## 연계 / 원칙
 - 설계 의도·난이도 곡선·재미는 [`level-architect`](../level-architect/SKILL.md)가 결정 → 이 스킬이 빌드. 레벨이 "재미없다/단조롭다" 진단·리밸런싱도 level-architect 소관.

@@ -292,6 +292,24 @@ var res = TiledForge.loadTiledMap(this, 'map', { tilesetKey:'forge-tiles', tiles
 this.physics.add.collider(this.hero, res.solids[0]);
 ```
 
+**고급 기능 4종**(데모 `tiled-iso`·`tiled-pack`):
+- **애니메이션 타일** — 타일 def에 `animFrames`/`anim:{frames,duration}` → 프레임마다 연속 GID로 굽고
+  Tiled `animation` 배열 자동 emit(Phaser가 CPU·GPU 양쪽 재생).
+- **등각/육각 맵** — `ascii-to-tmj`에 `ORIENTATION:'isometric'|'hexagonal'|'staggered'` + 비정방형
+  타일. iso/hex는 타일 좌표 논리 이동(`tileToWorldXY`/`getTileAt`).
+- **`TilemapGPULayer`** — `loadTiledMap({gpu:true})`로 WebGL 셰이더 레이어(직교 전용, WebGL·iso/hex
+  위반 시 CPU 자동 폴백). 편집 후 `res.regenerate()`.
+- **외부 CC0 팩 임포트 + `assets.json` 게이트** — `loadTiledMap({licenseGate:{policy,manifest}})`가
+  허용 안 된 라이선스를 로드 단계에서 차단. 팩 생성·검증은 `bake-tiled-pack`·`verify-tiled-pack` 도구.
+
+```js
+// 외부 CC0 팩을 라이선스 게이트로 임포트 + GPU 레이어로 렌더
+var res = TiledForge.loadTiledMap(this, 'pack-map', {
+  tilesetKey:'forge-pack', tilesetName:manifest.tilesetName, gpu:true,
+  licenseGate:{ policy: assets.policy, manifest: manifest } // CC0/MIT/… 만 통과, 아니면 throw
+});
+```
+
 > 자세한 API는 [skills/web-game-builder/reference/engine-api.md](skills/web-game-builder/reference/engine-api.md).
 > Tiled 저작 가이드: [skills/level-designer/reference/tiled/authoring.md](skills/level-designer/reference/tiled/authoring.md).
 
@@ -329,8 +347,9 @@ web-game-forge/
 ├── hooks/hooks.json                                   # UserPromptSubmit 의도 감지 등록
 ├── scripts/detect-game-intent.{js,ps1,sh}            # 한/영 게임·에셋 의도 감지(크로스플랫폼)
 ├── commands/make-game.md                              # /web-game-builder:make-game
-├── engine/  phaser.min.js · pixelforge.js · vectorforge.js · audio.js · mobile.js   # 재사용 엔진
-├── games/  super-runner/(픽셀 데모) · style-preview/(스무스 4스타일 쇼케이스)
+├── engine/  phaser.min.js · pixelforge.js · vectorforge.js · audio.js · mobile.js · tiled.js   # 재사용 엔진
+├── games/  super-runner/(픽셀 플랫포머·?tiled=1) · runeburst/ · is-rule/ · style-preview/
+│          · tiled-topdown/(GEM DUNGEON) · tiled-iso/(등각·육각, ?orient=hex) · tiled-pack/(GPU+CC0팩 임포트)
 ├── assets-library/                                    # 이전 사용 스프라이트 로컬 보관(사용자 자산)
 ├── assets.json                                        # CC0 라이선스 게이트 매니페스트 (+ sprite-picker 카탈로그 포인터)
 ├── docs/  설계.md · img/                              # 아키텍처 명세 · 스크린샷
@@ -370,9 +389,12 @@ chrome-devtools MCP로 실제 실행 검증 (super-runner):
 - ~~Tiled 맵 에디터(.tmj) 연동~~ — **완료** (절차 베이크 타일셋으로 외부 PNG 0 유지 +
   `engine/tiled.js` `TiledForge` 로더/베이커 + `level-to-tmj`·`ascii-to-tmj` 저작 도구 +
   데모 2종: super-runner `?tiled=1`(절차 경로와 동치)·`games/tiled-topdown`)
+- ~~Tiled 고급 기능 4종~~ — **완료** (① 외부 CC0 팩 임포트 + `assets.json` 라이선스 게이트
+  `verify-tiled-pack`/`bake-tiled-pack` · ② 애니메이션 타일 · ③ 등각/육각 맵 · ④ `TilemapGPULayer`
+  최적화. 데모 2종: `games/tiled-iso`(iso/hex)·`games/tiled-pack`(GPU+팩 임포트))
 - Phaser 가상조이스틱 플러그인 검토 (현재 자체 D-패드)
 - Capacitor/Cordova 네이티브 래퍼(앱스토어 배포) 가이드
-- CC0 실제 팩(Kenney/Pixel Frog) 벤더링 옵션
+- CC0 실제 팩(Kenney/Pixel Frog) 벤더링 옵션 (게이트 경로는 완료 — 우리 절차 CC0로 실증)
 - CC-BY 에셋 자동 attribution 생성
 
 ---

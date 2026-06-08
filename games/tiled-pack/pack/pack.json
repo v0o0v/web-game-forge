@@ -1,0 +1,12 @@
+{
+  "name": "forge-gpu-pack",
+  "license": "CC0-1.0",
+  "attribution": "WebGameForge 절차 생성 (CC0)",
+  "source": "WebGameForge bake-tiled-pack.mjs (절차 생성, 제3자 에셋 0)",
+  "tileset": "tileset.png",
+  "map": "level.tmj",
+  "tilesetName": "forge",
+  "tileSize": 16,
+  "usedIn": "games/tiled-pack",
+  "note": "외부 CC0 Tiled 팩 임포트 경로 실증용. assets.json policy 게이트(verify-tiled-pack.mjs) 통과 대상."
+}

@@ -128,6 +128,15 @@
       "attribution": "Lorc — game-icons.net — CC BY 3.0",
       "url": "games/runeburst/assets/gems/rune5-cut-diamond.svg",
       "usedIn": "games/runeburst"
+    },
+    {
+      "name": "forge-gpu-pack",
+      "type": "tiled-pack",
+      "source": "WebGameForge bake-tiled-pack.mjs (절차 생성, 제3자 에셋 0)",
+      "license": "CC0-1.0",
+      "url": "games/tiled-pack/pack/tileset.png",
+      "usedIn": "games/tiled-pack",
+      "attribution": "WebGameForge 절차 생성 (CC0)"
     }
   ]
 }
