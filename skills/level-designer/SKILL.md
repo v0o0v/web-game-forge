@@ -119,20 +119,41 @@ clearStage: function () {
 }
 ```
 
-## Tiled(.tmj) 연동 옵션 (간략)
-```js
-// preload
-this.load.tilemapTiledJSON('map', 'assets/level1.tmj');
-this.load.image('tiles', 'assets/tileset.png');
+## Tiled(.tmj) 연동 — 절차 베이커 + 오브젝트 스포너
 
-// create
-var map = this.make.tilemap({ key: 'map' });
-var tiles = map.addTilesetImage('tileset', 'tiles');
-var layer = map.createLayer('Ground', tiles, 0, 0);
-layer.setCollisionByProperty({ collides: true });
-this.physics.add.collider(this.hero, layer);
+대형·복잡 맵, 라운드트립 편집(실제 Tiled 앱), 탑다운·던전 같은 그리드 장르엔 **`.tmj` 포맷**을
+쓴다. **외부 PNG 없이** `engine/tiled.js`(`TiledForge`)가 타일셋 아틀라스를 절차 베이크(`PixelForge`)해
+연결하므로 IP-safe 정체성을 유지한다. 분할 원칙: **타일 레이어 = 정적 지형 / 오브젝트 레이어 = 행동**.
+
+```js
+// preload: .tmj는 Phaser 로더로(http 서빙 필요). 타일셋 PNG 로드 안 함 — 절차 베이크.
+preload: function () { this.load.tilemapTiledJSON('map', 'level.tmj'); }
+
+// create: 절차 타일셋 베이크 → 로드(타일 레이어 충돌 + 오브젝트 스포너 위임)
+var tileDefs = [
+  { name: 'ground', collides: true, frame: PixelForge.LIB.ground.frames[0] }, // GID 1
+  { name: 'dirt',   collides: true, frame: PixelForge.LIB.dirt.frames[0] },   // GID 2
+  { name: 'stone',  collides: true, frame: PixelForge.LIB.qblock.frames[2] }  // GID 3
+];
+TiledForge.bakeTileset(this, tileDefs, { key:'forge-tiles', name:'forge', tileSize:16, columns:3 });
+var res = TiledForge.loadTiledMap(this, 'map', {
+  tilesetKey:'forge-tiles', tilesetName:'forge',
+  spawners: {                              // type → 기존 게임 시스템 재사용(행동 로직 무변경)
+    player: function (s, o) { s.placeHero(o.x, o.y); },
+    enemy:  function (s, o) { s.spawnEnemy(o.x, o.y); },
+    coin:   function (s, o) { s.makeCoin(o.x, o.y); }
+  }
+});
+this.physics.add.collider(this.hero, res.solids[0]); // 충돌 설정된 타일 레이어
 ```
-Tiled 방식은 대형 맵에 유리하나, 타일 이미지가 CC0여야 IP-safe를 유지한다.
+
+**.tmj 작성은 도구로**(손으로 GID 배열 쓰지 말 것, 무의존성 Node):
+- `tools/level-to-tmj.mjs` — 자체 `LEVEL` 피처리스트 → `.tmj`(super-runner 이전·라운드트립).
+- `tools/ascii-to-tmj.mjs` — ASCII 격자 → `.tmj`(LLM 친화, 탑다운·던전·퍼즐).
+
+> 전체 저작 가이드(타일셋 계약·오브젝트 type·로딩·게처·실증): [`reference/tiled/authoring.md`](reference/tiled/authoring.md).
+> 실증: [`games/super-runner`](../../games/super-runner/)(`?tiled=1`, 절차 경로와 동치) ·
+> [`games/tiled-topdown`](../../games/tiled-topdown/)(GEM DUNGEON).
 
 ## 연계 / 원칙
 - 설계 의도·난이도 곡선·재미는 [`level-architect`](../level-architect/SKILL.md)가 결정 → 이 스킬이 빌드. 레벨이 "재미없다/단조롭다" 진단·리밸런싱도 level-architect 소관.

@@ -24,71 +24,24 @@
   function cy(row) { return row * TILE + TILE / 2; }
 
   // ===========================================================================
-  // 레벨 정의 (타일 단위). 바닥은 자동 생성, 그 외 피처는 목록으로.
+  // 레벨 소스 — 절차 LEVEL은 level.js에서 로드(변환기와 단일 소스 공유).
+  // ?tiled=1 이면 같은 레벨을 .tmj(level.tmj.js)로 로드하는 경로로 전환한다.
+  // 두 경로는 같은 엔티티 생성 헬퍼(makeCoin/makeBlockKind/makePipe/makeGoal/
+  // spawnEnemy)를 공유하므로 행동 로직은 완전히 동일하다.
   // ===========================================================================
-  var LEVEL = {
-    width: 132,           // 전체 가로 타일 수
-    rows: 14,             // 전체 세로 타일 수 (0..13)
-    groundTop: 12,        // 바닥은 row 12(잔디)+13(흙)
-    pits: [[27, 29], [58, 60], [88, 90], [104, 105]], // [시작,끝] 구덩이(바닥 없음)
-    // 피처: t=종류, c=열, r=행
-    features: [
-      // 도입부 코인 + 물음표블록
-      { t: '?', c: 8, r: 9 },
-      { t: 'o', c: 6, r: 9 }, { t: 'o', c: 10, r: 9 },
-      // 벽돌/블록 클러스터 (col 14~18, row 9)
-      { t: 'B', c: 14, r: 9 }, { t: '?', c: 15, r: 9 }, { t: 'B', c: 16, r: 9 },
-      { t: 'M', c: 17, r: 9 }, { t: 'B', c: 18, r: 9 },
-      { t: 'o', c: 15, r: 6 }, { t: 'o', c: 16, r: 6 }, { t: 'o', c: 17, r: 6 },
-      // 적 1
-      { t: 'e', c: 21, r: 11 },
-      // (파이프 col 23, 구덩이 27~29) — 구덩이 위 코인 아치
-      { t: 'o', c: 27, r: 8 }, { t: 'o', c: 28, r: 7 }, { t: 'o', c: 29, r: 8 },
-      // 적 2,3
-      { t: 'e', c: 34, r: 11 }, { t: 'e', c: 36, r: 11 },
-      // 돌계단 오르기 (col 39~42)
-      { t: 'S', c: 39, r: 11 },
-      { t: 'S', c: 40, r: 11 }, { t: 'S', c: 40, r: 10 },
-      { t: 'S', c: 41, r: 11 }, { t: 'S', c: 41, r: 10 }, { t: 'S', c: 41, r: 9 },
-      { t: 'S', c: 42, r: 11 }, { t: 'S', c: 42, r: 10 }, { t: 'S', c: 42, r: 9 }, { t: 'S', c: 42, r: 8 },
-      // 공중 벽돌 플랫폼 (col 45~49, row 6) + 위 코인 + 숨은 버섯
-      { t: 'B', c: 45, r: 6 }, { t: 'B', c: 46, r: 6 }, { t: 'M', c: 47, r: 6 }, { t: 'B', c: 48, r: 6 }, { t: 'B', c: 49, r: 6 },
-      { t: 'o', c: 46, r: 4 }, { t: 'o', c: 47, r: 4 }, { t: 'o', c: 48, r: 4 },
-      { t: 'e', c: 47, r: 5 },
-      // (파이프 col 54 height 4)
-      // 구덩이 58~60 위 코인
-      { t: 'o', c: 57, r: 8 }, { t: 'o', c: 59, r: 7 }, { t: 'o', c: 61, r: 8 },
-      // 적 무리
-      { t: 'e', c: 66, r: 11 }, { t: 'e', c: 68, r: 11 },
-      // 물음표 3연속
-      { t: '?', c: 70, r: 9 }, { t: '?', c: 71, r: 9 }, { t: '?', c: 72, r: 9 },
-      // 돌계단 (col 75~79)
-      { t: 'S', c: 75, r: 11 },
-      { t: 'S', c: 76, r: 11 }, { t: 'S', c: 76, r: 10 },
-      { t: 'S', c: 77, r: 11 }, { t: 'S', c: 77, r: 10 }, { t: 'S', c: 77, r: 9 },
-      { t: 'S', c: 78, r: 11 }, { t: 'S', c: 78, r: 10 }, { t: 'S', c: 78, r: 9 }, { t: 'S', c: 78, r: 8 },
-      { t: 'S', c: 79, r: 11 }, { t: 'S', c: 79, r: 10 }, { t: 'S', c: 79, r: 9 }, { t: 'S', c: 79, r: 8 }, { t: 'S', c: 79, r: 7 },
-      { t: 'o', c: 82, r: 6 }, { t: 'o', c: 83, r: 6 }, { t: 'o', c: 84, r: 6 },
-      // (구덩이 88~90 위 코인)
-      { t: 'o', c: 87, r: 8 }, { t: 'o', c: 89, r: 6 }, { t: 'o', c: 91, r: 8 },
-      // 벽돌 + 적
-      { t: 'B', c: 95, r: 9 }, { t: '?', c: 96, r: 9 }, { t: 'B', c: 97, r: 9 },
-      { t: 'e', c: 99, r: 11 }, { t: 'e', c: 101, r: 11 },
-      // 마지막 코인 길
-      { t: 'o', c: 108, r: 9 }, { t: 'o', c: 109, r: 9 }, { t: 'o', c: 110, r: 9 },
-      // 골 직전 돌계단
-      { t: 'S', c: 113, r: 11 },
-      { t: 'S', c: 114, r: 11 }, { t: 'S', c: 114, r: 10 },
-      { t: 'S', c: 115, r: 11 }, { t: 'S', c: 115, r: 10 }, { t: 'S', c: 115, r: 9 },
-      { t: 'S', c: 116, r: 11 }, { t: 'S', c: 116, r: 10 }, { t: 'S', c: 116, r: 9 }, { t: 'S', c: 116, r: 8 }
-    ],
-    pipes: [
-      { c: 23, top: 10, h: 2 },
-      { c: 54, top: 8, h: 4 }
-    ],
-    goal: { c: 124 },     // 깃대 위치
-    start: { c: 2, r: 11 }
-  };
+  var LEVEL = window.SUPER_RUNNER_LEVEL;
+  var USE_TILED = /[?&]tiled=1/.test(location.search);
+
+  // 절차 베이크 타일셋(?tiled=1 경로) — docs §2 계약 순서: ground·dirt·stone.
+  // ground/dirt는 PixelForge 내장 타일, stone은 qblock '사용됨' 프레임(2)을 재사용.
+  function terrainTileDefs() {
+    var L = PixelForge.LIB;
+    return [
+      { name: 'ground', collides: true, frame: L.ground.frames[0] },
+      { name: 'dirt',   collides: true, frame: L.dirt.frames[0] },
+      { name: 'stone',  collides: true, frame: L.qblock.frames[2] }
+    ];
+  }
 
   // ===========================================================================
   // Boot — 에셋 생성
@@ -168,6 +121,12 @@
     Extends: Phaser.Scene,
     initialize: function GameScene() { Phaser.Scene.call(this, { key: 'Game' }); },
 
+    // ?tiled=1 경로: 변환된 .tmj(순수 JSON)를 Phaser 로더로 비동기 로드.
+    // Tiled 앱에서 그대로 여는 파일이며, 로더가 첫 프레임 전 완료를 보장한다(http 서빙 필요).
+    preload: function () {
+      if (USE_TILED) this.load.tilemapTiledJSON('sr-map', 'level.tmj');
+    },
+
     create: function () {
       var W = LEVEL.width * TILE, Hh = LEVEL.rows * TILE;
       this.worldW = W; this.worldH = Hh;
@@ -223,13 +182,21 @@
     },
 
     // --- 레벨(타일/블록/코인/적/파이프/깃발) --------------------------------
+    // 그룹 생성 후 절차/Tiled 경로로 분기. 두 경로는 아래 공유 헬퍼를 쓴다.
     buildLevel: function () {
       this.solids = this.physics.add.staticGroup();
       this.blocks = this.physics.add.staticGroup();
       this.coins = this.physics.add.group({ allowGravity: false, immovable: true });
       this.enemies = this.physics.add.group();
       this.items = this.physics.add.group();
+      this.startPos = { x: cx(LEVEL.start.c), y: cy(LEVEL.start.r) }; // 기본(절차)
 
+      if (USE_TILED) this.buildLevelTiled();
+      else this.buildLevelProcedural();
+    },
+
+    // 절차 경로: 바닥 자동 생성 + 피처/파이프/골을 공유 헬퍼로 빌드.
+    buildLevelProcedural: function () {
       var self = this;
       var isPit = function (col) {
         for (var i = 0; i < LEVEL.pits.length; i++) {
@@ -250,41 +217,76 @@
       // 피처
       LEVEL.features.forEach(function (f) {
         var x = cx(f.c), y = cy(f.r);
-        if (f.t === 'o') {
-          var coin = self.coins.create(x, y, 'coin').setDepth(2);
-          coin.play('coin-spin'); coin.body.setSize(10, 10);
-        } else if (f.t === 'e') {
-          self.spawnEnemy(x, y);
-        } else if (f.t === 'S') {
-          var s = self.solids.create(x, y, 'qblock', 2); s.refreshBody();
-        } else if (f.t === 'B') {
-          self.makeBlock(x, y, 'brick', 'brick');
-        } else if (f.t === '?') {
-          self.makeBlock(x, y, 'qblock', 'coin');
-        } else if (f.t === 'M') {
-          self.makeBlock(x, y, 'qblock', 'mushroom');
-        }
+        if (f.t === 'o') self.makeCoin(x, y);
+        else if (f.t === 'e') self.spawnEnemy(x, y);
+        else if (f.t === 'S') { var s = self.solids.create(x, y, 'qblock', 2); s.refreshBody(); }
+        else if (f.t === 'B') self.makeBlockKind(x, y, 'brick');
+        else if (f.t === '?') self.makeBlockKind(x, y, 'coin');
+        else if (f.t === 'M') self.makeBlockKind(x, y, 'mushroom');
       });
 
-      // 파이프 (2타일 폭)
-      LEVEL.pipes.forEach(function (p) {
-        var px = p.c * TILE; // 좌상단
-        // 입구
-        var topSpr = self.add.image(px, p.top * TILE, 'pipeTop').setOrigin(0, 0).setDepth(1);
-        for (var k = 1; k < p.h; k++) {
-          self.add.image(px, (p.top + k) * TILE, 'pipeBody').setOrigin(0, 0).setDepth(1);
-        }
-        // 충돌체 (2 x h 타일)
-        for (var cc = 0; cc < 2; cc++) {
-          for (var rr = 0; rr < p.h; rr++) {
-            var body = self.solids.create((p.c + cc) * TILE + TILE / 2, (p.top + rr) * TILE + TILE / 2, null);
-            body.setVisible(false); body.body.setSize(TILE, TILE); body.refreshBody();
-          }
+      // 파이프 + 골
+      LEVEL.pipes.forEach(function (p) { self.makePipe(p.c, p.top, p.h); });
+      this.makeGoal(LEVEL.goal.c);
+    },
+
+    // Tiled 경로: 절차 베이크 타일셋 + .tmj 로드. 정적 지형은 타일 레이어,
+    // 행동하는 것(코인/적/블록/파이프/골/시작점)은 오브젝트 레이어 → 스포너 위임.
+    buildLevelTiled: function () {
+      var self = this;
+      TiledForge.bakeTileset(this, terrainTileDefs(), {
+        key: 'forge-tiles', name: 'forge', tileSize: TILE, columns: 3
+      });
+      // .tmj는 preload에서 로드됨. (file:// 폴백: level.tmj.js를 함께 로드하면 전역에서 주입)
+      if (!this.cache.tilemap.exists('sr-map') && window.SUPER_RUNNER_TMJ) {
+        TiledForge.injectMap(this, 'sr-map', window.SUPER_RUNNER_TMJ);
+      }
+      var res = TiledForge.loadTiledMap(this, 'sr-map', {
+        tilesetKey: 'forge-tiles', tilesetName: 'forge',
+        spawners: {
+          player: function (s, o) { self.startPos = { x: o.x, y: o.y }; },
+          coin:   function (s, o) { self.makeCoin(o.x, o.y); },
+          enemy:  function (s, o) { self.spawnEnemy(o.x, o.y); },
+          block:  function (s, o) { self.makeBlockKind(o.x, o.y, o.props.kind); },
+          pipe:   function (s, o) { self.makePipe(Math.round(o.x / TILE), Math.round(o.y / TILE), o.props.height); },
+          goal:   function (s, o) { self.makeGoal(Math.round(o.x / TILE)); }
         }
       });
+      // 타일 레이어(충돌 설정됨)를 지형 콜라이더로 보관 → setupColliders에서 연결.
+      this.terrainLayer = res.solids[0];
+    },
 
-      // 깃발 골인
-      var gx = LEVEL.goal.c * TILE;
+    // --- 공유 엔티티 헬퍼 (절차·Tiled 경로 공통) ----------------------------
+    makeCoin: function (x, y) {
+      var coin = this.coins.create(x, y, 'coin').setDepth(2);
+      coin.play('coin-spin'); coin.body.setSize(10, 10);
+      return coin;
+    },
+
+    // kind: 'brick'|'coin'|'mushroom' → 적절한 텍스처로 makeBlock 호출
+    makeBlockKind: function (x, y, kind) {
+      var texKey = (kind === 'brick') ? 'brick' : 'qblock';
+      return this.makeBlock(x, y, texKey, kind);
+    },
+
+    makePipe: function (col, top, h) {
+      var self = this;
+      var px = col * TILE; // 좌상단
+      self.add.image(px, top * TILE, 'pipeTop').setOrigin(0, 0).setDepth(1);
+      for (var k = 1; k < h; k++) {
+        self.add.image(px, (top + k) * TILE, 'pipeBody').setOrigin(0, 0).setDepth(1);
+      }
+      // 충돌체 (2 x h 타일)
+      for (var cc = 0; cc < 2; cc++) {
+        for (var rr = 0; rr < h; rr++) {
+          var body = self.solids.create((col + cc) * TILE + TILE / 2, (top + rr) * TILE + TILE / 2, null);
+          body.setVisible(false); body.body.setSize(TILE, TILE); body.refreshBody();
+        }
+      }
+    },
+
+    makeGoal: function (col) {
+      var gx = col * TILE;
       var poleTopRow = 4, poleBottomRow = LEVEL.groundTop;
       for (var pr = poleTopRow; pr < poleBottomRow; pr++) {
         this.add.image(gx + 6, pr * TILE, 'pole').setOrigin(0, 0).setDepth(1);
@@ -319,8 +321,8 @@
     },
 
     buildHero: function () {
-      var s = LEVEL.start;
-      this.hero = this.physics.add.sprite(cx(s.c), cy(s.r), 'hero', 0).setDepth(5);
+      var p = this.startPos || { x: cx(LEVEL.start.c), y: cy(LEVEL.start.r) };
+      this.hero = this.physics.add.sprite(p.x, p.y, 'hero', 0).setDepth(5);
       this.hero.body.setSize(9, 15); this.hero.body.setOffset(1.5, 1);
       this.hero.setCollideWorldBounds(false);
       this.hero.big = false;
@@ -345,6 +347,12 @@
       this.physics.add.collider(this.hero, this.solids);
       this.physics.add.collider(this.enemies, this.solids);
       this.physics.add.collider(this.items, this.solids);
+      // Tiled 경로: 정적 지형(ground/dirt/stone)은 타일 레이어에 있으므로 함께 충돌.
+      if (this.terrainLayer) {
+        this.physics.add.collider(this.hero, this.terrainLayer);
+        this.physics.add.collider(this.enemies, this.terrainLayer);
+        this.physics.add.collider(this.items, this.terrainLayer);
+      }
       this.physics.add.collider(this.hero, this.blocks, this.onHitBlock, null, this);
       this.physics.add.collider(this.enemies, this.blocks);
       this.physics.add.collider(this.items, this.blocks);

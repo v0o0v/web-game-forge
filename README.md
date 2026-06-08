@@ -244,7 +244,7 @@ Phaser 4 API 의 정확한 사용법(씬 라이프사이클·물리·스케일·
 
 ---
 
-## ⚙️ 엔진 라이브러리 4종 (`engine/`)
+## ⚙️ 엔진 라이브러리 5종 (`engine/`)
 
 ### PixelForge (`pixelforge.js`)
 문자 그리드로 정의한 스프라이트를 Phaser 텍스처로 굽는 절차적 픽셀아트 생성기. 외부 이미지 0,
@@ -279,7 +279,21 @@ Web Audio API만으로 8비트 효과음과 **오리지널** BGM을 코드 합�
 모바일 웹뷰 베스트프랙티스를 한 곳에: `scaleConfig()`(FIT+CENTER), `installDomGuards()`(iOS 줌/스크롤
 차단), `TouchControlsClass()`(멀티터치 D-패드+점프 버튼 Scene).
 
+### TiledForge (`tiled.js`)
+Tiled 맵 포맷(.tmj)을 **외부 PNG 없이** 연동. `bakeTileset()`이 `PixelForge`/`VectorForge` 타일을
+*한 장의* 아틀라스 텍스처로 절차 베이크해 Phaser 타일셋에 연결(외부 파일 0, CC0/IP-safe).
+`loadTiledMap()`이 타일 레이어 충돌을 설정하고 오브젝트 레이어를 게임이 등록한 스포너로 위임한다
+(타일 레이어=정적 지형, 오브젝트 레이어=행동). `.tmj` 저작은 `level-to-tmj`(LEVEL→.tmj)·
+`ascii-to-tmj`(격자→.tmj) 도구로. 데모: `super-runner ?tiled=1`(절차 경로와 동치)·`tiled-topdown`.
+
+```js
+TiledForge.bakeTileset(this, tileDefs, { key:'forge-tiles', name:'forge', tileSize:16, columns:3 });
+var res = TiledForge.loadTiledMap(this, 'map', { tilesetKey:'forge-tiles', tilesetName:'forge', spawners:{...} });
+this.physics.add.collider(this.hero, res.solids[0]);
+```
+
 > 자세한 API는 [skills/web-game-builder/reference/engine-api.md](skills/web-game-builder/reference/engine-api.md).
+> Tiled 저작 가이드: [skills/level-designer/reference/tiled/authoring.md](skills/level-designer/reference/tiled/authoring.md).
 
 ---
 
@@ -353,7 +367,9 @@ chrome-devtools MCP로 실제 실행 검증 (super-runner):
 
 - ~~Phaser 4 업그레이드~~ — **완료** (v4.1.0 vendored + 공식 v4 레퍼런스 28종 벤더링)
 - 장르 템플릿을 동작 데모까지 승격 (현재 지침형 → super-runner 같은 실동작 코드)
-- Tiled 맵 에디터(.tmj) 연동
+- ~~Tiled 맵 에디터(.tmj) 연동~~ — **완료** (절차 베이크 타일셋으로 외부 PNG 0 유지 +
+  `engine/tiled.js` `TiledForge` 로더/베이커 + `level-to-tmj`·`ascii-to-tmj` 저작 도구 +
+  데모 2종: super-runner `?tiled=1`(절차 경로와 동치)·`games/tiled-topdown`)
 - Phaser 가상조이스틱 플러그인 검토 (현재 자체 D-패드)
 - Capacitor/Cordova 네이티브 래퍼(앱스토어 배포) 가이드
 - CC0 실제 팩(Kenney/Pixel Frog) 벤더링 옵션
