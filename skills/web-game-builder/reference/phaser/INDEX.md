@@ -28,6 +28,10 @@
 | `level-designer` (레벨/맵/타일맵) | [tilemaps](./tilemaps.md), [groups-and-containers](./groups-and-containers.md), [geometry-and-math](./geometry-and-math.md) |
 | `game-ui-hud` (HUD/메뉴/UI) | [text-and-bitmaptext](./text-and-bitmaptext.md), [scenes](./scenes.md), [scale-and-responsive](./scale-and-responsive.md) |
 | `juice-fx` (파티클/셰이크/트윈) | [particles](./particles.md), [tweens](./tweens.md), [cameras](./cameras.md), [filters-and-postfx](./filters-and-postfx.md) |
+| `matter-physics` (MatterKit 강체 물리) | [physics-matter](./physics-matter.md), [game-setup-and-config](./game-setup-and-config.md) |
+| `screen-fx` (ScreenFX 포스트FX 룩) | [filters-and-postfx](./filters-and-postfx.md), [cameras](./cameras.md), [v4-new-features](./v4-new-features.md) |
+| `lighting-mood` (LightingKit 라이팅·분위기) | [game-object-components](./game-object-components.md), [v4-new-features](./v4-new-features.md), [filters-and-postfx](./filters-and-postfx.md) |
+| `path-motion` (PathKit 경로·모션) | [curves-and-paths](./curves-and-paths.md), [tweens](./tweens.md) |
 | `mobile-webview-tune` (모바일 최적화) | [scale-and-responsive](./scale-and-responsive.md), [game-setup-and-config](./game-setup-and-config.md), [input-keyboard-mouse-touch](./input-keyboard-mouse-touch.md) |
 | `perf-60fps` (성능 최적화) | [game-object-components](./game-object-components.md), [groups-and-containers](./groups-and-containers.md), [particles](./particles.md), [game-setup-and-config](./game-setup-and-config.md) |
 | `game-qa` (동작 검증) | [scenes](./scenes.md), [time-and-timers](./time-and-timers.md), [events-system](./events-system.md) |
