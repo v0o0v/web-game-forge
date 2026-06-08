@@ -95,6 +95,7 @@
 - **대표 게임:** Hollow Knight, Ori and the Blind Forest, Monument Valley, Celeste
 - **우리 엔진 구현:** VectorForge 그라데이션/글로우+패럴랙스 다층 배경+chip-sound의 무드 BGM 레이어로 톤을 만든다. 동적 시간대/날씨 그라데이션(Alto식)으로 '예쁜 한 판'. 텍스트는 짧은 막간으로, 컷신은 최소화.
 - **조합 주의:** FE-ESCALATION·고긴장 시간압박과 충돌(감상 여유 소멸). 단일플레이 2D 절차 에셋 한계로 방대한 월드/보이스는 ❌, 무드·암시 중심으로.
+- **서사 본격 설계:** 분위기를 넘어 *이야기·캐릭터·대사·반전*까지 가려면 [`story-architect`](../../../story-architect/SKILL.md)로 라우팅한다(톤 확정 → `games/<slug>/STORY.md` 바이블 → 인트로/막간/엔딩·환경 단서·NPC 대사 + 연속성 린트). 분위기 에셋은 VectorForge(색=감정)·chip-sound(무드 BGM). 전형 vs 참신 스토리 여부를 사용자에게 묻고, 짧은 게임이므로 전복은 하나에 집중.
 
 ### FE-EXPLORE 탐험·발견
 - **정의:** 개방형 맵에서 길을 찾고 비밀·새 지역을 발견하는 재미. 능력 게이트로 잠긴 곳을 나중에 여는 메트로배니아 동선.
