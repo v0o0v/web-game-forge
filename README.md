@@ -4,14 +4,14 @@
 
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Phaser](https://img.shields.io/badge/engine-Phaser%204.1-blueviolet)
-![Skills](https://img.shields.io/badge/skills-21-orange)
+![Skills](https://img.shields.io/badge/skills-22-orange)
 ![Phaser refs](https://img.shields.io/badge/phaser--refs-28-informational)
 ![Assets](https://img.shields.io/badge/assets-CC0%20%2F%20IP--safe-success)
 ![Mobile](https://img.shields.io/badge/mobile--webview-ready-success)
 
 기존 클로드 코드에 "웹 게임 만들어줘"라고 하면 바닐라 JS 수준의 투박한 결과가 나옵니다.
 **WebGameForge는 게임 제작 의도를 자동 감지**해, 검증된 엔진 스택(Phaser 4(4.1.0) + 절차적 에셋/사운드 +
-모바일 하니스)과 전문 스킬 20종으로 **스프라이트 애니메이션·HUD·터치 컨트롤·8비트 사운드까지 갖춘
+모바일 하니스)과 전문 스킬 21종으로 **스프라이트 애니메이션·HUD·터치 컨트롤·8비트 사운드까지 갖춘
 게임**을 만들어 줍니다.
 
 > 플러그인 내부 식별자는 `web-game-builder` 입니다(슬래시 커맨드·스킬 네임스페이스에 사용).
@@ -38,9 +38,13 @@
   게이트(`assets.json`, CC0만)로 로딩합니다. 닌텐도 등 타사 에셋·이름·시그니처 조합을 쓰지 않습니다.
 - **🔊 8비트 사운드** — `ChipAudio`가 Web Audio API로 효과음과 **오리지널** BGM을 코드 합성합니다.
   오디오 파일 0개, 100% CC0.
-- **🧩 21종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 10 + 품질·운영 5 + 메인 오케스트레이터.
+- **🧩 22종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 11 + 품질·운영 5 + 메인 오케스트레이터.
 - **📖 게임 서사 설계** — `story-architect`가 톤·스토리·목표·캐릭터·대사·반전을 탑다운 인터뷰로 설계해
   `STORY.md` 스토리 바이블로 산출하고 인트로/막간/엔딩·환경 단서·NPC 대사로 입힙니다(전형 vs 참신 선택, 대사 자동 작성, 연속성 린트).
+- **🎒 게임 아이템 설계** — `item-architect`가 소모품·장비·특수기능·통화·시너지 등 **습득·사용하는 모든 것**을
+  탑다운 인터뷰(복잡도부터, 디폴트 0개)로 설계해 `ITEMS.md` 바이블 + `items.json` 데이터로 산출합니다. 각 아이템의
+  **visual.\* 묘사 슬롯**(실루엣·재질·팔레트·등급 시각언어)을 채워 `sprite-forge`/`vector-graphics`/`sprite-picker`가
+  좋은 아이콘을 만들게 하고, 무의존성 `lint-items.mjs` validator로 죽은아이템·지배전략·곱연산 폭발을 기계 검증합니다.
 - **🖼 스프라이트 시각 선택** — 화면 비주얼은 재미의 핵심이라 사용자가 **직접 고르게** 합니다.
   `sprite-picker`가 라이선스-안전(CC0) 스프라이트/스프라이트시트를 **브라우저 갤러리에서 클릭 선택**하게
   하고(카탈로그·로컬 파일·이전 사용분), 캐싱으로 매번 웹을 뒤지지 않습니다. 카탈로그 갱신은 `sprite-catalog-refresh`.
@@ -175,7 +179,7 @@ http://127.0.0.1:8766/games/super-runner/index.html
 
 ---
 
-## 🧩 스킬 카탈로그 (21종)
+## 🧩 스킬 카탈로그 (22종)
 
 메인 `web-game-builder`가 전체 흐름을 조율하고, 요청 성격에 따라 전문 스킬이 자동 발동합니다.
 **장르로 스캐폴드 → 제작요소로 살붙이기 → 품질로 검증·최적화** 순서로 협력합니다.
@@ -195,6 +199,7 @@ http://127.0.0.1:8766/games/super-runner/index.html
 | | `world-map-architect` | 스테이지를 잇는 **진행 맵 위상**(선형·사가·분기 노드맵·액트·허브·무한) 설계 + 맵 화면 빌드 |
 | | `level-architect` | 게임 분석·의도 인터뷰·난이도 곡선·재미 극대화 레벨 **설계** |
 | | `story-architect` | 톤·스토리·목표·**캐릭터·대사·반전** 게임 **서사 설계** + `STORY.md` 바이블·전형↔참신·대사 자동 작성·연속성 린트 |
+| | `item-architect` | 소모품·장비·특수기능·통화·**시너지·획득** 게임 **아이템 설계** + `ITEMS.md` 바이블·`items.json`·복잡도 게이트·visual.* 아이콘 핸드오프·`lint-items.mjs` 밸런스 검증 |
 | | `level-designer` | 레벨·맵(타일맵) **빌드**(구현 패턴) |
 | | `game-ui-hud` | HUD·메뉴·UI 화면 |
 | | `juice-fx` | 파티클·스크린셰이크·게임필 |
@@ -301,6 +306,8 @@ web-game-forge/
 │   ├── platformer-game/  topdown-shooter/  arcade-classic/  puzzle-game/  endless-runner/
 │   ├── world-map-architect/  (+ reference/map-interview · map-design/ MAP-* 원칙 + 위상 카탈로그 + 빌드 패턴)
 │   ├── level-architect/  (+ reference/level-interview · level-design/ LD-* 원칙 + 장르별 레벨 설계)  level-designer/
+│   ├── story-architect/  (+ reference/story-interview · story-design/ ST~TL-* 원칙)
+│   ├── item-architect/  (+ reference/item-interview · item-design/ SCOPE~UX-* 원칙 100여종 + tools/lint-items.mjs 밸런스 validator)
 │   ├── sprite-picker/  (+ catalog/ 검증된 CC0 소스 캐시 · picker/ 브라우저 갤러리 · reference/ 인터뷰·소싱·프로토콜·라이브러리)
 │   ├── sprite-catalog-refresh/  (sprite-picker 카탈로그 웹 재조사·갱신)
 │   ├── sprite-forge/  vector-graphics/  chip-sound/  game-ui-hud/  juice-fx/

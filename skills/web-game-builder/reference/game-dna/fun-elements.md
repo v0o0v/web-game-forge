@@ -41,6 +41,7 @@
 - **대표 게임:** Subway Surfers, Jetpack Joyride, Hollow Knight, Vampire Survivors
 - **우리 엔진 구현:** localStorage 기반 메타 저장(코인·해금 플래그). DataManager로 런타임 상태 관리, game-ui-hud로 수집 카운터·진행 바. 서버 없는 단일플레이라 가챠/시즌 메타는 ❌—해금 트리·업그레이드 상점 같은 로컬 progression으로 축소 재현.
 - **조합 주의:** 수집 그라인드가 길면 FE-JUST-ONE-MORE의 즉시성과 충돌. 무한 성장은 FE-MASTERY(실력)를 '시간 투자'로 대체해 실력 천장을 흐릴 수 있다.
+- **아이템 본격 설계:** *무엇을 수집/획득하는가*(아이템·통화·등급·전리품·드랍 루프)를 설계하려면 [`item-architect`](../../../item-architect/SKILL.md)로 라우팅한다. 획득 동기=몰입은 가변비율·천장(pity)·등급 사다리로 만들되 도박 구조(loot box/gacha)는 차용 금지(`ECON-VARIABLE-RATIO`), 수집은 보상이나 로어로 시간을 존중(`IDENT-MEANINGFUL-COLLECT`). 단, 디폴트는 아이템 0개라 단순 코인 수집이면 이 스킬 없이도 충분.
 
 ### FE-COMBO 연쇄·콤보
 - **정의:** 한 동작이 다음을 연쇄로 터뜨리거나 멀티플라이어가 누적돼 작은 입력이 큰 결과로 증폭되는 쾌감.
@@ -77,6 +78,7 @@
 - **대표 게임:** Vampire Survivors, Brotato, The Binding of Isaac, Nuclear Throne
 - **우리 엔진 구현:** 무기/패시브를 데이터 테이블로 정의하고 레벨업 시 3택 카드 UI(game-ui-hud)를 띄운다. 효과는 스탯 가산/곱산 스택으로 합성, evolution 조건(무기 만렙+짝 패시브)을 룩업으로. topdown-shooter 자동발사 슬롯에 얹는 게 가장 자연스럽다.
 - **조합 주의:** 선택지가 많으면 FE-JUST-ONE-MORE의 즉시성·FE-FLOW를 끊는다(카드 화면=멈춤). 빌드 깊이는 단일플레이 한 세션 안에서 닫히게 설계, 서버 메타 의존 ❌.
+- **아이템 본격 설계:** 빌드를 만드는 *아이템 자체*(소모품·장비·렐릭·시너지·등급·드랍)를 설계하려면 [`item-architect`](../../../item-architect/SKILL.md)로 라우팅한다(복잡도 티어 확정 → `games/<slug>/ITEMS.md` 바이블 + `items.json` → enabler/payoff·가산vs곱산 격리·진화/세트 → 아이콘 visual.* 핸드오프 → `lint-items.mjs` 밸런스 검수). 지배전략·곱연산 폭발·함정템은 이 스킬의 `SYN-*` 원칙으로 차단. 카드 UI는 game-ui-hud, 획득 연출은 juice-fx.
 
 ### FE-ESCALATION 점증 압박
 - **정의:** 시간이 갈수록 속도·밀도·난도가 올라가 결국 무너지는 구조. 끝이 정해진 압박이 긴장을 만든다.
