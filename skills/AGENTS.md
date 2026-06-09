@@ -4,7 +4,7 @@
 # skills/
 
 ## Purpose
-WebGameForge의 **26종 스킬 체계**가 사는 곳. 메인 오케스트레이터 `web-game-builder`가 전체 흐름을 조율하고, 요청 성격에 따라 전문 스킬이 자동 발동한다. 협력 순서는 **장르로 스캐폴드 → 제작요소로 살붙이기 → 품질로 검증·최적화**. 각 스킬은 `SKILL.md`(YAML frontmatter `name`+`description` + 본문 지침)가 진실의 원천이며, 일부는 `reference/`(설계 이론·인터뷰 대본)와 `tools/`(무의존성 `.mjs` validator/베이커)를 동반한다. tight한 description으로 관련 요청에만 발동해 스킬 listing 예산(컨텍스트 ~1%, 개별 캡 1,536자)을 관리한다.
+WebGameForge의 **28종 스킬 체계**가 사는 곳. 메인 오케스트레이터 `web-game-builder`가 전체 흐름을 조율하고, 요청 성격에 따라 전문 스킬이 자동 발동한다. 협력 순서는 **장르로 스캐폴드 → 제작요소로 살붙이기 → 품질로 검증·최적화**. 각 스킬은 `SKILL.md`(YAML frontmatter `name`+`description` + 본문 지침)가 진실의 원천이며, 일부는 `reference/`(설계 이론·인터뷰 대본)와 `tools/`(무의존성 `.mjs` validator/베이커)를 동반한다. tight한 description으로 관련 요청에만 발동해 스킬 listing 예산(컨텍스트 ~1%, 개별 캡 1,536자)을 관리한다.
 
 > **이 디렉터리의 AGENTS.md는 카탈로그/라우터다.** 각 스킬의 상세 동작은 그 스킬의 `SKILL.md`를 직접 읽어라. 복합 구조를 가진 두 허브 스킬은 자체 AGENTS.md를 둔다(`web-game-builder/`, `sprite-picker/`).
 
@@ -24,12 +24,13 @@ WebGameForge의 **26종 스킬 체계**가 사는 곳. 메인 오케스트레이
 | `puzzle-game/` | 테트리스·매치3·2048·뿌요뿌요 (퍼즐 신규 하위장르 포함) |
 | `endless-runner/` | 무한 러너·플래피류 |
 
-### 🛠 제작요소 (11)
+### 🛠 제작요소 (12)
 | Skill | 역할 |
 |-------|------|
 | `sprite-picker/` | 실제 스프라이트/시트/애니를 브라우저 갤러리에서 시각 선택·적용 + 캐싱·로컬 라이브러리 (see `sprite-picker/AGENTS.md`) |
 | `sprite-forge/` | PixelForge 픽셀아트 스프라이트·애니 절차 생성 |
 | `vector-graphics/` | VectorForge 스무스/벡터 그래픽 + 외부 HD CC0 로딩 |
+| `sound-architect/` | 무드·BGM·효과음·적응형 음악 사운드 **설계** + SoundForge(Tone.js)·`AUDIO.md`·`audio.json`·`lint-audio.mjs` (`reference/sound-design/`) |
 | `chip-sound/` | ChipAudio 효과음·BGM 합성 |
 | `world-map-architect/` | 스테이지를 잇는 진행 맵 위상 설계 + 맵 화면 빌드 (`reference/map-design/`) |
 | `level-architect/` | 난이도 곡선·재미 극대화 레벨 **설계**(인터뷰) (`reference/level-design/`) |
@@ -39,13 +40,14 @@ WebGameForge의 **26종 스킬 체계**가 사는 곳. 메인 오케스트레이
 | `game-ui-hud/` | HUD·메뉴·UI 화면 |
 | `juice-fx/` | 파티클·스크린셰이크·게임필 |
 
-### 🧩 Phaser 고급 킷 (4) — `engine/*kit.js`와 1:1
+### 🧩 Phaser 고급 킷 (5) — `engine/*kit.js`와 1:1
 | Skill | 역할 |
 |-------|------|
 | `matter-physics/` | Matter 강체 물리(슬링샷·쌓기·물리퍼즐·래그돌) → `engine/matterkit.js` |
 | `screen-fx/` | 포스트FX 화면 룩(블룸·비네트·CRT·네온) → `engine/screenfx.js` |
 | `lighting-mood/` | 동적 라이팅·분위기(PointLight·안개·밤하늘) → `engine/lightingkit.js` |
 | `path-motion/` | 경로·모션(스플라인 패트롤·방사 탄막·크립) → `engine/pathkit.js` |
+| `virtual-joystick/` | 가상 조이스틱(아날로그/트윈스틱) 터치 컨트롤. 디지털 D-패드와 공존 → `engine/joystickkit.js` |
 
 ### ✅ 품질·운영 (5)
 | Skill | 역할 |
@@ -75,7 +77,7 @@ WebGameForge의 **26종 스킬 체계**가 사는 곳. 메인 오케스트레이
 ## Dependencies
 
 ### Internal
-- 고급 킷 스킬 4종 ↔ `engine/*kit.js`.
+- 고급 킷 스킬 5종 ↔ `engine/*kit.js`(matter-physics·screen-fx·lighting-mood·path-motion·virtual-joystick).
 - `sprite-picker`/`vector-graphics`/`sprite-forge`는 `assets.json`·`assets-library/library.json` 라이선스 게이트와 연동.
 - `ip-license-guard`가 모든 에셋 경로의 최종 라이선스 게이트.
 

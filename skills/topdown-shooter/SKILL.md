@@ -16,16 +16,16 @@ allowed-tools: Read, Write, Edit, Bash
 ## 핵심 레시피
 
 0. **스타일·테마 미지정이면 먼저 물어보기** — 아트 스타일(픽셀 `PixelForge` / 미려한 스무스 `VectorForge`)·테마·분량이 요청에 명시돼 있지 않으면, 코드 전에 `AskUserQuestion`으로 확인한다 (web-game-builder의 '요청 명확화' 참고). 어떤 재미요소를 넣을지 막막하면 [game-dna/shooters-roguelite.md](../web-game-builder/reference/game-dna/shooters-roguelite.md)(Vampire Survivors·Brotato·Geometry Wars 등 분석)와 [fun-elements.md](../web-game-builder/reference/game-dna/fun-elements.md)의 조합 설계법으로 아키타입·재미요소를 제안한다.
-1. `games/<slug>/` 스캐폴딩. `index.html`은 super-runner의 모바일 하니스 + 스크립트 로드 순서(phaser → pixelforge → audio → mobile → game) 따르기.
+1. `games/<slug>/` 스캐폴딩. `index.html`은 super-runner의 모바일 하니스 + 스크립트 로드 순서(phaser → pixelforge → audio → mobile → game) 따르기. **트윈스틱**이면 mobile 다음에 `joystickkit.js` 를 추가한다.
 2. **중력 0**: `physics: { arcade: { gravity: { y: 0 }, debug: false } }`. 탑다운에서는 중력이 없다.
 3. **8방향 이동**: `setVelocity(vx, vy)`. 대각선 이동 시 벡터 정규화(`Phaser.Math.Vector2.normalize`)로 속도 일정하게 유지.
-4. **조준**: 데스크톱은 `scene.input.activePointer` 월드 좌표 → 플레이어 방향 각도(`Phaser.Math.Angle.Between`). 모바일은 우측 가상 영역 드래그 방향.
+4. **조준**: 데스크톱은 `scene.input.activePointer` 월드 좌표 → 플레이어 방향 각도(`Phaser.Math.Angle.Between`). 모바일은 `JoystickKit` 우(조준)스틱의 `joy.state.aim.angle`(트윈스틱).
 5. **총알 오브젝트 풀**: `this.physics.add.group({ maxSize: 30 })`. 발사 시 `group.get()` → `body.reset(x,y)` → `setActive(true).setVisible(true)` → `setVelocityFromRotation(angle, speed)`. 화면 밖 총알은 `killAndHide()`.
 6. **적 스포너**: `this.time.addEvent({ delay: 1500, callback: spawnEnemy, loop: true })`. 적은 플레이어 방향으로 `moveTo` 또는 `velocityFromAngle`.
 7. **충돌 처리**: `physics.add.overlap(bullets, enemies, onHit)`, `physics.add.overlap(enemies, player, onDamage)`. `onHit`에서 `GAME_AUDIO.sfx('stomp')`, `killAndHide` 양쪽.
 8. **웨이브/체력**: 적 처치 수로 웨이브 카운터 증가 → 스폰 주기 단축. 플레이어 HP 0 → 게임오버.
 9. PixelForge로 플레이어·적·총알 스프라이트 정의(`PixelForge.bake`). ChipAudio SFX(`audio.sfx('bump')` 피격, `audio.sfx('die')` 사망). MobileHarness 터치 컨트롤.
-10. **모바일 입력**: 좌측 영역 드래그 = 이동, 우측 영역 드래그 = 조준+자동사격. `MobileHarness.TouchControlsClass`를 좌측 D-패드로 이동, 우측은 씬에서 `input.on('pointermove')` 커스텀 처리.
+10. **모바일 입력(트윈스틱 — 권장)**: `JoystickKit.create(this, { twin:true })`(HUD 씬)로 좌스틱 아날로그 이동 + 우스틱 조준/발사를 한 줄로 얹는다. 게임 update 에서 `joy.state.move`(이동)·`joy.state.aim.angle`(조준)·`joy.state.fire`(발사)를 읽는다. → `virtual-joystick` 스킬, 데모 `games/tiled-topdown/index.html?stick=1`. (직접 `input.on('pointermove')`로 손수 구현하지 말 것 — 멀티터치·플로팅·데드존을 킷이 처리.)
 11. HUD에 HP 바·점수·웨이브 표시. `Title` 씬에서 'Tap to start' + `audio.unlock()`. 로컬 서버로 검증.
 
 ## 짧은 스니펫

@@ -14,7 +14,7 @@
 | `runeburst/` | Runeburst — 별무리 매치 | 매치3. VectorForge + 외부 CC0 룬 젬 SVG(game-icons.net, CC-BY-3.0, `CREDITS.txt`). `assets/gems/` |
 | `is-rule/` | IS — 규칙을 다시 쓰는 퍼즐 | Baba Is You류 규칙 조작 퍼즐 |
 | `style-preview/` | VectorForge 스무스 그래픽 프리뷰 | VectorForge 4가지 스타일 쇼케이스(`index.html` 단독, game.js 없음) |
-| `tiled-topdown/` | GEM DUNGEON | 탑다운 Tiled 데모 — 타일 레이어 충돌의 정석. `level.tmj`·`map.mjs` |
+| `tiled-topdown/` | GEM DUNGEON | 탑다운 Tiled 데모 — 타일 레이어 충돌의 정석. `level.tmj`·`map.mjs`. **`?stick=1`** = JoystickKit 트윈스틱 모드(좌스틱 이동·우스틱 조준/마법볼트 발사) — `virtual-joystick` 실증. 기본 경로는 디지털 D-패드 |
 | `tiled-iso/` | FORGE ISO | 등각/육각 Tiled 맵(`?orient=hex`). `level-iso.tmj`·`level-hex.tmj`·`map-iso.mjs`·`map-hex.mjs` |
 | `tiled-pack/` | FORGE PACK | `TilemapGPULayer`(WebGL) + 외부 CC0 팩 임포트 + `assets.json` 라이선스 게이트. `pack/`(tmj·pack.json·tileset.png) |
 

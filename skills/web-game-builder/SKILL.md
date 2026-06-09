@@ -53,11 +53,12 @@ ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
 - HUD/메뉴/UI → `game-ui-hud`
 - 파티클/스크린셰이크/게임필 → `juice-fx`
 
-**Phaser 고급 4종**(필요한 게임만 — `index.html`에 해당 `engine/*.js` 킷을 phaser 다음·game 이전 추가)
+**Phaser 고급·입력 5종**(필요한 게임만 — `index.html`에 해당 `engine/*.js` 킷을 phaser 다음·game 이전 추가)
 - Matter 강체 물리(슬링샷·쌓기·물리퍼즐·래그돌 — Arcade 로 못 하는 회전·충격·무너짐) → `matter-physics`
 - 포스트FX 화면 룩(블룸·비네트·CRT·네온·컬러그레이딩 — v4 Filter, 전 장르 폴리시) → `screen-fx`
 - 동적 라이팅·분위기(점광원·Simplex Noise 안개·Gradient 밤하늘·앰비언트 — 호러·던전·밤) → `lighting-mood`
 - 경로·모션(스플라인 패트롤·방사 탄막·타워디펜스 크립·앰비언트 드리프트) → `path-motion`
+- 가상 조이스틱(아날로그/트윈스틱 — 360° 방향+세기·이동/조준 분리, 디지털 D-패드와 공존; 탑다운/슈터/러너) → `virtual-joystick`
 
 **품질·운영**
 - 모바일 웹뷰 최적화/감사 → `mobile-webview-tune`
@@ -156,9 +157,10 @@ games/<slug>/
 
 `index.html` 은 `super-runner/index.html` 의 `<head>`(뷰포트 meta + CSS 리셋)와
 스크립트 로드 순서(phaser → pixelforge → audio → mobile → game)를 그대로 따른다.
-**Phaser 고급 4종 킷**(`matterkit`·`screenfx`·`lightingkit`·`pathkit`)을 쓰는 게임은 그 킷의
+**Phaser 고급·입력 킷 5종**(`matterkit`·`screenfx`·`lightingkit`·`pathkit`·`joystickkit`)을 쓰는 게임은 그 킷의
 `engine/*.js` 를 **phaser 다음·game 이전**에 추가한다(미사용 게임엔 넣지 않는다). 통합 예시는
 `games/nocturne/index.html`(스무스/벡터 스타일, Matter+포스트FX+라이팅+경로) 참고.
+입력 킷은 장르로 고른다 — 아날로그/트윈스틱은 `joystickkit`(데모 `tiled-topdown?stick=1`), 디지털 좌우+점프는 `mobile.js`의 D-패드.
 **`sound-architect`(SoundForge) 사운드**를 쓰는 게임은 `engine/tone.js` → `engine/soundforge.js` 를
 **phaser 다음·game 이전**(soundforge 는 tone 다음)에 추가한다. 8비트 ChipAudio(`engine/audio.js`)만
 쓰는 게임엔 tone/soundforge 를 넣지 않는다(게임당 한 오디오 엔진).

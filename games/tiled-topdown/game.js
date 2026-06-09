@@ -22,6 +22,11 @@
   var GAME_AUDIO = new ChipAudio();
   window.GAME_AUDIO = GAME_AUDIO;
 
+  // ?stick=1 → JoystickKit 트윈스틱 모드(좌:이동 / 우:조준·발사). 기본은 디지털 D-패드.
+  var STICK = /[?&]stick=1/.test(location.search);
+  var JOY = null;          // UIScene 에서 JoystickKit.create 로 채움
+  var BOLT_SPEED = 240;
+
   // --- 공유 팔레트 -----------------------------------------------------------
   var TPAL = {
     '.': null, ' ': null,
@@ -198,7 +203,9 @@
         fontFamily: 'monospace', fontSize: '13px', color: '#ffffff', stroke: '#000', strokeThickness: 4
       }).setOrigin(0.5);
       this.tweens.add({ targets: tap, alpha: 0.2, duration: 600, yoyo: true, repeat: -1 });
-      this.add.text(DESIGN_W / 2, 212, '방향키/WASD 이동 · 보석 모두 줍고 포털로', {
+      this.add.text(DESIGN_W / 2, 212,
+        STICK ? '좌스틱 이동 · 우스틱 조준/발사 · 보석 모두 줍고 포털로'
+              : '방향키/WASD 이동 · 보석 모두 줍고 포털로', {
         fontFamily: 'monospace', fontSize: '10px', color: '#c8d2e8'
       }).setOrigin(0.5);
 
@@ -236,8 +243,20 @@
       this.buildPlayer();
       this.setupInput();
       this.setupColliders();
+      if (STICK) this.setupStickCombat();
 
       this.cameras.main.startFollow(this.player, true, 0.16, 0.16);
+    },
+
+    // 트윈스틱 모드 전용: 조준 스틱으로 쏘는 마법 볼트 + 조준 레티클.
+    setupStickCombat: function () {
+      this.bolts = this.physics.add.group({ allowGravity: false });
+      this.aimAngle = 0;
+      this._fireCd = 0; // 프레임 단위 발사 쿨다운(헤드리스 결정성)
+      this.reticle = this.add.circle(this.player.x, this.player.y, 4, 0xffffff, 0)
+        .setStrokeStyle(2, 0x9affff, 0.9).setDepth(7).setVisible(false);
+      this.physics.add.overlap(this.bolts, this.enemies, this.onBoltEnemy, null, this);
+      this.physics.add.collider(this.bolts, this.wallLayer, this.onBoltWall, null, this);
     },
 
     // Tiled 맵: 타일 레이어(벽 충돌) + 오브젝트 스포너
@@ -297,6 +316,8 @@
     setupInput: function () {
       this.cursors = this.input.keyboard.createCursorKeys();
       this.keys = this.input.keyboard.addKeys({ w: 'W', a: 'A', s: 'S', d: 'D' });
+      this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+      this._lastMoveAngle = null;
     },
 
     setupColliders: function () {
@@ -364,6 +385,51 @@
       this.time.delayedCall(2600, function () { self.scene.stop('UI'); self.scene.start('Title'); });
     },
 
+    // 조준 스틱(우): 레티클 표시 + 발사. 키보드는 마지막 이동 방향으로 SPACE 발사.
+    updateAim: function () {
+      if (this._fireCd > 0) this._fireCd--;
+      var a = JOY ? JOY.state.aim : null;
+      var aiming = a && a.active && a.force > 0.05;
+      if (aiming) this.aimAngle = a.angle;
+      if (this.reticle) {
+        if (aiming) {
+          this.reticle.setPosition(
+            this.player.x + Math.cos(this.aimAngle) * 22,
+            this.player.y + Math.sin(this.aimAngle) * 22
+          ).setVisible(true);
+        } else {
+          this.reticle.setVisible(false);
+        }
+      }
+      var fire = (JOY && JOY.state.fire) ||
+        (this.spaceKey && this.spaceKey.isDown && (aiming || this._lastMoveAngle != null));
+      if (fire && this._fireCd <= 0) {
+        var ang = aiming ? this.aimAngle : (this._lastMoveAngle == null ? 0 : this._lastMoveAngle);
+        this.fireBolt(ang);
+        this._fireCd = 11; // ~180ms @60fps
+      }
+    },
+
+    fireBolt: function (angle) {
+      var b = this.bolts.create(this.player.x, this.player.y, 'spark');
+      if (!b) return;
+      b.setTint(0x9affff).setScale(2).setDepth(6);
+      b.body.setAllowGravity(false);
+      b.setVelocity(Math.cos(angle) * BOLT_SPEED, Math.sin(angle) * BOLT_SPEED);
+      b.life = 90; // 프레임 수명 (헤드리스 결정성)
+      GAME_AUDIO.sfx('coin');
+    },
+
+    onBoltEnemy: function (bolt, enemy) {
+      this.popText(enemy.x, enemy.y, '+150', '#ffd23f');
+      enemy.destroy();
+      bolt.destroy();
+      this.state.score += 150;
+      GAME_AUDIO.sfx('bump');
+    },
+
+    onBoltWall: function (bolt) { if (bolt && bolt.destroy) bolt.destroy(); },
+
     update: function () {
       if (this.state.dead || this.state.won) return;
       var p = this.player;
@@ -372,15 +438,34 @@
       var up = this.cursors.up.isDown || this.keys.w.isDown || GAME_INPUT.up;
       var down = this.cursors.down.isDown || this.keys.s.isDown || GAME_INPUT.down;
 
-      var vx = (right ? 1 : 0) - (left ? 1 : 0);
-      var vy = (down ? 1 : 0) - (up ? 1 : 0);
-      // 넉백(무적) 중에는 입력 속도를 덮어쓰지 않고 drag로 자연 감쇠시킨다.
-      if (!p.invuln) {
+      var vx, vy;
+      var stickMove = STICK && JOY && JOY.state.move.active && JOY.state.move.force > 0;
+      if (stickMove && !(left || right || up || down)) {
+        // 아날로그 이동(키보드 입력이 없을 때 스틱 사용)
+        vx = JOY.state.move.x; vy = JOY.state.move.y;
+      } else {
+        vx = (right ? 1 : 0) - (left ? 1 : 0);
+        vy = (down ? 1 : 0) - (up ? 1 : 0);
         if (vx && vy) { vx *= 0.7071; vy *= 0.7071; }
-        p.setVelocity(vx * SPEED, vy * SPEED);
       }
+      // 넉백(무적) 중에는 입력 속도를 덮어쓰지 않고 drag로 자연 감쇠시킨다.
+      if (!p.invuln) p.setVelocity(vx * SPEED, vy * SPEED);
+      if (vx || vy) this._lastMoveAngle = Math.atan2(vy, vx);
       if (vx < 0) p.setFlipX(true); else if (vx > 0) p.setFlipX(false);
       if (vx || vy) p.play('player-walk', true); else p.play('player-idle', true);
+
+      if (STICK) {
+        this.updateAim();
+        // 볼트 수명/경계 정리 (역순 순회 — destroy 안전)
+        if (this.bolts) {
+          var arr = this.bolts.getChildren();
+          for (var bi = arr.length - 1; bi >= 0; bi--) {
+            var b = arr[bi];
+            if (!b || !b.active) continue;
+            if (--b.life <= 0 || b.x < -8 || b.y < -8 || b.x > WORLD_W + 8 || b.y > WORLD_H + 8) b.destroy();
+          }
+        }
+      }
 
       // 골 도달 (전 보석 수집 시)
       if (this.goalSpr && this.state.gemsLeft <= 0) {
@@ -412,7 +497,13 @@
         self.tweens.add({ targets: self.banner, scale: 1, duration: 400, ease: 'Back.out' });
       });
 
-      this.buildDpad();
+      if (STICK) {
+        // 트윈스틱: 좌(이동)/우(조준·발사). JoystickKit 이 매 프레임 자동 갱신.
+        JOY = JoystickKit.create(this, { twin: true, show: true });
+        if (window.TiledTopdown) window.TiledTopdown.joy = JOY;
+      } else {
+        this.buildDpad();
+      }
     },
 
     // 간단 4방향 터치 D-패드(좌하단). 멀티터치 안전: 매 프레임 포인터로 재계산.
@@ -465,5 +556,5 @@
     scene: [BootScene, TitleScene, GameScene, UIScene]
   };
   var game = new Phaser.Game(config);
-  window.TiledTopdown = { game: game, input: GAME_INPUT, audio: GAME_AUDIO };
+  window.TiledTopdown = { game: game, input: GAME_INPUT, audio: GAME_AUDIO, joy: null };
 })();
