@@ -1,0 +1,30 @@
+{
+  "slug": "role-collision-test",
+  "schema_version": 1,
+  "medium": "pixel",
+  "tier": 1,
+  "mood": "custom",
+
+  "master_palette": {
+    "ramps": {
+      "stone": ["#2a2438", "#3c3550", "#574a6e", "#7a6b94"]
+    },
+    "neutrals": { "black": "#120e1a", "white": "#fff3e0" },
+    "background": "#171320"
+  },
+
+  "role_colors": {
+    "player":    "#3a7a3b",
+    "enemy":     "#3c7c3d",
+    "danger":    "#3b7b3c",
+    "pickup":    "#ffd23f",
+    "ui_accent": "#ffb347"
+  },
+
+  "lintConfig": {
+    "min_contrast_ratio": 3.0,
+    "max_palette_colors": 48,
+    "ip_redwords": ["gungeon", "mario", "zelda"],
+    "role_collision_threshold": 25
+  }
+}

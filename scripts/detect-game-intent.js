@@ -54,6 +54,20 @@ process.stdin.on('end', () => {
     'i'
   );
 
+  // 게임 전체의 아트 스타일·룩·무드·팔레트를 정의/통일하려는 의도 (style-architect 넛지)
+  // 주의: 단일 이미지 *생성*(스프라이트 한 장)이 아니라 게임 전체 시각 방향을 잡으려는 의도에 반응.
+  const stylePattern = new RegExp(
+    [
+      '아트\\s*스타일|아트\\s*디렉션|비주얼\\s*톤|스타일\\s*가이드|색\\s*팔레트|컬러\\s*팔레트|팔레트\\s*(통일|정해|잡아|만들)',
+      '(룩|무드|분위기|톤|컬러)[\\s\\S]*(잡아|정해|통일|맞춰|입혀|바꿔|만들)',
+      '(카툰|픽셀|픽셀아트|플랫|벡터)\\s*(룩|풍|느낌|스타일)',
+      '(셀\\s*셰이딩|셰이딩|라인아트|아웃라인|리스킨|컬러\\s*그레이딩)',
+      '\\b(art ?style|art ?direction|visual ?tone|style ?guide|colou?r ?palette|color ?ramp|mood ?board|reskin|cell ?shading|cohesive ?look)\\b',
+      '\\b(cartoon|pixel|flat|vector)\\b[\\s\\S]*\\b(look|style|aesthetic)\\b'
+    ].join('|'),
+    'i'
+  );
+
   const parts = [];
   if (gamePattern.test(prompt)) {
     parts.push([
@@ -69,6 +83,14 @@ process.stdin.on('end', () => {
       '응답 전에 sprite-picker 스킬을 호출해 먼저 "실제 에셋 소싱 vs 절차 생성"을 묻고,',
       '캐싱된 CC0 카탈로그·로컬 파일·이전 사용분을 브라우저 갤러리 피커로 시각 선택하게 하세요(절차 생성은 sprite-forge/vector-graphics 위임).',
       '(The user wants to choose/apply game sprite assets — invoke the sprite-picker skill.)'
+    ].join(' '));
+  }
+  if (stylePattern.test(prompt)) {
+    parts.push([
+      '사용자가 게임 전체의 아트 스타일/룩/무드/팔레트를 정의·통일하려 합니다.',
+      '응답 전에 style-architect 스킬을 호출해 먼저 매체(픽셀↔벡터)·복잡도를 가르고, 룩·무드·master_palette를 정의하세요',
+      '(이 스킬은 이미지를 직접 생성하지 않습니다 — 스프라이트·아이콘 생성은 sprite-forge/vector-graphics/sprite-picker, style-architect는 그 위에서 시각 스타일을 정의·강제하는 디렉션 권위입니다).',
+      '(The user wants to define/unify the game\'s overall art style/look/mood/palette — invoke the style-architect skill, the visual-direction authority that does NOT generate images.)'
     ].join(' '));
   }
 

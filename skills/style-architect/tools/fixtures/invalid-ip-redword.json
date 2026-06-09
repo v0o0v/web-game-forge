@@ -1,0 +1,29 @@
+{
+  "slug": "enter-the-gungeon-clone",
+  "schema_version": 1,
+  "medium": "pixel",
+  "tier": 2,
+  "mood": "cozy-dungeon",
+
+  "master_palette": {
+    "ramps": {
+      "stone": ["#2a2438", "#3c3550", "#574a6e", "#7a6b94"]
+    },
+    "neutrals": { "black": "#120e1a", "white": "#fff3e0" },
+    "background": "#171320"
+  },
+
+  "role_colors": {
+    "player":    "#7ad6ff",
+    "enemy":     "#9a52c7",
+    "danger":    "#e83b2e",
+    "pickup":    "#ffd23f",
+    "ui_accent": "#ffb347"
+  },
+
+  "lintConfig": {
+    "min_contrast_ratio": 3.0,
+    "max_palette_colors": 48,
+    "ip_redwords": ["gungeon", "enter the gungeon", "mario", "zelda", "isaac", "metroid"]
+  }
+}

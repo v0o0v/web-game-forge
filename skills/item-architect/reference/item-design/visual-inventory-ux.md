@@ -64,6 +64,7 @@
 - **정의:** 작은 캔버스는 색 수가 적을수록 명료하다. 게임 전역 마스터 팔레트(16~32색)를 정하고 아이템은 그 안에서만 고른다. 적은 색이 실루엣과 1px 외곽선이 일하게 만든다.
 - **출처:** media.io "fewer colors → shapes/silhouettes do communication"(https://www.media.io/color-palette/pixel-art-color-palette.html), Pixel Art App 32x32 해상도 가이드(색 절제, https://pixelartapp.com/resolutions-guide), Microsoft app icon 가이드.
 - **우리 엔진 구현(작은 웹게임):** `assets/palette.master.json` 전역 팔레트를 sprite-forge·vector-graphics·sprite-picker가 공유. `visual.palette`는 자유 hex가 아니라 마스터의 인덱스/키 참조(통일성 강제). 희귀도 색은 별도 reserved 슬롯(`rarity_colors` 상수). 모바일 OLED 절전 위해 과채도 자제.
+- **상류 권위(D6):** `assets/palette.master.json`은 상류 디렉터 [`style-architect`](../../../style-architect/SKILL.md)(`style.json`의 `master_palette`)가 정한다 — `style.json`이 있으면 아이템은 그 마스터를 **상속**(게임 전 비주얼 응집), 없으면 아이템 §7이 **인라인으로 마스터를 정의**(하위호환).
 - **흔한 실패:** 아이템마다 임의 hex로 팔레트가 100색+ 되어 화면 불협. 마스터 팔레트 없이 도구별 색이 달라 세트가 어긋남.
 - **연관:** `UX-MATERIAL-RAMP`, `UX-CONSISTENT-LIGHT`, `UX-RARITY-MULTI-CHANNEL`, `UX-DESC-SLOTS`
 

@@ -1,0 +1,62 @@
+{
+  "slug": "cozy-crypt-demo",
+  "schema_version": 1,
+  "medium": "pixel",
+  "tier": 2,
+  "mood": "cozy-dungeon",
+  "master_palette": {
+    "ramps": {
+      "stone":      ["#2a2438", "#3c3550", "#574a6e", "#7a6b94"],
+      "wood":       ["#3a2418", "#5a3a22", "#7a4a22", "#a06a34"],
+      "warm_light": ["#5a3a1a", "#a8631e", "#ffb347", "#ffe6a8"],
+      "moss":       ["#23351f", "#395a2e", "#56823f", "#7caa55"],
+      "flesh":      ["#7a4a52", "#c07a6e", "#ffce9e", "#ffe6c8"]
+    },
+    "neutrals": { "black": "#120e1a", "white": "#fff3e0" },
+    "background": "#171320"
+  },
+  "role_colors": {
+    "player": "#7ad6ff",
+    "enemy": "#9a52c7",
+    "danger": "#e83b2e",
+    "pickup": "#ffd23f",
+    "ui_accent": "#ffb347"
+  },
+  "proportions": {
+    "head_to_body": "1:1.2",
+    "silhouette": "chunky-rounded",
+    "min_feature_px": 2
+  },
+  "line": {
+    "outline": "selective",
+    "outline_color": "darker-of-fill",
+    "weight_px": 1
+  },
+  "shading": {
+    "model": "cell",
+    "light_dir": "NW",
+    "ramp_steps": 3,
+    "hue_shift": "warm-light-cool-shadow"
+  },
+  "lighting": {
+    "ambient": { "color": "#171320", "alpha": 0.55 },
+    "point_lights": { "color": "#ffd9a0", "radius": 110, "intensity": 0.9 },
+    "fog": { "enabled": false }
+  },
+  "postfx": {
+    "preset": "warm-dungeon",
+    "bloom": { "threshold": 0.6, "amount": 0.4 },
+    "vignette": { "radius": 0.7, "strength": 0.45 },
+    "color_grade": { "warm": 0.15 }
+  },
+  "canvas_fallback": {
+    "ambient_overlay": "#171320cc",
+    "pre_shade_sprites": true
+  },
+  "render": { "pixelArt": true, "antialias": false, "roundPixels": true },
+  "lintConfig": {
+    "min_contrast_ratio": 3.0,
+    "max_palette_colors": 48,
+    "ip_redwords": ["gungeon", "enter the gungeon", "mario", "zelda", "isaac", "metroid", "binding of isaac"]
+  }
+}

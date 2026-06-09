@@ -154,6 +154,7 @@ node skills/ability-architect/tools/sim-abilities.mjs games/<slug>/abilities.jso
 - **슬롯:** `silhouette`(외곽 한 단어·실루엣 우선) · `material`(불·얼음·강철·전기·그림자…) · `palette`(§8 master_palette 참조, 자유 hex 금지) · `focal_motif`(이 아이콘이 말하는 단 하나) · `vfx_motif`(발동 시 화면 이펙트의 결) · `telegraph_read`(적 입장에서 무엇을 보고 피하나, 적/위험 능력일 때) · `rarity_visual`(등급/궁극 테두리, 색 단독 금지) · `lighting`(기본 NW 상속).
 - **어댑터:** visual.* 한 블록이 → sprite-forge(픽셀 팔레트·프레임 시드) / vector-graphics(베지어·글로우·재질 램프 명세) / sprite-picker(태그·contentType·style 검색쿼리 + 대상 슬롯) 입력으로 변환된다. 자세히는 [presentation-ux.md](./reference/ability-design/presentation-ux.md)의 `UX-DESC-SLOTS` 표.
 - **일관성:** §8 스타일가이드 헤더 상수(팔레트·역할 색·궁극 강조·광원·display_px·kind 시각문법)를 모든 능력이 상속해 한 게임 한 스타일을 유지한다.
+- **master_palette 상류 권위(D6):** §8의 `master_palette`/`assets/palette.master.json`은 상류 디렉터 [`style-architect`](../style-architect/SKILL.md)(`style.json`)이 정한다 — `games/<slug>/style.json`이 있으면 §8은 이를 **상속**(능력 아이콘이 게임 전체 룩과 응집), 없으면 §8이 **인라인으로 정의**(기존 동작 그대로, 하위호환).
 
 ## make-game 적용 게이트 (반드시 묻는 항목)
 - **make-game 적용:** web-game-builder/make-game 흐름에서 게임 청사진 인터뷰(+서사 게이트) 직후, **아이템 게이트 전에** **"이 게임에 ability-architect로 캐릭터 능력/스킬 시스템을 설계해 적용할까요?"를 반드시 묻는다**(능력은 코어 동사에 가장 가깝고, 아이템이 능력을 부여하므로 능력을 먼저 정한다). '네'면 이 워크플로로(복잡도부터), '아니요'면 코어 동사 기본 입력만(능력 0~1개), '나중에'면 게임부터 만들고 중반에 이 스킬로 추가(초·중반 어디서든 가능).

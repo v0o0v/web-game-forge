@@ -58,6 +58,7 @@ enabler/payoff archetype 2~3개 · 진화 레시피 `{base,catalyst,when,into}` 
 
 ### ## 7. 비주얼 스타일가이드(헤더 상수) — *T≥2 (아이콘 있을 때)*
 전역 1회 선언, 개별 레코드가 상속: `master_palette`(16~32색) · `rarity_colors`(등급→hex+테두리+핍) · `light_dir`(NW 고정) · `view_angle` · `display_px`(48) · 카테고리 시각문법 · 실루엣 변주축(`UX-PALETTE-DISCIPLINE`/`UX-RARITY-MULTI-CHANNEL`/`UX-CONSISTENT-LIGHT`, 정의는 [visual-inventory-ux.md](./visual-inventory-ux.md)). 개별 `visual.palette`는 이 표만 참조(자유 hex 금지).
+> **master_palette 상류 권위(D6):** `master_palette`/`assets/palette.master.json`은 상류 디렉터 [`style-architect`](../../../style-architect/SKILL.md)(`style.json`)이 정한다 — `games/<slug>/style.json`이 있으면 §7은 이를 **상속**(게임 전체 룩과 응집), 없으면 §7이 위 표대로 **인라인 정의**(하위호환, 기존 동작 그대로).
 
 ### ## 8. 인벤토리 & UX — *T≥3*
 인벤 모델(없음/슬롯/그리드) · 슬롯 수 · 핫바 배치(엄지영역) · 툴팁 2층(effect/flavor) · 자동관리(`UX-INV-MINIMAL`/`UX-TAP-TARGET`/`UX-AUTO-MANAGE`, 정의는 [visual-inventory-ux.md](./visual-inventory-ux.md)). 인벤토리가 코어가 아니면 최소화/제거, 픽업=즉시효과.

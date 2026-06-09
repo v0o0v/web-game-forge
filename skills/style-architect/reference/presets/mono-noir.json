@@ -1,0 +1,68 @@
+{
+  "slug": "<game-slug>",
+  "schema_version": 1,
+  "medium": "pixel",
+  "tier": 2,
+  "mood": "mono-noir",
+  "_preset": {
+    "title": "Mono Noir",
+    "summary": "한정 톤 흑백 누아르. 차가운 회청색 단색 램프에 단 하나의 핏빛 강조색(danger)으로 긴장을 집중시킨다. 짙은 앰비언트 어둠 + 강한 비네트 + 안개로 필름누아르/스텔스/미스터리 무드. IP-safe 일반화.",
+    "use_when": "느와르/미스터리/스텔스, 한정 팔레트 미니멀, 강조색 1개로 시선 유도, 무드 중심 단편."
+  },
+  "master_palette": {
+    "ramps": {
+      "ash":        ["#101418", "#222a32", "#3e4a55", "#5c6b78"],
+      "fog_gray":   ["#3a444e", "#5a666f", "#7e8a92", "#a9b3ba"],
+      "ink":        ["#070a0d", "#12181d", "#1d262d", "#2b363f"],
+      "accent":     ["#3a0c10", "#7a1620", "#c01f2e", "#ff4d52"]
+    },
+    "neutrals": { "black": "#070a0d", "white": "#e6edf2" },
+    "background": "#0b0e12"
+  },
+  "role_colors": {
+    "player": "#a9b3ba",
+    "enemy": "#5c6b78",
+    "danger": "#c01f2e",
+    "pickup": "#e6edf2",
+    "ui_accent": "#ff4d52"
+  },
+  "proportions": {
+    "head_to_body": "1:1.6",
+    "silhouette": "lean-angular",
+    "min_feature_px": 2
+  },
+  "line": {
+    "outline": "selective",
+    "outline_color": "#070a0d",
+    "weight_px": 1
+  },
+  "shading": {
+    "model": "cell",
+    "light_dir": "NW",
+    "ramp_steps": 3,
+    "hue_shift": "value-only"
+  },
+  "lighting": {
+    "ambient": { "color": "#0b0e12", "alpha": 0.7 },
+    "point_lights": { "color": "#cfe0ec", "radius": 100, "intensity": 0.85 },
+    "fog": { "enabled": true, "color": "#9aa6b0", "alpha": 0.16 }
+  },
+  "postfx": {
+    "preset": "night",
+    "bloom": { "threshold": 0.7, "amount": 0.3 },
+    "vignette": { "radius": 0.6, "strength": 0.6 },
+    "color_grade": { "warm": 0.0 }
+  },
+  "canvas_fallback": {
+    "ambient_overlay": "#0b0e12cc",
+    "pre_shade_sprites": true
+  },
+  "render": { "pixelArt": true, "antialias": false, "roundPixels": true },
+  "lintConfig": {
+    "min_contrast_ratio": 3.0,
+    "max_palette_colors": 32,
+    "known_moods": ["mono-noir", "custom"],
+    "known_postfx_presets": ["night", "custom"],
+    "ip_redwords": ["sin city", "max payne", "mario", "zelda"]
+  }
+}

@@ -36,6 +36,8 @@ ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
 - 무한 러너·플래피류 → `endless-runner`
 
 **제작 요소**
+- 비주얼 아트 디렉션 설계(룩·무드·팔레트·셰이딩·라인·라이팅·포스트FX를 **정의·강제**) → `style-architect`
+  (게임 전체의 **시각 스타일 권위** 레인. **이미지를 직접 생성하지 않고**(생성은 sprite-forge/vector-graphics/sprite-picker), `master_palette`·역할색·셰이딩·광원·무드를 한 번 정의해 모든 에셋·HUD·juice·라이팅이 상속하게 한다. 아트 디렉션 적용 여부는 **story 게이트 전(또는 함께)**에 사용자에게 묻는다 — 룩은 톤과 함께 인상을 좌우하고 이후 story·ability·item의 비주얼이 이 팔레트를 상속하므로 **시퀀스는 style → story → ability → item**. 단 **복잡도·매체부터** 가르고 디폴트는 제한 팔레트 + 무드 하나라 작은 게임엔 과설계를 권하지 않는다. `games/<slug>/STYLE.md` 바이블 + `style.json` + `assets/palette.master.json` 산출, `engine/stylekit.js`로 배선, `tools/lint-style.mjs`로 대비·색 수·IP 금칙어 검수. 초반(룩 확정)·중반(리스킨·무드 변경) 모두 가능)
 - 실제 스프라이트/시트/애니메이션을 **시각적으로 골라 적용**(CC0 카탈로그·로컬 파일·이전 사용분) → `sprite-picker`
   (아트를 어떻게 채울지 = **실제 에셋 소싱 vs 절차 생성** 결정 게이트. 카탈로그 갱신은 `sprite-catalog-refresh`)
 - 스프라이트/타일/애니메이션 (픽셀아트, **절차 생성**) → `sprite-forge`
