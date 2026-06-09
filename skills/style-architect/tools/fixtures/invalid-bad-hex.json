@@ -1,0 +1,29 @@
+{
+  "slug": "bad-hex-test",
+  "schema_version": 1,
+  "medium": "pixel",
+  "tier": 1,
+  "mood": "custom",
+
+  "master_palette": {
+    "ramps": {
+      "stone": ["#zzzzzz", "#3c3550", "not-a-color", "#7a6b94"]
+    },
+    "neutrals": { "black": "#120e1a", "white": "ffffff" },
+    "background": "171320"
+  },
+
+  "role_colors": {
+    "player":    "rgb(100,200,255)",
+    "enemy":     "#9a52c7",
+    "danger":    "#e83b2e",
+    "pickup":    "#ffd23f",
+    "ui_accent": "#ffb347"
+  },
+
+  "lintConfig": {
+    "min_contrast_ratio": 3.0,
+    "max_palette_colors": 48,
+    "ip_redwords": ["gungeon", "mario", "zelda"]
+  }
+}

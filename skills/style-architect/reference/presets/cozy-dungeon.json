@@ -1,0 +1,69 @@
+{
+  "slug": "<game-slug>",
+  "schema_version": 1,
+  "medium": "pixel",
+  "tier": 2,
+  "mood": "cozy-dungeon",
+  "_preset": {
+    "title": "Cozy Dungeon",
+    "summary": "따뜻한 횃불빛이 도는 아늑한 던전. 차가운 돌·나무 재질 위에 주황 점광원과 부드러운 비네트로 '위험하지만 포근한' 탐험 무드. IP-safe 일반화 — 특정 상용 던전 게임의 에셋/이름/시그니처를 복제하지 않고 무드만 차용.",
+    "use_when": "지하/동굴/지하감옥 탐험, 횃불·모닥불 광원, 로그라이크/메트로배니아, 따뜻한 픽셀 룩."
+  },
+  "master_palette": {
+    "ramps": {
+      "stone":      ["#2a2438", "#3c3550", "#574a6e", "#7a6b94"],
+      "wood":       ["#3a2418", "#5a3a22", "#7a4a22", "#a06a34"],
+      "warm_light": ["#5a3a1a", "#a8631e", "#ffb347", "#ffe6a8"],
+      "moss":       ["#23351f", "#395a2e", "#56823f", "#7caa55"],
+      "flesh":      ["#7a4a52", "#c07a6e", "#ffce9e", "#ffe6c8"]
+    },
+    "neutrals": { "black": "#120e1a", "white": "#fff3e0" },
+    "background": "#171320"
+  },
+  "role_colors": {
+    "player": "#7ad6ff",
+    "enemy": "#9a52c7",
+    "danger": "#e83b2e",
+    "pickup": "#ffd23f",
+    "ui_accent": "#ffb347"
+  },
+  "proportions": {
+    "head_to_body": "1:1.2",
+    "silhouette": "chunky-rounded",
+    "min_feature_px": 2
+  },
+  "line": {
+    "outline": "selective",
+    "outline_color": "darker-of-fill",
+    "weight_px": 1
+  },
+  "shading": {
+    "model": "cell",
+    "light_dir": "NW",
+    "ramp_steps": 3,
+    "hue_shift": "warm-light-cool-shadow"
+  },
+  "lighting": {
+    "ambient": { "color": "#171320", "alpha": 0.55 },
+    "point_lights": { "color": "#ffd9a0", "radius": 110, "intensity": 0.9 },
+    "fog": { "enabled": false }
+  },
+  "postfx": {
+    "preset": "warm-dungeon",
+    "bloom": { "threshold": 0.6, "amount": 0.4 },
+    "vignette": { "radius": 0.7, "strength": 0.45 },
+    "color_grade": { "warm": 0.15 }
+  },
+  "canvas_fallback": {
+    "ambient_overlay": "#171320cc",
+    "pre_shade_sprites": true
+  },
+  "render": { "pixelArt": true, "antialias": false, "roundPixels": true },
+  "lintConfig": {
+    "min_contrast_ratio": 3.0,
+    "max_palette_colors": 48,
+    "known_moods": ["cozy-dungeon", "custom"],
+    "known_postfx_presets": ["warm-dungeon", "custom"],
+    "ip_redwords": ["gungeon", "enter the gungeon", "mario", "zelda", "isaac", "metroid", "binding of isaac"]
+  }
+}

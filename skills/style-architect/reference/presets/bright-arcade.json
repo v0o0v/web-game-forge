@@ -1,0 +1,69 @@
+{
+  "slug": "<game-slug>",
+  "schema_version": 1,
+  "medium": "pixel",
+  "tier": 2,
+  "mood": "bright-arcade",
+  "_preset": {
+    "title": "Bright Arcade",
+    "summary": "쨍한 원색 하이키 아케이드 룩. 검은 배경 위 네온 가까운 채도의 캐릭터·픽업, 가벼운 블룸으로 CRT 캐비닛 느낌. 밝고 즉각적이며 읽기 쉬운 캐주얼/스코어어택 무드. IP-safe 일반화.",
+    "use_when": "캐주얼/스코어어택, 슈무프, 퐁·브레이크아웃류, 밝고 또렷한 원색 룩, 파티 게임."
+  },
+  "master_palette": {
+    "ramps": {
+      "primary":    ["#1b2a55", "#2f5bd0", "#3f9bff", "#9fe0ff"],
+      "hot":        ["#7a1030", "#d62246", "#ff5a78", "#ffb3c2"],
+      "lime":       ["#1f5a1a", "#3fae2f", "#7be03f", "#d3ff9f"],
+      "sun":        ["#7a4a00", "#d99000", "#ffc83f", "#fff0a8"],
+      "steel":      ["#1a2030", "#34405a", "#5a6a8a", "#9fb0d0"]
+    },
+    "neutrals": { "black": "#0a0c14", "white": "#ffffff" },
+    "background": "#0a0c14"
+  },
+  "role_colors": {
+    "player": "#3f9bff",
+    "enemy": "#ff5a78",
+    "danger": "#ff2d3f",
+    "pickup": "#ffc83f",
+    "ui_accent": "#7be03f"
+  },
+  "proportions": {
+    "head_to_body": "1:1.4",
+    "silhouette": "bold-blocky",
+    "min_feature_px": 2
+  },
+  "line": {
+    "outline": "full",
+    "outline_color": "#0a0c14",
+    "weight_px": 1
+  },
+  "shading": {
+    "model": "flat",
+    "light_dir": "N",
+    "ramp_steps": 2,
+    "hue_shift": "saturate-light"
+  },
+  "lighting": {
+    "ambient": { "color": "#0a0c14", "alpha": 0.18 },
+    "point_lights": { "color": "#9fe0ff", "radius": 90, "intensity": 0.7 },
+    "fog": { "enabled": false }
+  },
+  "postfx": {
+    "preset": "neon",
+    "bloom": { "threshold": 0.45, "amount": 0.65 },
+    "vignette": { "radius": 0.8, "strength": 0.25 },
+    "color_grade": { "warm": 0.0 }
+  },
+  "canvas_fallback": {
+    "ambient_overlay": "#0a0c1433",
+    "pre_shade_sprites": false
+  },
+  "render": { "pixelArt": true, "antialias": false, "roundPixels": true },
+  "lintConfig": {
+    "min_contrast_ratio": 3.0,
+    "max_palette_colors": 48,
+    "known_moods": ["bright-arcade", "custom"],
+    "known_postfx_presets": ["neon", "custom"],
+    "ip_redwords": ["pac-man", "pacman", "galaga", "space invaders", "mario", "sonic", "tetris"]
+  }
+}

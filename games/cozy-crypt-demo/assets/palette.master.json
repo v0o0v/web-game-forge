@@ -1,0 +1,21 @@
+{
+  "_comment": "master_palette 단일 진실(상류). style.json 의 master_palette 와 동일하게 유지하며, sprite-forge·item-architect·ability-architect·game-ui-hud·juice-fx 가 이 파일의 색을 상속한다. style.json 있으면 권위, 없으면 인라인 하위호환(D6).",
+  "slug": "cozy-crypt-demo",
+  "schema_version": 1,
+  "ramps": {
+    "stone":      ["#2a2438", "#3c3550", "#574a6e", "#7a6b94"],
+    "wood":       ["#3a2418", "#5a3a22", "#7a4a22", "#a06a34"],
+    "warm_light": ["#5a3a1a", "#a8631e", "#ffb347", "#ffe6a8"],
+    "moss":       ["#23351f", "#395a2e", "#56823f", "#7caa55"],
+    "flesh":      ["#7a4a52", "#c07a6e", "#ffce9e", "#ffe6c8"]
+  },
+  "neutrals": { "black": "#120e1a", "white": "#fff3e0" },
+  "background": "#171320",
+  "role_colors": {
+    "player": "#7ad6ff",
+    "enemy": "#9a52c7",
+    "danger": "#e83b2e",
+    "pickup": "#ffd23f",
+    "ui_accent": "#ffb347"
+  }
+}

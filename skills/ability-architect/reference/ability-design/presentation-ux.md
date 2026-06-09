@@ -60,6 +60,7 @@ HUD에 능력 정보가 과하면 게임 화면을 가린다. 핵심(쿨다운·
 
 ## §8 스타일가이드 헤더 상수 (한 게임 한 스타일)
 모든 능력 아이콘이 상속하는 상수를 ABILITIES.md §8에 둔다: `master_palette`(능력 공통 팔레트) · `role_colors`(주력/생존/이동/CC/버프 색) · `ultimate_accent`(궁극 강조) · `lighting`(광원 방향) · `display_px`(스킬바 크기) · `kind_grammar`(kind별 시각 문법 — 액티브=꽉 찬, 패시브=은은한 외곽 등). visual.* 슬롯이 이 상수를 참조해 일관성 유지.
+> **master_palette 상류 권위(D6):** `master_palette`/`assets/palette.master.json`은 상류 디렉터 [`style-architect`](../../../style-architect/SKILL.md)(`style.json`)이 정한다 — `games/<slug>/style.json`이 있으면 §8은 이를 **상속**(능력 아이콘이 게임 전체 룩과 응집), 없으면 §8이 위 상수를 **인라인 정의**(하위호환, 기존 동작 그대로).
 
 ## 기계 검증 훅 (lint-abilities.mjs)
 - `visual.*` 필수 슬롯 미채움 → `schema` warn(아이콘 품질 저하).

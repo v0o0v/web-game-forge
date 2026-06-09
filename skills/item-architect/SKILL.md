@@ -128,6 +128,7 @@ node skills/item-architect/tools/lint-items.mjs games/<slug>/items.json
 - **슬롯:** `silhouette`(외곽 한 단어·실루엣 우선) · `primary_shape`(베지어/픽셀 시드) · `material`(metal/wood/gem/cloth/stone/glass…) · `palette`(§7 master_palette 참조, 자유 hex 금지) · `focal_motif`(이 아이콘이 말하는 단 하나) · `negative_space` · `rarity_visual`(테두리+핍+글로우, 색 단독 금지 `UX-RARITY-MULTI-CHANNEL`) · `lighting`(기본 NW 상속) · `evolve_from`(진화체 base).
 - **어댑터:** visual.* 한 블록이 → sprite-forge(픽셀 팔레트·프레임 시드) / vector-graphics(베지어·글로우·재질 램프 명세) / sprite-picker(태그·contentType·style 검색쿼리 + 대상 슬롯) 입력으로 변환된다. 자세히는 [visual-inventory-ux.md](./reference/item-design/visual-inventory-ux.md)의 `UX-DESC-SLOTS` 표.
 - **일관성:** §7 스타일가이드 헤더 상수(팔레트·등급 색·광원·display_px·카테고리 시각문법)를 모든 아이템이 상속해 한 게임 한 스타일을 유지한다.
+- **master_palette 상류 권위(D6):** §7의 `master_palette`/`assets/palette.master.json`은 상류 디렉터 [`style-architect`](../style-architect/SKILL.md)(`style.json`)이 정한다 — `games/<slug>/style.json`이 있으면 §7은 이를 **상속**(아이템 아이콘이 게임 전체 룩과 응집), 없으면 §7이 **인라인으로 정의**(기존 동작 그대로, 하위호환).
 
 ## make-game 적용 게이트 (반드시 묻는 항목)
 - **make-game 적용:** web-game-builder/make-game 흐름에서 게임 청사진 인터뷰(+서사 게이트) 직후 **"이 게임에 item-architect로 아이템 시스템을 설계해 적용할까요?"를 반드시 묻는다**. '네'면 이 워크플로로(복잡도부터), '아니요'면 장르 기본 픽업(코인·파워업 1개)만, '나중에'면 게임부터 만들고 중반에 이 스킬로 추가(초·중반 어디서든 가능).

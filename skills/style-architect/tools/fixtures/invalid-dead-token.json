@@ -1,0 +1,33 @@
+{
+  "slug": "dead-token-test",
+  "schema_version": 1,
+  "medium": "pixel",
+  "tier": 1,
+  "mood": "custom",
+
+  "master_palette": {
+    "ramps": {
+      "stone":      ["#2a2438", "#3c3550", "#574a6e", "#7a6b94"],
+      "wood":       ["#3a2418", "#5a3a22", "#7a4a22", "#a06a34"],
+      "unused_ramp_alpha": ["#ff0000", "#ff4444", "#ff8888", "#ffcccc"],
+      "unused_ramp_beta":  ["#0000ff", "#4444ff", "#8888ff", "#ccccff"]
+    },
+    "neutrals": { "black": "#120e1a", "white": "#fff3e0" },
+    "background": "#171320"
+  },
+
+  "role_colors": {
+    "player":    "#7ad6ff",
+    "enemy":     "#9a52c7",
+    "danger":    "#e83b2e",
+    "pickup":    "#ffd23f",
+    "ui_accent": "#ffb347",
+    "custom_unused_role": "#aabbcc"
+  },
+
+  "lintConfig": {
+    "min_contrast_ratio": 3.0,
+    "max_palette_colors": 48,
+    "ip_redwords": ["gungeon", "mario", "zelda"]
+  }
+}
