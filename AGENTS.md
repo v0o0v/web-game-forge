@@ -3,7 +3,7 @@
 # WebGameForge (plugin id: `web-game-builder`)
 
 ## Purpose
-**WebGameForge**는 "슈퍼마리오 게임 만들어줘" 같은 자연어 한 줄로 모바일 웹뷰에서 잘 도는 완성도 높은 2D 웹 게임을 자동 생성하는 **Claude Code 플러그인**이다. 검증된 엔진 스택(Phaser 4.1.0 + 절차적 에셋/사운드 + 모바일 하니스)과 26종의 전문 스킬을 조합해, 게임 제작 의도를 자동 감지하고 스프라이트 애니메이션·HUD·터치 컨트롤·8비트 사운드까지 갖춘 게임을 벼려낸다. 모든 에셋은 CC0 또는 절차적 생성(외부 저작물 미사용)이다.
+**WebGameForge**는 "슈퍼마리오 게임 만들어줘" 같은 자연어 한 줄로 모바일 웹뷰에서 잘 도는 완성도 높은 2D 웹 게임을 자동 생성하는 **Claude Code 플러그인**이다. 검증된 엔진 스택(Phaser 4.1.0 + 절차적 에셋/사운드 + 모바일 하니스)과 27종의 전문 스킬을 조합해, 게임 제작 의도를 자동 감지하고 스프라이트 애니메이션·HUD·터치 컨트롤(디지털 D-패드+아날로그 가상조이스틱)·8비트 사운드까지 갖춘 게임을 벼려낸다. 모든 에셋은 CC0 또는 절차적 생성(외부 저작물 미사용)이다.
 
 > **WebGameForge** = 프로젝트/저장소 브랜드명. `web-game-builder` = 슬래시 커맨드·스킬 네임스페이스에 쓰는 플러그인 내부 식별자. 둘은 같은 것을 가리킨다.
 
@@ -22,8 +22,8 @@
 | `commands/` | 슬래시 커맨드 `/web-game-builder:make-game` (see `commands/AGENTS.md`) |
 | `hooks/` | `UserPromptSubmit` 의도 감지 훅 등록 (see `hooks/AGENTS.md`) |
 | `scripts/` | 한/영 게임 의도 감지 스크립트 3종 (see `scripts/AGENTS.md`) |
-| `engine/` | 재사용 엔진 라이브러리 9종 + vendored Phaser (see `engine/AGENTS.md`) |
-| `skills/` | 26종 스킬 체계 — 장르·제작요소·품질·고급 킷 (see `skills/AGENTS.md`) |
+| `engine/` | 재사용 엔진 라이브러리 11종 + vendored Phaser/Tone.js (see `engine/AGENTS.md`) |
+| `skills/` | 28종 스킬 체계 — 장르·제작요소·품질·고급 킷 (see `skills/AGENTS.md`) |
 | `games/` | 데모 게임 8종 (엔진·스킬 실증) (see `games/AGENTS.md`) |
 | `assets-library/` | 이전 사용 스프라이트 로컬 보관 (사용자 자산) (see `assets-library/AGENTS.md`) |
 | `docs/` | 아키텍처 설계 명세 + 스크린샷 (see `docs/AGENTS.md`) |

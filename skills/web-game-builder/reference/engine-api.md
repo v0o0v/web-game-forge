@@ -154,3 +154,62 @@ this.scene.launch('TouchControls');
 > `inputState`(예: `GAME_INPUT = {left,right,up}`)는 터치 전용. 키보드는 게임 씬에서
 > `cursors`/`keys` 로 직접 읽어 OR 합친다. (TouchControls 가 매 프레임 inputState 를
 > 포인터 기준으로 덮어쓰므로, 키보드 값을 inputState 에 넣지 말 것.)
+
+---
+
+## JoystickKit — 가상 조이스틱 (아날로그/트윈스틱) (`engine/joystickkit.js`)
+
+선택 킷. Phaser 4 멀티터치 포인터를 읽어 **360° 방향 + 세기(force)** 벡터를 만든다.
+`MobileHarness.TouchControls`(디지털 좌/우/점프)와 달리 가변 방향·가변 세기를 주며, 둘은
+독립적으로 **공존**한다(플랫포머=D-패드, 탑다운/슈터/러너=조이스틱). 전용 스킬: `virtual-joystick`.
+
+### `JoystickKit.create(scene, opts)` → controller
+**카메라가 스크롤/줌 되지 않는 씬(HUD/UI)**의 `create()`에서 호출한다(게임 씬에서 만들면
+포인터 월드좌표와 베이스 화면좌표가 어긋난다). 매 프레임 자동 갱신(`game.step()`에서도 발화).
+
+| opts 키 | 기본값 | 설명 |
+|---|---|---|
+| `twin` | false | 트윈스틱(이동+조준). false면 이동 스틱 1개 |
+| `radius` | min(W,H)*0.16 | 스틱 반경(디자인 px) |
+| `deadzone` | 0.16 | 미만은 0, 바깥은 0~1 재정규화 |
+| `show` | 터치 시 | 시각 표시 |
+| `autoUpdate` | true | 씬 update 자동 훅(false면 `joy.update()` 직접) |
+| `move` / `aim` | 좌하단/우하단 플로팅 | 스틱 설정(아래) |
+
+스틱 설정(`move`/`aim`): `{ mode:'floating'|'fixed', x, y, zone:'left'|'right'|'all'|{x,y,w,h}, color, fireThreshold }`.
+`floating`=처음 누른 곳에 베이스 생성, `fixed`=고정 베이스. twin 기본 zone: move=`left`, aim=`right`.
+
+### `controller.state` (게임이 읽는 출력)
+```js
+joy.state = {
+  move: { x, y, angle, force, active },  // x,y ∈ [-1,1], force ∈ [0,1]
+  aim:  { x, y, angle, force, active },  // twin일 때
+  fire: false                            // aim.force >= fireThreshold(기본 0.35)
+};
+// 게임 update():
+player.setVelocity(joy.state.move.x * SPEED, joy.state.move.y * SPEED);
+if (joy.state.fire) shootToward(joy.state.aim.angle);
+```
+
+### `controller.inject(spec)` / `controller.clearInject()`
+포인터 없이 벡터 주입 → `game-qa` 헤드리스 step 검증용. `clearInject()`로 실 포인터 복귀.
+```js
+joy.inject({ move:{x:1,y:0}, aim:{x:0,y:-1, fire:true} });  // 우 이동 + 위 조준 발사
+```
+
+### `controller.setVisible(v)` / `controller.destroy()`
+표시 토글 / 정리(그래픽 제거 + update 훅 해제). 씬 `shutdown` 시 자동 destroy.
+
+### `JoystickKit.SceneClass(opts)` → Phaser.Scene 클래스
+`TouchControlsClass`처럼 독립 최상단 씬으로. 인스턴스 `.joy`로 접근, `opts.onReady(joy)` 콜백.
+
+```js
+// index.html: <script src="../../engine/joystickkit.js"></script> (phaser 다음)
+// HUD 씬 create():
+var joy = JoystickKit.create(this, { twin: true });
+window.MyGame.joy = joy;
+```
+
+> 데모: `games/tiled-topdown/index.html?stick=1` (GEM DUNGEON 트윈스틱 모드 — 좌스틱 이동,
+> 우스틱 조준·마법볼트 발사). 기본 경로(`?stick=1` 없음)는 디지털 D-패드 그대로.
+> 멀티터치는 `game.input.manager.pointers`를 스틱별 id 로 바인딩한다(씬-로컬 input.pointers 금지).

@@ -20,6 +20,8 @@
 - [ ] **Scale.FIT + CENTER_BOTH**, 고정 디자인 해상도 1개. (`MobileHarness.scaleConfig`)
 - [ ] **멀티터치**: `this.input.addPointer(2+)` — D-패드 + 점프 동시 입력.
       (`MobileHarness.TouchControlsClass` 가 처리)
+- [ ] **아날로그/트윈스틱 입력**(탑다운·슈터·러너): 디지털 D-패드 대신 `JoystickKit`(`engine/joystickkit.js`)
+      으로 360° 방향+세기·이동/조준 분리. HUD 씬에서 `JoystickKit.create(this, { twin:true })`. → `virtual-joystick`
 
 ## 성능 (60fps 목표)
 - [ ] update() 루프에서 **프레임당 할당 금지**(객체/배열 리터럴·클로저·문자열 연결 X) — GC

@@ -4,14 +4,14 @@
 
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Phaser](https://img.shields.io/badge/engine-Phaser%204.1-blueviolet)
-![Skills](https://img.shields.io/badge/skills-27-orange)
+![Skills](https://img.shields.io/badge/skills-28-orange)
 ![Phaser refs](https://img.shields.io/badge/phaser--refs-28-informational)
 ![Assets](https://img.shields.io/badge/assets-CC0%20%2F%20IP--safe-success)
 ![Mobile](https://img.shields.io/badge/mobile--webview-ready-success)
 
 기존 클로드 코드에 "웹 게임 만들어줘"라고 하면 바닐라 JS 수준의 투박한 결과가 나옵니다.
 **WebGameForge는 게임 제작 의도를 자동 감지**해, 검증된 엔진 스택(Phaser 4(4.1.0) + 절차적 에셋/사운드 +
-모바일 하니스)과 전문 스킬 26종으로 **스프라이트 애니메이션·HUD·터치 컨트롤·장르별 사운드(8비트 칩튠부터
+모바일 하니스)과 전문 스킬 27종으로 **스프라이트 애니메이션·HUD·터치 컨트롤(디지털 D-패드+아날로그 가상조이스틱)·장르별 사운드(8비트 칩튠부터
 신스웨이브·앰비언트·적응형 음악까지) 갖춘 게임**을 만들어 줍니다.
 
 > 플러그인 내부 식별자는 `web-game-builder` 입니다(슬래시 커맨드·스킬 네임스페이스에 사용).
@@ -31,7 +31,8 @@
 - **🎮 Phaser 4 기반** — Arcade 물리·타일맵·스프라이트 애니메이션·카메라 추적·HUD가 전부 1급 API로
   내장된 엔진(vendored `engine/phaser.min.js`, v4.1.0, MIT)을 사용합니다.
 - **📱 모바일 웹뷰 대응** — iOS WKWebView, 카카오/인스타 인앱 브라우저까지 커버하는 Scale.FIT,
-  'Tap to start' 오디오 언락, 멀티터치 가상 D-패드+점프 버튼이 기본 포함됩니다.
+  'Tap to start' 오디오 언락, 멀티터치 가상 D-패드+점프 버튼이 기본 포함됩니다. 탑다운·트윈스틱·러너에는
+  아날로그 **가상조이스틱**(`JoystickKit` — 360° 방향+세기·이동/조준 분리)을 D-패드와 장르별로 골라 씁니다.
 - **🎨 두 가지 아트 스타일** — 픽셀아트(`PixelForge`)와 **미려한 스무스/벡터**(`VectorForge` —
   그라데이션·글로우·소프트섀도우·글래스모피즘·곡선 캐릭터)를 모두 코드로 생성합니다. 게임당 한 스타일.
 - **⚖️ CC0 / IP-safe 에셋** — 외부 파일 없이 절차적으로 생성하거나, 외부 HD CC0 아트를 라이선스
@@ -40,7 +41,7 @@
   Tone.js v15)가 ADSR·필터·슈퍼소우·FM·노이즈 퍼커션·절차 리버브·**적응형 레이어드 음악**을 코드 합성합니다 —
   칩튠·신스웨이브·앰비언트·로파이·아케이드. 아주 작은/레트로 게임은 `ChipAudio` 8비트 경량 레인(`chip-sound`).
   오디오 파일 0개, 100% CC0(절차 합성 오리지널).
-- **🧩 27종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 12(서사·아이템·**사운드** 디렉터 포함) + **Phaser 고급 4**(Matter 물리·포스트FX·라이팅·경로) + 품질·운영 5 + 메인 오케스트레이터.
+- **🧩 28종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 12(서사·아이템·**사운드** 디렉터 포함) + **Phaser 고급 5**(Matter 물리·포스트FX·라이팅·경로·**가상조이스틱**) + 품질·운영 5 + 메인 오케스트레이터.
 - **📖 게임 서사 설계** — `story-architect`가 톤·스토리·목표·캐릭터·대사·반전을 탑다운 인터뷰로 설계해
   `STORY.md` 스토리 바이블로 산출하고 인트로/막간/엔딩·환경 단서·NPC 대사로 입힙니다(전형 vs 참신 선택, 대사 자동 작성, 연속성 린트).
 - **🎒 게임 아이템 설계** — `item-architect`가 소모품·장비·특수기능·통화·시너지 등 **습득·사용하는 모든 것**을
@@ -181,7 +182,7 @@ http://127.0.0.1:8766/games/super-runner/index.html
 
 ---
 
-## 🧩 스킬 카탈로그 (27종)
+## 🧩 스킬 카탈로그 (28종)
 
 메인 `web-game-builder`가 전체 흐름을 조율하고, 요청 성격에 따라 전문 스킬이 자동 발동합니다.
 **장르로 스캐폴드 → 제작요소로 살붙이기 → 품질로 검증·최적화** 순서로 협력합니다.
@@ -210,6 +211,7 @@ http://127.0.0.1:8766/games/super-runner/index.html
 | | `screen-fx` | 포스트FX 화면 룩(블룸·비네트·CRT·네온 글로우·컬러그레이딩) — v4 Filter, 전 장르 폴리시 |
 | | `lighting-mood` | 동적 라이팅·분위기(PointLight·Simplex Noise 안개·Gradient 밤하늘·앰비언트) |
 | | `path-motion` | 경로·모션(스플라인 패트롤·방사 탄막·타워디펜스 크립·앰비언트 드리프트) |
+| | `virtual-joystick` | 가상 조이스틱(아날로그/트윈스틱) 터치 컨트롤 — 360° 방향+세기·이동/조준 분리. 디지털 D-패드와 장르별 공존 |
 | ✅ 품질·운영 | `mobile-webview-tune` | 모바일 웹뷰 최적화·감사 |
 | | `game-qa` | 헤드리스 step 하니스 동작 검증 |
 | | `ip-license-guard` | 저작권·라이선스 안전 점검 |
@@ -251,7 +253,7 @@ Phaser 4 API 의 정확한 사용법(씬 라이프사이클·물리·스케일·
 
 ---
 
-## ⚙️ 엔진 라이브러리 9종 (`engine/`)
+## ⚙️ 엔진 라이브러리 11종 (`engine/`)
 
 ### PixelForge (`pixelforge.js`)
 문자 그리드로 정의한 스프라이트를 Phaser 텍스처로 굽는 절차적 픽셀아트 생성기. 외부 이미지 0,
@@ -334,13 +336,14 @@ var res = TiledForge.loadTiledMap(this, 'pack-map', {
 > 자세한 API는 [skills/web-game-builder/reference/engine-api.md](skills/web-game-builder/reference/engine-api.md).
 > Tiled 저작 가이드: [skills/level-designer/reference/tiled/authoring.md](skills/level-designer/reference/tiled/authoring.md).
 
-### Phaser 고급 4종 킷 (`matterkit.js` · `screenfx.js` · `lightingkit.js` · `pathkit.js`)
+### Phaser 고급·입력 킷 5종 (`matterkit.js` · `screenfx.js` · `lightingkit.js` · `pathkit.js` · `joystickkit.js`)
 Phaser 4 의 고급 기능을 한 줄 API 로 감싼 **선택적 킷**. 게임이 필요할 때만 `index.html` 에 스크립트로 추가한다(phaser 다음). 미사용 게임엔 부담 0.
 
 - **MatterKit (`matterkit.js`)** — 번들된 Matter.js(`this.matter`) 위에 config·바디 팩토리·상자 스택·슬링샷. Arcade 로 못 하는 강체 물리(물리퍼즐·쌓기·래그돌·로프). → `matter-physics`
 - **ScreenFX (`screenfx.js`)** — v4 Filter 체계(블룸·비네트·글로우·컬러그레이딩·CRT). 전 장르 폴리시. WebGL 전용, Canvas 면 graceful no-op. → `screen-fx`
 - **LightingKit (`lightingkit.js`)** — PointLight 발광·Simplex Noise 안개·Gradient 밤하늘·앰비언트 어둠. 호러·던전·밤 무드. WebGL 전용. → `lighting-mood`
 - **PathKit (`pathkit.js`)** — Curves/Path/PathFollower 로 스플라인 루프·패트롤·방사 탄막·타워디펜스 크립 경로. → `path-motion`
+- **JoystickKit (`joystickkit.js`)** — 가상 조이스틱(아날로그/트윈스틱) 터치 컨트롤. 멀티터치 포인터 → 360° 방향+세기 벡터(이동/조준 분리). 디지털 D-패드(MobileHarness)와 장르별 **공존**. 탑다운·트윈스틱 슈터·러너. → `virtual-joystick`
 
 데모 **`nocturne`**(야간 물리 슬링볼)가 네 킷을 한 화면에 통합한다 — Matter 슬링샷+상자 스택, 스플라인 등불, 점광원+절차 안개, 블룸+비네트. WebGL 헤드리스 검증 통과(상자 토폴·등불 명중·승리 파이프라인).
 
@@ -351,6 +354,9 @@ physics: MatterKit.config({ gravity:{x:0,y:1}, bounds:true })
 ScreenFX.preset(this.cameras.main, 'night');
 LightingKit.attach(this, orb, { color:0x8fe9ff, radius:80 });
 PathKit.follower(this, PathKit.loop(this, pts), 'lantern', { duration:8000 });
+// 트윈스틱 가상조이스틱 (HUD 씬에서): 좌 이동 + 우 조준/발사
+var joy = JoystickKit.create(this, { twin:true });
+// 게임 update(): player.setVelocity(joy.state.move.x*SPEED, joy.state.move.y*SPEED); if (joy.state.fire) fire(joy.state.aim.angle);
 ```
 
 ---
@@ -373,7 +379,7 @@ PathKit.follower(this, PathKit.loop(this, pts), 'lantern', { duration:8000 });
 ```
 web-game-forge/
 ├── .claude-plugin/  plugin.json · marketplace.json   # 플러그인 매니페스트
-├── skills/                                            # 27종 스킬 (메인 1 + 전문 26)
+├── skills/                                            # 28종 스킬 (메인 1 + 전문 27)
 │   ├── web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 분석 + game-dna/puzzle/ 퍼즐 20종 심화)
 │   ├── platformer-game/  topdown-shooter/  arcade-classic/  puzzle-game/  endless-runner/
 │   ├── world-map-architect/  (+ reference/map-interview · map-design/ MAP-* 원칙 + 위상 카탈로그 + 빌드 패턴)
@@ -383,12 +389,12 @@ web-game-forge/
 │   ├── sprite-picker/  (+ catalog/ 검증된 CC0 소스 캐시 · picker/ 브라우저 갤러리 · reference/ 인터뷰·소싱·프로토콜·라이브러리)
 │   ├── sprite-catalog-refresh/  (sprite-picker 카탈로그 웹 재조사·갱신)
 │   ├── sprite-forge/  vector-graphics/  sound-architect/(+reference/sound-design 8종·lint-audio.mjs)  chip-sound/  game-ui-hud/  juice-fx/
-│   ├── matter-physics/  screen-fx/  lighting-mood/  path-motion/       # Phaser 고급 4종 킷 스킬
+│   ├── matter-physics/  screen-fx/  lighting-mood/  path-motion/  virtual-joystick/   # Phaser 고급·입력 킷 5종 스킬
 │   └── mobile-webview-tune/  game-qa/  ip-license-guard/  perf-60fps/
 ├── hooks/hooks.json                                   # UserPromptSubmit 의도 감지 등록
 ├── scripts/detect-game-intent.{js,ps1,sh}            # 한/영 게임·에셋 의도 감지(크로스플랫폼)
 ├── commands/make-game.md                              # /web-game-builder:make-game
-├── engine/  phaser.min.js · pixelforge · vectorforge · audio · soundforge · tone(Tone.js v15) · mobile · tiled · matterkit · screenfx · lightingkit · pathkit   # 재사용 엔진(+Phaser 고급 4종 킷)
+├── engine/  phaser.min.js · pixelforge · vectorforge · audio · soundforge · tone(Tone.js v15) · mobile · tiled · matterkit · screenfx · lightingkit · pathkit · joystickkit   # 재사용 엔진(+Phaser 고급·입력 킷 5종)
 ├── games/  super-runner/(픽셀 플랫포머·?tiled=1) · runeburst/ · is-rule/ · style-preview/
 │          · tiled-topdown/(GEM DUNGEON) · tiled-iso/(등각·육각, ?orient=hex) · tiled-pack/(GPU+CC0팩 임포트)
 │          · nocturne/(야간 물리 슬링볼 — Matter+포스트FX+라이팅+경로 통합 데모)
@@ -440,7 +446,9 @@ chrome-devtools MCP로 실제 실행 검증 (nocturne — Phaser 고급 4종 통
 - ~~Tiled 고급 기능 4종~~ — **완료** (① 외부 CC0 팩 임포트 + `assets.json` 라이선스 게이트
   `verify-tiled-pack`/`bake-tiled-pack` · ② 애니메이션 타일 · ③ 등각/육각 맵 · ④ `TilemapGPULayer`
   최적화. 데모 2종: `games/tiled-iso`(iso/hex)·`games/tiled-pack`(GPU+팩 임포트))
-- Phaser 가상조이스틱 플러그인 검토 (현재 자체 D-패드)
+- ~~Phaser 가상조이스틱 플러그인~~ — **완료** (`engine/joystickkit.js` `JoystickKit` 아날로그/트윈스틱 킷 +
+  `virtual-joystick` 스킬. 외부 플러그인 대신 Phaser 4 네이티브 자체 킷으로 구현 — 디지털 D-패드와 장르별 공존.
+  데모: `games/tiled-topdown/index.html?stick=1`(트윈스틱 — 좌 이동·우 조준/발사), 헤드리스 step 하니스 검증 통과)
 - Capacitor/Cordova 네이티브 래퍼(앱스토어 배포) 가이드
 - CC0 실제 팩(Kenney/Pixel Frog) 벤더링 옵션 (게이트 경로는 완료 — 우리 절차 CC0로 실증)
 - CC-BY 에셋 자동 attribution 생성
