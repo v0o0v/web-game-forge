@@ -23,6 +23,7 @@
 - **대표 게임:** Super Meat Boy, Cuphead, Geometry Dash, Jump King
 - **우리 엔진 구현:** 고스트 리플레이(입력 타임라인을 localStorage에 기록 후 반투명 스프라이트로 재생)와 타임어택 모드를 둔다. game-ui-hud로 베스트/현재 기록 동시 표시. 결정론적 물리(고정 dt step, super-runner의 step(t,dt) 패턴)로 같은 입력이 같은 결과를 보장해 연습이 누적되게 한다.
 - **조합 주의:** FE-SURPRISE(매판 RNG)와 정면충돌—난수가 크면 기록 비교가 무의미해진다. 숙련을 강조하려면 RNG는 시드 고정 또는 최소화.
+- **능력 본격 설계:** 숙련 천장을 *캐릭터 능력*(콤보 연계·캔슬·정밀 발동·자원 운용)으로 만들려면 [`ability-architect`](../../../ability-architect/SKILL.md)로 라우팅한다(선딜/발동/후딜·텔레그래프·버퍼 게임필 `FEEL-*`, 콤보 링크 `COMBO-*`). 여기서 '스킬'은 캐릭터 능력 — Claude 스킬과 다르다.
 
 ### FE-RISK-REWARD 위험-보상
 - **정의:** 더 욕심내면 보상이 크지만 잃을 위험도 커지는 푸시유어럭 선택. 멈출지 더 갈지를 매 순간 저울질하게 만든다.
@@ -48,6 +49,7 @@
 - **대표 게임:** Candy Crush Saga, Fruit Ninja, Geometry Wars, Alto's Odyssey
 - **우리 엔진 구현:** puzzle-game의 매치→중력낙하→리필→재매치 캐스케이드 루프, 또는 처치 간 타이머로 콤보 유지. juice-fx로 콤보 단계마다 셰이크·파티클·SFX 피치를 올려 증폭감을 청각화. 콤보 카운터는 game-ui-hud에 큼직하게.
 - **조합 주의:** 콤보 연출이 과하면 FE-FLOW 입력 리듬을 가린다. FE-CONSTRAINT(제한 수) 퍼즐과 묶을 때 캐스케이드 난수가 운 의존을 키우면 FE-AHA(계획성)를 해친다.
+- **능력 본격 설계:** 콤보가 *캐릭터 능력의 연계*(능력 A→B 캔슬·체인, 콤보가 자원/쿨다운을 생성하는 루프)면 [`ability-architect`](../../../ability-architect/SKILL.md)로 라우팅한다(콤보 윈도·캔슬 `COMBO-*`, 무한 콤보·스턴락은 `lint-abilities.mjs` 가 차단). 매치/캐스케이드 콤보는 puzzle-game, 처치 연쇄 콤보는 juice-fx/game-ui-hud 카운터.
 
 ### FE-TIMING 타이밍·리듬
 - **정의:** 정확한 순간의 탭·비트 맞추기가 핵심이 되는 박자 기반 재미. 한 프레임 차이가 성패를 가른다.
@@ -60,6 +62,7 @@
 - **대표 게임:** Vampire Survivors, Brotato, The Binding of Isaac
 - **우리 엔진 구현:** topdown-shooter 자동발사+레벨업 3택 빌드. 적은 오브젝트 풀로 대량 스폰하되 모바일은 동시 60~100체 상한+간단 AI(moveTo)로 부하 관리. juice-fx 파티클은 화면당 2~3 emitter 제한을 지키며 처치 이펙트를 batch 처리.
 - **조합 주의:** FE-TENSION(아슬아슬)과 반대 곡선—초반 약함과 후반 압도의 대비로 설계해야 둘 다 산다. 모바일에서 대량 적+파티클은 perf-60fps 한계, 절차 무한증식은 ❌에 가까움.
+- **능력 본격 설계:** 압도적 강함이 *능력의 성장·시너지*(궁극기·스킬트리·enabler+payoff로 후반 폭발)에서 나오면 [`ability-architect`](../../../ability-architect/SKILL.md)로 라우팅한다(파워예산·스케일링 캡 `BAL-*`, 시너지 `SYN-ENABLER-PAYOFF`). 곱연산 폭발·지배 능력은 `lint-abilities.mjs`/`sim-abilities.mjs` 가 차단.
 
 ### FE-TENSION 긴장·니어미스
 - **정의:** 아슬아슬하게 피했을 때의 짜릿함. 죽음이 코앞일수록 회피 성공의 쾌감이 커진다.
@@ -79,6 +82,7 @@
 - **우리 엔진 구현:** 무기/패시브를 데이터 테이블로 정의하고 레벨업 시 3택 카드 UI(game-ui-hud)를 띄운다. 효과는 스탯 가산/곱산 스택으로 합성, evolution 조건(무기 만렙+짝 패시브)을 룩업으로. topdown-shooter 자동발사 슬롯에 얹는 게 가장 자연스럽다.
 - **조합 주의:** 선택지가 많으면 FE-JUST-ONE-MORE의 즉시성·FE-FLOW를 끊는다(카드 화면=멈춤). 빌드 깊이는 단일플레이 한 세션 안에서 닫히게 설계, 서버 메타 의존 ❌.
 - **아이템 본격 설계:** 빌드를 만드는 *아이템 자체*(소모품·장비·렐릭·시너지·등급·드랍)를 설계하려면 [`item-architect`](../../../item-architect/SKILL.md)로 라우팅한다(복잡도 티어 확정 → `games/<slug>/ITEMS.md` 바이블 + `items.json` → enabler/payoff·가산vs곱산 격리·진화/세트 → 아이콘 visual.* 핸드오프 → `lint-items.mjs` 밸런스 검수). 지배전략·곱연산 폭발·함정템은 이 스킬의 `SYN-*` 원칙으로 차단. 카드 UI는 game-ui-hud, 획득 연출은 juice-fx.
+- **능력 본격 설계:** 빌드를 만드는 게 *캐릭터 능력/스킬*(액티브·패시브·궁극기·스킬트리·능력 시너지·콤보)이면 [`ability-architect`](../../../ability-architect/SKILL.md)로 라우팅한다(복잡도 티어 → `games/<slug>/ABILITIES.md` + `abilities.json` → enabler/payoff·콤보 연계 → `engine/abilitykit.js` 런타임 → 아이콘 핸드오프 → `lint-abilities.mjs`/`sim-abilities.mjs` 검수). 능력 부여 *아이템*과는 grantsAbility id 로 교차(아이템=그릇, 능력=정의). 여기서 '스킬'은 캐릭터 능력 — Claude 스킬과 다르다.
 
 ### FE-ESCALATION 점증 압박
 - **정의:** 시간이 갈수록 속도·밀도·난도가 올라가 결국 무너지는 구조. 끝이 정해진 압박이 긴장을 만든다.

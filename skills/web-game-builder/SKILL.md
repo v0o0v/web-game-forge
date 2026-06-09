@@ -47,6 +47,8 @@ ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
 - 레벨 설계(게임 분석·의도 인터뷰·난이도 곡선·재미 극대화) → `level-architect`
 - 게임 서사 설계(톤·스토리·목표·캐릭터·대사·반전) → `story-architect`
   (game-dna `FE-NARRATIVE` 의 본격 설계 레인. 스토리 적용 여부는 청사진 인터뷰 직후 사용자에게 **반드시 묻는다**. 초·중반 어디서든 스토리 수정·캐릭터 추가/삭제 가능. 빌드 중 인트로/막간/승패/대사 카피가 placeholder·빈 슬롯으로 남으면 `story-architect` 의 대사 자동 개입을 호출해 채운다)
+- 캐릭터 능력/스킬 시스템 설계(액티브·패시브·이동기·궁극기·자원·쿨다운·콤보·스킬트리·시너지) → `ability-architect`
+  (game-dna `FE-MASTERY`·`FE-BUILD`·`FE-COMBO`·`FE-POWER-FANTASY` 의 본격 설계 레인. **'스킬'은 게임 캐릭터의 능력 — Claude 스킬과 다름**. 능력 적용 여부는 서사 게이트 직후·아이템 게이트 전에 사용자에게 **반드시 묻는다**(능력은 코어 동사에 가장 가깝고 아이템이 능력을 부여하므로 먼저) — 단 **복잡도부터** 가르고 디폴트는 코어 동사 위 능력 0~1개라 작은 게임엔 과설계를 권하지 않는다. `games/<slug>/ABILITIES.md` 바이블 + `abilities.json` 산출, `engine/abilitykit.js`(쿨다운·자원·콤보·게이트 런타임) 배선, visual.* 슬롯으로 아이콘을 sprite 스킬에 핸드오프, `tools/lint-abilities.mjs` 로 죽은스킬·지배전략·곱연산폭발·무한콤보·게이트softlock 검수(복잡한 킷은 `tools/sim-abilities.mjs`). 초·중반 어디서든 추가/수정/삭제 가능)
 - 아이템 시스템 설계(소모품·장비·특수기능·통화·시너지·획득) → `item-architect`
   (game-dna `FE-BUILD`·`FE-COLLECT`·`FE-RISK-REWARD` 의 본격 설계 레인. 아이템 적용 여부는 서사 게이트 직후 사용자에게 **반드시 묻는다** — 단 **복잡도부터** 가르고 디폴트는 아이템 0개라 작은 게임엔 과설계를 권하지 않는다. `games/<slug>/ITEMS.md` 바이블 + `items.json` 산출, 각 아이템의 visual.* 슬롯을 채워 아이콘을 sprite-forge/vector-graphics/sprite-picker로 핸드오프, `tools/lint-items.mjs` 로 밸런스(죽은아이템·지배전략·곱연산 폭발) 검수. 초·중반 어디서든 아이템 추가/수정/삭제 가능)
 - 레벨/맵/타일맵 빌드(구현 패턴) → `level-designer`
@@ -164,6 +166,7 @@ games/<slug>/
 **`sound-architect`(SoundForge) 사운드**를 쓰는 게임은 `engine/tone.js` → `engine/soundforge.js` 를
 **phaser 다음·game 이전**(soundforge 는 tone 다음)에 추가한다. 8비트 ChipAudio(`engine/audio.js`)만
 쓰는 게임엔 tone/soundforge 를 넣지 않는다(게임당 한 오디오 엔진).
+**`ability-architect`(AbilityKit) 능력 시스템**(T2+)을 쓰는 게임은 `engine/abilitykit.js` 를 **phaser 다음·game 이전**에 추가한다(능력 1~2개 단순 게임은 game.js 직접 코딩, 미사용 게임엔 넣지 않는다).
 
 ### 3) 에셋 생성 / 소싱
 - **먼저 아트 출처를 가른다(결정 게이트).** 비주얼은 재미의 핵심이므로, 인터뷰(C4)에서 **실제 에셋을

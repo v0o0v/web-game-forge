@@ -41,13 +41,19 @@
   Tone.js v15)가 ADSR·필터·슈퍼소우·FM·노이즈 퍼커션·절차 리버브·**적응형 레이어드 음악**을 코드 합성합니다 —
   칩튠·신스웨이브·앰비언트·로파이·아케이드. 아주 작은/레트로 게임은 `ChipAudio` 8비트 경량 레인(`chip-sound`).
   오디오 파일 0개, 100% CC0(절차 합성 오리지널).
-- **🧩 28종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 12(서사·아이템·**사운드** 디렉터 포함) + **Phaser 고급 5**(Matter 물리·포스트FX·라이팅·경로·**가상조이스틱**) + 품질·운영 5 + 메인 오케스트레이터.
+- **🧩 29종 스킬 체계** — 장르 스캐폴드 5 + 제작요소 13(서사·**능력**·아이템·**사운드** 디렉터 포함) + **Phaser 고급 5**(Matter 물리·포스트FX·라이팅·경로·**가상조이스틱**) + 품질·운영 5 + 메인 오케스트레이터.
 - **📖 게임 서사 설계** — `story-architect`가 톤·스토리·목표·캐릭터·대사·반전을 탑다운 인터뷰로 설계해
   `STORY.md` 스토리 바이블로 산출하고 인트로/막간/엔딩·환경 단서·NPC 대사로 입힙니다(전형 vs 참신 선택, 대사 자동 작성, 연속성 린트).
 - **🎒 게임 아이템 설계** — `item-architect`가 소모품·장비·특수기능·통화·시너지 등 **습득·사용하는 모든 것**을
   탑다운 인터뷰(복잡도부터, 디폴트 0개)로 설계해 `ITEMS.md` 바이블 + `items.json` 데이터로 산출합니다. 각 아이템의
   **visual.\* 묘사 슬롯**(실루엣·재질·팔레트·등급 시각언어)을 채워 `sprite-forge`/`vector-graphics`/`sprite-picker`가
   좋은 아이콘을 만들게 하고, 무의존성 `lint-items.mjs` validator로 죽은아이템·지배전략·곱연산 폭발을 기계 검증합니다.
+- **🎮 캐릭터 능력/스킬 시스템 설계** — `ability-architect`가 캐릭터의 **능력 전체**(액티브·패시브·이동기·궁극기·자원·
+  쿨다운·콤보·스킬트리·시너지·진행)를 탑다운 인터뷰(복잡도부터, 플랫포머 더블점프 한 개 ~ 디아블로급 스킬트리)로 설계해
+  `ABILITIES.md` 바이블 + `abilities.json` 데이터로 산출하고, `engine/abilitykit.js`(쿨다운·자원·콤보·게이트 런타임)로
+  게임에 입힙니다. 능력을 **획득→조합(시너지·콤보)→사용**하는 재미가 1순위. 무의존성 `lint-abilities.mjs` validator로
+  죽은스킬·지배전략·곱연산폭발·무한콤보·게이트softlock을, `sim-abilities.mjs`로 빌드별 DPS·자원 지속성을 기계 검증합니다.
+  *(여기서 '스킬'은 게임 캐릭터의 능력 — Claude 스킬과 다릅니다.)*
 - **🖼 스프라이트 시각 선택** — 화면 비주얼은 재미의 핵심이라 사용자가 **직접 고르게** 합니다.
   `sprite-picker`가 라이선스-안전(CC0) 스프라이트/스프라이트시트를 **브라우저 갤러리에서 클릭 선택**하게
   하고(카탈로그·로컬 파일·이전 사용분), 캐싱으로 매번 웹을 뒤지지 않습니다. 카탈로그 갱신은 `sprite-catalog-refresh`.
@@ -182,7 +188,7 @@ http://127.0.0.1:8766/games/super-runner/index.html
 
 ---
 
-## 🧩 스킬 카탈로그 (28종)
+## 🧩 스킬 카탈로그 (29종)
 
 메인 `web-game-builder`가 전체 흐름을 조율하고, 요청 성격에 따라 전문 스킬이 자동 발동합니다.
 **장르로 스캐폴드 → 제작요소로 살붙이기 → 품질로 검증·최적화** 순서로 협력합니다.
@@ -203,6 +209,7 @@ http://127.0.0.1:8766/games/super-runner/index.html
 | | `world-map-architect` | 스테이지를 잇는 **진행 맵 위상**(선형·사가·분기 노드맵·액트·허브·무한) 설계 + 맵 화면 빌드 |
 | | `level-architect` | 게임 분석·의도 인터뷰·난이도 곡선·재미 극대화 레벨 **설계** |
 | | `story-architect` | 톤·스토리·목표·**캐릭터·대사·반전** 게임 **서사 설계** + `STORY.md` 바이블·전형↔참신·대사 자동 작성·연속성 린트 |
+| | `ability-architect` | 액티브·패시브·이동기·궁극기·자원·쿨다운·**콤보·스킬트리·시너지** **캐릭터 능력/스킬 시스템 설계**(Claude 스킬 아님) + `ABILITIES.md` 바이블·`abilities.json`·`engine/abilitykit.js` 런타임·복잡도 게이트·visual.* 아이콘 핸드오프·`lint-abilities.mjs`/`sim-abilities.mjs` 검증 |
 | | `item-architect` | 소모품·장비·특수기능·통화·**시너지·획득** 게임 **아이템 설계** + `ITEMS.md` 바이블·`items.json`·복잡도 게이트·visual.* 아이콘 핸드오프·`lint-items.mjs` 밸런스 검증 |
 | | `level-designer` | 레벨·맵(타일맵) **빌드**(구현 패턴) |
 | | `game-ui-hud` | HUD·메뉴·UI 화면 |
@@ -253,7 +260,7 @@ Phaser 4 API 의 정확한 사용법(씬 라이프사이클·물리·스케일·
 
 ---
 
-## ⚙️ 엔진 라이브러리 11종 (`engine/`)
+## ⚙️ 엔진 라이브러리 12종 (`engine/`)
 
 ### PixelForge (`pixelforge.js`)
 문자 그리드로 정의한 스프라이트를 Phaser 텍스처로 굽는 절차적 픽셀아트 생성기. 외부 이미지 0,
@@ -336,6 +343,23 @@ var res = TiledForge.loadTiledMap(this, 'pack-map', {
 > 자세한 API는 [skills/web-game-builder/reference/engine-api.md](skills/web-game-builder/reference/engine-api.md).
 > Tiled 저작 가이드: [skills/level-designer/reference/tiled/authoring.md](skills/level-designer/reference/tiled/authoring.md).
 
+### AbilityKit (`abilitykit.js`)
+**캐릭터 능력/스킬 시스템 런타임**(`ability-architect` 디렉터가 설계). `games/<slug>/abilities.json` 을 로드해 능력의
+**쿨다운·자원(마나/스태미나)·충전·콤보 윈도·능력 게이트·스킬트리 해금**을 데이터 구동으로 굴립니다. SoundForge 처럼
+"스펙 → 실제 동작". **킷은 타이밍·자원만** 관리하고, 능력의 *효과*(대미지·발사체·이동)는 게임이 `onActivate` 콜백에서
+실행 → 효과를 코드에 중복 하드코딩하지 않습니다(단일 진실 `abilities.json`).
+
+```js
+var KIT = AbilityKit.attach(this, ABILITIES_SPEC, {
+  unlockedAtStart: ['dash'],
+  onActivate: function (ab, ctx) { applyEffect(ab, ctx); }  // 게임이 효과 실행(ab.effect 읽기)
+});
+window.GAME_ABILITIES = KIT;
+if (justPressed) KIT.use('dash', { dir: facing });          // tick 은 씬 update 에 자동 훅
+```
+`tick(dt)` 는 결정론적(Date.now 미사용)이라 Node 헤드리스(`require`)로 결정적 검증 가능. 능력 1~2개 단순 게임은
+abilitykit 없이 game.js 직접 코딩(과설계 금지). 검수: `lint-abilities.mjs`(정적) + `sim-abilities.mjs`(DPS·자원 시뮬).
+
 ### Phaser 고급·입력 킷 5종 (`matterkit.js` · `screenfx.js` · `lightingkit.js` · `pathkit.js` · `joystickkit.js`)
 Phaser 4 의 고급 기능을 한 줄 API 로 감싼 **선택적 킷**. 게임이 필요할 때만 `index.html` 에 스크립트로 추가한다(phaser 다음). 미사용 게임엔 부담 0.
 
@@ -379,13 +403,15 @@ var joy = JoystickKit.create(this, { twin:true });
 ```
 web-game-forge/
 ├── .claude-plugin/  plugin.json · marketplace.json   # 플러그인 매니페스트
-├── skills/                                            # 28종 스킬 (메인 1 + 전문 27)
+├── skills/                                            # 29종 스킬 (메인 1 + 전문 28)
 │   ├── web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 분석 + game-dna/puzzle/ 퍼즐 20종 심화)
 │   ├── platformer-game/  topdown-shooter/  arcade-classic/  puzzle-game/  endless-runner/
 │   ├── world-map-architect/  (+ reference/map-interview · map-design/ MAP-* 원칙 + 위상 카탈로그 + 빌드 패턴)
 │   ├── level-architect/  (+ reference/level-interview · level-design/ LD-* 원칙 + 장르별 레벨 설계)  level-designer/
 │   ├── story-architect/  (+ reference/story-interview · story-design/ ST~TL-* 원칙)
 │   ├── item-architect/  (+ reference/item-interview · item-design/ SCOPE~UX-* 원칙 100여종 + tools/lint-items.mjs 밸런스 validator)
+│   ├── ability-architect/  (+ reference/ability-interview · ability-design/ SCOPE~UX-* 원칙 + tools/lint-abilities.mjs · sim-abilities.mjs) — 캐릭터 능력/스킬(Claude 스킬 아님)
+│   │                       └ 런타임은 engine/abilitykit.js
 │   ├── sprite-picker/  (+ catalog/ 검증된 CC0 소스 캐시 · picker/ 브라우저 갤러리 · reference/ 인터뷰·소싱·프로토콜·라이브러리)
 │   ├── sprite-catalog-refresh/  (sprite-picker 카탈로그 웹 재조사·갱신)
 │   ├── sprite-forge/  vector-graphics/  sound-architect/(+reference/sound-design 8종·lint-audio.mjs)  chip-sound/  game-ui-hud/  juice-fx/
@@ -394,7 +420,7 @@ web-game-forge/
 ├── hooks/hooks.json                                   # UserPromptSubmit 의도 감지 등록
 ├── scripts/detect-game-intent.{js,ps1,sh}            # 한/영 게임·에셋 의도 감지(크로스플랫폼)
 ├── commands/make-game.md                              # /web-game-builder:make-game
-├── engine/  phaser.min.js · pixelforge · vectorforge · audio · soundforge · tone(Tone.js v15) · mobile · tiled · matterkit · screenfx · lightingkit · pathkit · joystickkit   # 재사용 엔진(+Phaser 고급·입력 킷 5종)
+├── engine/  phaser.min.js · pixelforge · vectorforge · audio · soundforge · tone(Tone.js v15) · mobile · tiled · abilitykit(능력 런타임) · matterkit · screenfx · lightingkit · pathkit · joystickkit   # 재사용 엔진(+Phaser 고급·입력 킷 5종)
 ├── games/  super-runner/(픽셀 플랫포머·?tiled=1) · runeburst/ · is-rule/ · style-preview/
 │          · tiled-topdown/(GEM DUNGEON) · tiled-iso/(등각·육각, ?orient=hex) · tiled-pack/(GPU+CC0팩 임포트)
 │          · nocturne/(야간 물리 슬링볼 — Matter+포스트FX+라이팅+경로 통합 데모)
