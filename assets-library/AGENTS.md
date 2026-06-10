@@ -15,7 +15,7 @@
 ## For AI Agents
 
 ### Working In This Directory
-- **`library.json`은 주로 `sprite-picker`가 자동 갱신**한다. 수동 편집 시 스키마(`skills/sprite-picker/reference/catalog-schema.md` §3)를 준수한다.
+- **`library.json`은 주로 `sprite-picker`가 자동 갱신**한다. 수동 편집 시 스키마(`skills/wgf-sprite-picker/reference/catalog-schema.md` §3)를 준수한다.
 - 모든 항목은 라이선스·`safetyTier`(`cc0`/`permissive-attribution`/`mixed-per-item`/`avoid`)를 정확히 기록한다 — `ip-license-guard`의 게이트 대상.
 - `files[]`는 실제 벤더링된 에셋 경로(보통 `games/<slug>/assets/...`)를 가리킨다. CC-BY 항목은 게임 `CREDITS.txt` + 루트 `assets.json` 등록과 정합 유지.
 - 실제 에셋 파일은 보통 게임 폴더에 벤더링되고, 이 디렉터리는 인덱스를 보관한다.
@@ -30,7 +30,7 @@
 ## Dependencies
 
 ### Internal
-- `skills/sprite-picker/` (자동 갱신 주체, '이전 사용' 탭 소비자), 루트 `assets.json`(`spritePickerCatalog.localLibrary` 포인터), `ip-license-guard`.
+- `skills/wgf-sprite-picker/` (자동 갱신 주체, '이전 사용' 탭 소비자), 루트 `assets.json`(`spritePickerCatalog.localLibrary` 포인터), `ip-license-guard`.
 
 ### External
 - 외부 CC0/CC-BY 에셋 소스(game-icons.net 등) — 항목별 라이선스 기록.

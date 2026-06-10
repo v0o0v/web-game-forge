@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "note": "이 프로젝트에서 실제 사용한 스프라이트 라이브러리. sprite-picker 가 에셋을 적용할 때마다 자동 갱신한다. 피커의 '이전 사용' 탭이 이 파일을 읽는다. 스키마: skills/sprite-picker/reference/catalog-schema.md §3.",
+  "note": "이 프로젝트에서 실제 사용한 스프라이트 라이브러리. sprite-picker 가 에셋을 적용할 때마다 자동 갱신한다. 피커의 '이전 사용' 탭이 이 파일을 읽는다. 스키마: skills/wgf-sprite-picker/reference/catalog-schema.md §3.",
   "items": [
     {
       "id": "gameicons-lorc-emerald",

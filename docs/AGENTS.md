@@ -35,7 +35,7 @@
 
 ### Internal
 - README.md(루트)가 `docs/설계.md`를 "자세한 아키텍처"로 링크.
-- `tiled-연동-설계.md` ↔ `engine/tiled.js`·`skills/level-designer/reference/tiled/authoring.md`.
+- `tiled-연동-설계.md` ↔ `engine/tiled.js`·`skills/wgf-level-designer/reference/tiled/authoring.md`.
 
 ### External
 - 없음(순수 문서).

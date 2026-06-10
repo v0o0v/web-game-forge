@@ -54,9 +54,9 @@ var res = TiledForge.loadTiledMap(this, 'map', { tilesetKey:'forge-tiles', spawn
 ## Dependencies
 
 ### Internal
-- 각 킷 파일은 대응 스킬과 1:1 — `engine/matterkit.js`↔`skills/matter-physics/`, `screenfx.js`↔`screen-fx/`, `lightingkit.js`↔`lighting-mood/`, `pathkit.js`↔`path-motion/`, `joystickkit.js`↔`virtual-joystick/`.
-- 상세 API 계약: `skills/web-game-builder/reference/engine-api.md`.
-- Tiled 저작 가이드: `skills/level-designer/reference/tiled/authoring.md`.
+- 각 킷 파일은 대응 스킬과 1:1 — `engine/matterkit.js`↔`skills/wgf-matter-physics/`, `screenfx.js`↔`wgf-screen-fx/`, `lightingkit.js`↔`wgf-lighting-mood/`, `pathkit.js`↔`wgf-path-motion/`, `joystickkit.js`↔`wgf-virtual-joystick/`.
+- 상세 API 계약: `skills/wgf-web-game-builder/reference/engine-api.md`.
+- Tiled 저작 가이드: `skills/wgf-level-designer/reference/tiled/authoring.md`.
 
 ### External
 - **Phaser 4.1.0** (vendored) — 모든 모듈의 런타임 토대.

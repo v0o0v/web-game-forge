@@ -1,6 +1,6 @@
 # AUDIO.md — sound-lab 사운드 바이블
 
-> `sound-architect` 디렉터 스킬의 산출물 예시(T3 적응형). 단일 진실 = 이 파일(의도) + [`audio.json`](./audio.json)(기계). 검수: `node skills/sound-architect/tools/lint-audio.mjs games/sound-lab/audio.json`.
+> `sound-architect` 디렉터 스킬의 산출물 예시(T3 적응형). 단일 진실 = 이 파일(의도) + [`audio.json`](./audio.json)(기계). 검수: `node skills/wgf-sound-architect/tools/lint-audio.mjs games/sound-lab/audio.json`.
 > 이 데모는 `engine/soundforge.js`(Tone.js v15) 엔진을 보여주는 쇼케이스이자 검증 하니스다.
 
 ## 0. 메타
