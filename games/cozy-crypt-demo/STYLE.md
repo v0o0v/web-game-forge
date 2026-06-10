@@ -65,7 +65,8 @@ HUD·능력·아이템·juice 파티클이 상속하는 **의미 기반 색**(�
 
 **WebGL** (`engine/lightingkit.js`, `engine/screenfx.js`):
 - `ambient`: 색 `#171320`, alpha `0.55` — 화면 전체를 어둡게(MULTIPLY).
-- `point_lights`: 색 `#ffd9a0`, radius `110`, intensity `0.9` — 횃불·플레이어 위치에 가산 발광.
+- `point_lights`: 색 `#ffd9a0`, radius `110`, intensity `0.4` — 횃불 위치에 가산 발광.
+  플레이어 글로우는 게임이 radius `70`·intensity `0.22` 로 오버라이드(영웅이 코어에 안 묻히게).
 - `postfx`: bloom(threshold 0.6, amount 0.4) + vignette(radius 0.7, strength 0.45) +
   color_grade(warm 0.15).
 

@@ -40,7 +40,7 @@
   },
   "lighting": {
     "ambient": { "color": "#171320", "alpha": 0.55 },
-    "point_lights": { "color": "#ffd9a0", "radius": 110, "intensity": 0.9 },
+    "point_lights": { "color": "#ffd9a0", "radius": 110, "intensity": 0.4 },
     "fog": { "enabled": false }
   },
   "postfx": {
