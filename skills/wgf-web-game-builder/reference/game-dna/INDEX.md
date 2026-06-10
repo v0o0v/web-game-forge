@@ -1,6 +1,6 @@
 # 게임 DNA 레퍼런스 라이브러리 — 색인 (INDEX)
 
-> 지난 10여 년간 많은 사람이 플레이한 **인기 2D 게임**의 **재미 요소·메카닉**을 분석해, WebGameForge(`web-game-builder`)가 새 게임을 설계할 때 쓰는 **템플릿/조합 자료**다. 전 장르 29작 + **퍼즐 심화 35작**(디지털 퍼즐 20 + 퍼즐 보드게임 15, [puzzle/](./puzzle/INDEX.md) 서브라이브러리) = 64작.
+> 지난 10여 년간 많은 사람이 플레이한 **인기 2D 게임**의 **재미 요소·메카닉**을 분석해, WebGameForge(`web-game-builder`)가 새 게임을 설계할 때 쓰는 **템플릿/조합 자료**다. 전 장르 29작 + **퍼즐 심화 35작**(디지털 퍼즐 20 + 퍼즐 보드게임 15, [puzzle/](./puzzle/INDEX.md) 서브라이브러리) + **보드게임 아틀라스 100작**(컴팩트 카탈로그, [board/](./board/INDEX.md)) = **164작**. 2티어 구조: 심화(게임당 11섹션 풀 분석) vs 아틀라스(게임당 핵심 압축 — 코어·재미요소·메카닉·웹 번안·조합 훅·IP).
 > 핵심 목적: 사용자에게 "어떤 게임 만들지" 물을 때 이 자료로 **검증된 재미를 제안**하고, 여러 게임의 재미 요소를 **조합해 새 게임에 녹이는** 것.
 > 분석 대상은 **메카닉·재미뿐**이다 — 이름·캐릭터·스프라이트·음악 등 저작물은 절대 쓰지 않는다(각 파일의 IP 안전 메모 참고).
 
@@ -62,6 +62,23 @@
 | [보드: 폴리오미노·패킹](./puzzle/board-packing.md) | Patchwork · Blokus · Ubongo · NMBR 9 · Project L | `puzzle-game` |
 | [보드: 세트·재배열·롤앤라이트](./puzzle/board-set-rollwrite.md) | Rummikub · SET · Qwirkle · Ganz schön clever · Railroad Ink | `puzzle-game` |
 
+### [board/](./board/INDEX.md) — 보드게임 아틀라스 (컴팩트 카탈로그, 100종)
+> 유명 보드게임 100종의 메카닉·재미요소를 **게임당 핵심만 압축**한 2티어 카탈로그 → **[board/INDEX.md](./board/INDEX.md)**.
+> 10개 메카닉 클러스터 × 10종. 물리 보드게임을 디지털 단일플레이 웹으로 번안하는 관점(AI 상대·남김 비용·날짜 시드 데일리).
+
+| 클러스터 | 게임 | 주 라우팅 |
+|---|---|---|
+| [덱빌딩·엔진빌딩](./board/deck-engine.md) | Dominion · Splendor · Wingspan · Star Realms · Century: Spice Road · 7 Wonders · Race for the Galaxy · Gizmos · Terraforming Mars · Res Arcana | `puzzle-game`/`topdown-shooter`(런 빌드) |
+| [푸시유어럭·주사위](./board/push-luck-dice.md) | Can't Stop · Quacks of Quedlinburg · Incan Gold · Deep Sea Adventure · Heckmeck · Zombie Dice · Port Royal · Yahtzee · King of Tokyo · Las Vegas | `puzzle-game`/`arcade-classic` |
+| [타일 배치·경로](./board/tile-route.md) | Carcassonne · Ticket to Ride · Tsuro · Karuba · Isle of Skye · Alhambra · Kingdom Builder · Galaxy Trucker · Cartographers · Bärenpark | `puzzle-game` |
+| [경매·경제·협상](./board/auction-economy.md) | Modern Art · Ra · For Sale · High Society · Power Grid · Acquire · Monopoly · Catan · Chinatown · Sheriff of Nottingham | `puzzle-game` |
+| [워커·액션 선택](./board/worker-action.md) | Agricola · Stone Age · Lords of Waterdeep · Viticulture · Everdell · Caylus · Tzolk'in · A Feast for Odin · Raiders of the North Sea · Architects of the West Kingdom | `puzzle-game` |
+| [협력·제한 소통](./board/coop-comm.md) | Pandemic · Forbidden Island · Hanabi · The Mind · The Crew · Spirit Island · Flash Point · Magic Maze · Mysterium · Sky Team | `puzzle-game` |
+| [은닉 정보·추리·블러프](./board/hidden-deduction.md) | Stratego · Battleship · Mastermind · Cluedo · Coup · Skull · Love Letter · Liar's Dice · Cockroach Poker · Spyfall | `puzzle-game` |
+| [추상 전략 듀얼](./board/abstract-duel.md) | Hive · Onitama · Santorini · Quoridor · Othello · Connect Four · 오목 · Mancala · Backgammon · YINSH | `puzzle-game`(+AI 대전) |
+| [단어·파티·연상](./board/word-party.md) | Scrabble · Boggle · Bananagrams · Codenames · Just One · Dixit · Wavelength · Telestrations · Concept · Taboo | `puzzle-game`(단어)/요소 추출 |
+| [순발력·기억·민첩](./board/speed-memory.md) | Dobble · Ghost Blitz · Jungle Speed · Halli Galli · Memory · Simon · Jenga · Rhino Hero · Crokinole · ICECOOL | `arcade-classic`/`puzzle-game` |
+
 ### [shooters-roguelite.md](./shooters-roguelite.md) — 슈터 · 로그라이트
 | 게임 | 대표 재미요소 | 주 스킬 | 재현 |
 |---|---|---|---|
@@ -85,13 +102,13 @@
 
 ## 재미요소 사전 빠른 색인 — 자세한 정의는 [fun-elements.md](./fun-elements.md) §1
 
-`FE-JUST-ONE-MORE`(한 판 더) · `FE-FLOW`(몰입 흐름) · `FE-MASTERY`(숙련 표현) · `FE-RISK-REWARD`(위험-보상) · `FE-SURPRISE`(변주·무작위) · `FE-COLLECT`(수집·성장) · `FE-COMBO`(연쇄·콤보) · `FE-TIMING`(타이밍·리듬) · `FE-POWER-FANTASY`(파워 판타지) · `FE-TENSION`(긴장·니어미스) · `FE-AHA`(통찰·아하) · `FE-BUILD`(빌드·시너지) · `FE-ESCALATION`(점증 압박) · `FE-EXPRESSION`(자기표현·창의) · `FE-NARRATIVE`(서사·분위기) · `FE-EXPLORE`(탐험·발견) · `FE-JUICE`(감각 피드백) · `FE-SOCIAL`(경쟁·공유) · `FE-FAIRNESS`(공정한 죽음) · `FE-CONSTRAINT`(제약 퍼즐) · `FE-EMERGENCE`(창발·시스템 상호작용)
+`FE-JUST-ONE-MORE`(한 판 더) · `FE-FLOW`(몰입 흐름) · `FE-MASTERY`(숙련 표현) · `FE-RISK-REWARD`(위험-보상) · `FE-SURPRISE`(변주·무작위) · `FE-COLLECT`(수집·성장) · `FE-COMBO`(연쇄·콤보) · `FE-TIMING`(타이밍·리듬) · `FE-POWER-FANTASY`(파워 판타지) · `FE-TENSION`(긴장·니어미스) · `FE-AHA`(통찰·아하) · `FE-BUILD`(빌드·시너지) · `FE-ESCALATION`(점증 압박) · `FE-EXPRESSION`(자기표현·창의) · `FE-NARRATIVE`(서사·분위기) · `FE-EXPLORE`(탐험·발견) · `FE-JUICE`(감각 피드백) · `FE-SOCIAL`(경쟁·공유) · `FE-FAIRNESS`(공정한 죽음) · `FE-CONSTRAINT`(제약 퍼즐) · `FE-EMERGENCE`(창발·시스템 상호작용) · **(보드게임 계열 신설)** `FE-DECKCRAFT`(덱 조형) · `FE-AUCTION`(경매·가치 평가) · `FE-BLUFF`(심리전·은닉) · `FE-MEMORY`(기억)
 
 > **퍼즐 특화 재미요소 13종** — `FE-DEDUCTION`·`FE-RULE-DISCOVERY`·`FE-ELEGANCE`·`FE-SPATIAL`·`FE-PLANNING`·`FE-TRANSFORM`·`FE-HIDDEN-INFO`·`FE-OPTIMIZE` + 보드게임 계열 `FE-DRAFT`·`FE-PACKING`·`FE-LUCK-TAME`·`FE-REARRANGE`·`FE-SET-LOGIC`은 [puzzle/fun-elements.md](./puzzle/fun-elements.md)에서 정식 정의한다(전역 21종을 퍼즐 도메인으로 확장).
 
 ## 조합 레시피 빠른 색인 — 자세한 내용은 [fun-elements.md](./fun-elements.md) §2
 
-리듬 정밀 러너 · 불릿헤븐 러너 · 매치3 무기 장전 슈터 · 제약 물리 발사 퍼즐 · 규칙조작 그리드 퍼즐 · 역전 푸시유어럭 호퍼 · 수직 빌드 점퍼 · 점증 스택 타워 · 분위기 트릭 콤보 보더 · 닷지롤 탄막 퍼즐 · 등반 머리싸움 퍼즐 — 그리고 **섞지 말 것**은 [fun-elements.md](./fun-elements.md) §3 안티패턴.
+리듬 정밀 러너 · 불릿헤븐 러너 · 매치3 무기 장전 슈터 · 제약 물리 발사 퍼즐 · 규칙조작 그리드 퍼즐 · 역전 푸시유어럭 호퍼 · 수직 빌드 점퍼 · 점증 스택 타워 · 분위기 트릭 콤보 보더 · 닷지롤 탄막 퍼즐 · 등반 머리싸움 퍼즐 · **(보드게임 계열)** 덱조형 런 슈터 · 시스템 경매 타이쿤 · 텔 읽기 듀얼 · 시퀀스 폭주 암기 — 그리고 **섞지 말 것**은 [fun-elements.md](./fun-elements.md) §3 안티패턴(다인 사회성 솔로 직역, 실물 민첩 정밀 물리 직역 포함).
 
 ## 범위 밖 — 의도적으로 제외한 게임들
 
