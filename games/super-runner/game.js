@@ -55,6 +55,29 @@
       var g = this.make.graphics({ x: 0, y: 0, add: false });
       g.fillStyle(0xffffff, 1); g.fillRect(0, 0, 4, 4);
       g.generateTexture('spark', 4, 4); g.destroy();
+      // 하늘 그라데이션 텍스처 (1회 베이크) — 위는 깊은 파랑, 지평선은 옅게
+      if (!this.textures.exists('sky')) {
+        var sky = this.textures.createCanvas('sky', DESIGN_W, DESIGN_H);
+        var sctx = sky.getContext();
+        var grad = sctx.createLinearGradient(0, 0, 0, DESIGN_H);
+        grad.addColorStop(0, '#3d7bd9');
+        grad.addColorStop(0.45, '#5c9bef');
+        grad.addColorStop(0.75, '#8ec4fa');
+        grad.addColorStop(1, '#cfe9ff');
+        sctx.fillStyle = grad; sctx.fillRect(0, 0, DESIGN_W, DESIGN_H);
+        sky.refresh();
+      }
+      // 부드러운 원형 글로우 (해 할로·파워업 플래시용, ADD 블렌드)
+      if (!this.textures.exists('glow')) {
+        var gl = this.textures.createCanvas('glow', 64, 64);
+        var gctx = gl.getContext();
+        var rg = gctx.createRadialGradient(32, 32, 2, 32, 32, 32);
+        rg.addColorStop(0, 'rgba(255,250,220,0.9)');
+        rg.addColorStop(0.5, 'rgba(255,240,180,0.35)');
+        rg.addColorStop(1, 'rgba(255,240,180,0)');
+        gctx.fillStyle = rg; gctx.fillRect(0, 0, 64, 64);
+        gl.refresh();
+      }
       // 터치 컨트롤 Scene 등록
       var TC = MobileHarness.TouchControlsClass(DESIGN_W, DESIGN_H, GAME_INPUT);
       if (!this.scene.get('TouchControls')) this.scene.add('TouchControls', TC, false);
@@ -71,30 +94,68 @@
     Extends: Phaser.Scene,
     initialize: function TitleScene() { Phaser.Scene.call(this, { key: 'Title' }); },
     create: function () {
-      this.cameras.main.setBackgroundColor('#5c94fc');
-      // 배경 장식
-      this.add.sprite(70, 150, 'hill').setScale(4).setOrigin(0.5, 1);
-      this.add.sprite(300, 140, 'hill').setScale(3).setOrigin(0.5, 1);
-      this.add.sprite(80, 40, 'cloud').setScale(3);
-      this.add.sprite(280, 30, 'cloud').setScale(2.5);
-      // 주인공 미리보기
-      var hero = this.add.sprite(DESIGN_W / 2, 120, 'hero', 0).setScale(4);
+      var groundY = DESIGN_H - 32; // 바닥 윗면
+      // 하늘 그라데이션 + 해
+      this.add.image(0, 0, 'sky').setOrigin(0, 0).setDepth(-60);
+      this.add.image(322, 38, 'glow').setScale(2.6).setBlendMode(Phaser.BlendModes.ADD).setDepth(-56).setAlpha(0.85);
+      this.add.image(322, 38, 'sun').setScale(1.6).setDepth(-55);
+      // 원경 산 → 언덕 → 나무/덤불 (깊이 레이어)
+      this.add.sprite(60, groundY, 'mountain').setOrigin(0.5, 1).setScale(2).setDepth(-40).setAlpha(0.9);
+      this.add.sprite(250, groundY, 'mountain').setOrigin(0.5, 1).setScale(2.4).setDepth(-40).setAlpha(0.9).setFlipX(true);
+      this.add.sprite(70, groundY, 'hill').setScale(3.2).setOrigin(0.5, 1).setDepth(-25);
+      this.add.sprite(316, groundY, 'hill').setScale(2.4).setOrigin(0.5, 1).setDepth(-25);
+      this.add.sprite(28, groundY, 'tree').setOrigin(0.5, 1).setScale(1.6).setDepth(-18);
+      this.add.sprite(352, groundY, 'tree').setOrigin(0.5, 1).setScale(1.3).setDepth(-18).setFlipX(true);
+      this.add.sprite(120, groundY, 'bush').setOrigin(0.5, 1).setScale(1.4).setDepth(-15);
+      // 떠다니는 구름
+      var c1 = this.add.sprite(80, 42, 'cloud').setScale(1.8).setDepth(-30).setAlpha(0.95);
+      var c2 = this.add.sprite(240, 26, 'cloud2').setScale(1.6).setDepth(-30).setAlpha(0.9);
+      var c3 = this.add.sprite(150, 64, 'cloud2').setScale(1.1).setDepth(-31).setAlpha(0.8);
+      this.tweens.add({ targets: c1, x: '+=26', duration: 9000, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: c2, x: '-=30', duration: 11000, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: c3, x: '+=18', duration: 7000, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      // 바닥 띠 (잔디+흙) + 장식
+      this.add.tileSprite(DESIGN_W / 2, groundY + 8, DESIGN_W, 16, 'ground').setDepth(-10);
+      this.add.tileSprite(DESIGN_W / 2, groundY + 24, DESIGN_W, 16, 'dirt').setDepth(-10);
+      var deco = [
+        { k: 'grasstuft', a: 'grass-sway', x: 50 }, { k: 'flowerR', a: 'flowerR-sway', x: 95 },
+        { k: 'flowerY', a: 'flowerY-sway', x: 150 }, { k: 'rock', a: null, x: 235 },
+        { k: 'grasstuft', a: 'grass-sway', x: 285 }, { k: 'flowerR', a: 'flowerR-sway', x: 330 }
+      ];
+      for (var di = 0; di < deco.length; di++) {
+        var d = this.add.sprite(deco[di].x, groundY, deco[di].k).setOrigin(0.5, 1).setDepth(-5);
+        if (deco[di].a) d.play({ key: deco[di].a, startFrame: di % 2 });
+      }
+      // 주인공 미리보기 — 바닥에 서서 호흡 + 코인 한 닢
+      var hero = this.add.sprite(DESIGN_W / 2 - 14, groundY, 'hero', 0).setOrigin(0.5, 1).setScale(3);
       hero.play('hero-idle');
-      this.tweens.add({ targets: hero, y: 112, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      var coin = this.add.sprite(DESIGN_W / 2 + 26, groundY - 24, 'coin').setScale(2);
+      coin.play('coin-spin');
+      this.tweens.add({ targets: coin, y: groundY - 30, duration: 800, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
 
-      var title = this.add.text(DESIGN_W / 2, 56, 'SUPER RUNNER', {
-        fontFamily: 'Arial Black, Impact, monospace', fontSize: '34px', color: '#ffd23f',
-        stroke: '#7d3a17', strokeThickness: 7
-      }).setOrigin(0.5);
-      this.tweens.add({ targets: title, scale: 1.05, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      // 로고 — 그림자 레이어 + 본문 + 트윙클
+      var ts = { fontFamily: 'Arial Black, Impact, monospace', fontSize: '34px', color: '#ffd23f', stroke: '#7d3a17', strokeThickness: 7 };
+      var shadow = this.add.text(DESIGN_W / 2 + 2, 59, 'SUPER RUNNER', Object.assign({}, ts, { color: '#3a1408', stroke: '#3a1408' })).setOrigin(0.5).setAlpha(0.45);
+      var title = this.add.text(DESIGN_W / 2, 56, 'SUPER RUNNER', ts).setOrigin(0.5);
+      this.tweens.add({ targets: [title, shadow], scale: 1.05, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      var self0 = this;
+      this.time.addEvent({
+        delay: 700, loop: true, callback: function () {
+          var sx = DESIGN_W / 2 + Phaser.Math.Between(-90, 90);
+          var sy = 56 + Phaser.Math.Between(-16, 16);
+          var sp = self0.add.sprite(sx, sy, 'sparkle').setScale(1.4).setDepth(5);
+          sp.play('sparkle-pop');
+          sp.once('animationcomplete', function () { sp.destroy(); });
+        }
+      });
 
-      var tap = this.add.text(DESIGN_W / 2, 178, 'TAP / SPACE 로 시작', {
-        fontFamily: 'monospace', fontSize: '14px', color: '#ffffff', stroke: '#000', strokeThickness: 4
+      var tap = this.add.text(DESIGN_W / 2, 126, 'TAP / SPACE 로 시작', {
+        fontFamily: 'monospace', fontSize: '14px', color: '#ffffff', stroke: '#1a1622', strokeThickness: 4
       }).setOrigin(0.5);
       this.tweens.add({ targets: tap, alpha: 0.2, duration: 600, yoyo: true, repeat: -1 });
 
-      this.add.text(DESIGN_W / 2, 206, '← → 이동 · A/↑/Space 점프 · 적을 밟으세요', {
-        fontFamily: 'monospace', fontSize: '10px', color: '#dfeaff'
+      this.add.text(DESIGN_W / 2, 212, '← → 이동 · A/↑/Space 점프 · 적을 밟으세요', {
+        fontFamily: 'monospace', fontSize: '10px', color: '#ffffff', stroke: '#46260f', strokeThickness: 3
       }).setOrigin(0.5);
 
       var self = this;
@@ -161,23 +222,69 @@
       });
     },
 
-    // --- 배경 (패럴랙스) ----------------------------------------------------
+    // --- 배경 (다층 패럴랙스: 하늘→해→산→구름→언덕→나무/덤불→지면 장식) ----
+    // 각 레이어의 배치 폭 = 화면폭 + (월드폭-화면폭)×scrollFactor + 여유.
+    // 카메라가 끝까지 가도 레이어가 비지 않는 최소 폭이다.
     buildBackground: function () {
       var sceneryY = LEVEL.groundTop * TILE;
-      // 언덕/덤불 (느린 패럴랙스)
-      for (var c = 4; c < LEVEL.width; c += 17) {
-        this.add.sprite(cx(c), sceneryY, 'hill').setOrigin(0.5, 1).setScale(2.4)
-          .setScrollFactor(0.5).setDepth(-20);
+      var span = function (sf) { return DESIGN_W + (LEVEL.width * TILE - DESIGN_W) * sf + 80; };
+
+      // 하늘 그라데이션 + 해(글로우 할로) — 화면 고정
+      this.add.image(0, 0, 'sky').setOrigin(0, 0).setScrollFactor(0).setDepth(-60);
+      this.add.image(322, 52, 'glow').setScale(2).setBlendMode(Phaser.BlendModes.ADD)
+        .setScrollFactor(0.02).setDepth(-56).setAlpha(0.6);
+      this.add.image(322, 52, 'sun').setScale(1.5).setScrollFactor(0.02).setDepth(-55);
+
+      // 원경 산 (아주 느림)
+      for (var m = 0; m < span(0.12); m += 96) {
+        this.add.sprite(m, sceneryY + 2, 'mountain').setOrigin(0.5, 1)
+          .setScale(2).setScrollFactor(0.12).setDepth(-44)
+          .setFlipX((m / 96) % 2 === 1).setAlpha(0.92);
       }
-      for (var c2 = 9; c2 < LEVEL.width; c2 += 11) {
-        this.add.sprite(cx(c2), sceneryY + 4, 'bush').setOrigin(0.5, 1).setScale(1.6)
-          .setScrollFactor(0.7).setDepth(-15);
+
+      // 구름 두 층 — 천천히 흘러가는 앰비언트 모션 (update 에서 드리프트)
+      this.driftClouds = [];
+      for (var c3 = 0; c3 < span(0.25); c3 += 88) {
+        var small = (c3 / 88) % 3 === 1;
+        var cl = this.add.sprite(c3, 18 + ((c3 * 7) % 46), small ? 'cloud2' : 'cloud')
+          .setScale(small ? 1.2 : 1.7).setScrollFactor(small ? 0.2 : 0.25)
+          .setDepth(small ? -36 : -34).setAlpha(small ? 0.8 : 0.95);
+        this.driftClouds.push({ spr: cl, speed: small ? 5 : 8, max: span(0.25) });
       }
-      // 구름 (더 느리게)
-      for (var c3 = 6; c3 < LEVEL.width; c3 += 13) {
-        var cy2 = 20 + ((c3 * 7) % 40);
-        this.add.sprite(cx(c3), cy2, 'cloud').setScale(2)
-          .setScrollFactor(0.3).setDepth(-30);
+
+      // 중경 언덕
+      for (var c = 0; c < span(0.45); c += 120) {
+        this.add.sprite(c + 30, sceneryY + 1, 'hill').setOrigin(0.5, 1)
+          .setScale(2 + ((c / 120) % 2) * 0.8).setScrollFactor(0.45).setDepth(-24);
+      }
+
+      // 근경 나무/덤불
+      for (var c2 = 0; c2 < span(0.7); c2 += 150) {
+        this.add.sprite(c2 + 60, sceneryY + 1, 'tree').setOrigin(0.5, 1)
+          .setScale(1.4).setScrollFactor(0.7).setDepth(-18)
+          .setFlipX((c2 / 150) % 2 === 0);
+        this.add.sprite(c2 + 130, sceneryY + 3, 'bush').setOrigin(0.5, 1)
+          .setScale(1.3).setScrollFactor(0.7).setDepth(-15);
+      }
+
+      // 지면 장식 (풀숲·꽃·바위) — 월드 좌표, 결정적 의사난수 배치
+      var isPit = function (col) {
+        for (var i = 0; i < LEVEL.pits.length; i++) {
+          if (col >= LEVEL.pits[i][0] && col <= LEVEL.pits[i][1]) return true;
+        }
+        return false;
+      };
+      for (var col = 1; col < LEVEL.width - 1; col++) {
+        if (isPit(col) || isPit(col - 1) || isPit(col + 1)) continue;
+        var hsh = (col * 7919 + 31) % 100;
+        var def = null;
+        if (hsh < 13) def = { k: 'grasstuft', a: 'grass-sway' };
+        else if (hsh < 20) def = { k: 'flowerR', a: 'flowerR-sway' };
+        else if (hsh < 27) def = { k: 'flowerY', a: 'flowerY-sway' };
+        else if (hsh < 32) def = { k: 'rock', a: null };
+        if (!def) continue;
+        var spr = this.add.sprite(cx(col), sceneryY, def.k).setOrigin(0.5, 1).setDepth(-4);
+        if (def.a) spr.play({ key: def.a, startFrame: col % 2 });
       }
     },
 
@@ -259,7 +366,9 @@
     // --- 공유 엔티티 헬퍼 (절차·Tiled 경로 공통) ----------------------------
     makeCoin: function (x, y) {
       var coin = this.coins.create(x, y, 'coin').setDepth(2);
-      coin.play('coin-spin'); coin.body.setSize(10, 10);
+      // 스핀 시작 프레임을 위치 기반으로 흩뜨려 동기화 깨기(모두 같은 면이면 어색)
+      coin.play({ key: 'coin-spin', startFrame: Math.floor(x / TILE) % 4 });
+      coin.body.setSize(10, 10);
       return coin;
     },
 
@@ -292,6 +401,7 @@
         this.add.image(gx + 6, pr * TILE, 'pole').setOrigin(0, 0).setDepth(1);
       }
       this.flagSpr = this.add.sprite(gx + 8, poleTopRow * TILE + 2, 'flag').setOrigin(0, 0).setDepth(2);
+      this.flagSpr.play('flag-wave');
       // 깃대 베이스 블록
       var base = this.solids.create(gx + 8, cy(LEVEL.groundTop - 1) + 8, 'qblock', 2); base.refreshBody();
       // 골 트리거 존
@@ -310,8 +420,7 @@
     spawnEnemy: function (x, y) {
       var e = this.enemies.create(x, y, 'enemy', 0);
       e.play('enemy-walk');
-      e.setSize ? e.body.setSize(11, 10) : null;
-      e.body.setSize(11, 9); e.body.setOffset(0.5, 1);
+      e.body.setSize(11, 8); e.body.setOffset(1.5, 2);
       e.setVelocityX(-26);
       e.setBounceX(1);
       e.dir = -1; e.dead = false;
@@ -323,14 +432,16 @@
     buildHero: function () {
       var p = this.startPos || { x: cx(LEVEL.start.c), y: cy(LEVEL.start.r) };
       this.hero = this.physics.add.sprite(p.x, p.y, 'hero', 0).setDepth(5);
-      this.hero.body.setSize(9, 15); this.hero.body.setOffset(1.5, 1);
+      this.hero.body.setSize(9, 15); this.hero.body.setOffset(2, 2);
       this.hero.setCollideWorldBounds(false);
       this.hero.big = false;
       this.hero.invuln = false;
       this.hero.facing = 1;
+      this.hero.baseSX = 1; this.hero.baseSY = 1; // 스쿼시&스트레치 복귀 기준
       this.hero.play('hero-idle');
-      // 점프 보정 변수
+      // 점프 보정 변수 + 착지/달리기 먼지 상태
       this.coyote = 0; this.jumpBuffer = 0; this.prevJump = false;
+      this.wasOnGround = true; this.peakFall = 0; this.runDustT = 0;
     },
 
     setupInput: function () {
@@ -368,6 +479,11 @@
       if (block.y > hero.y) return; // 위에서 친 게 아님
       if (block.used && block.kind !== 'brick') { GAME_AUDIO.sfx('bump'); this.bumpTween(block); return; }
       this.bumpTween(block);
+      // 히트 플래시 (블록을 친 피드백)
+      if (block.kind === 'coin' || block.kind === 'mushroom') {
+        block.setTintFill(0xffffff);
+        this.time.delayedCall(70, function () { if (block.active) block.clearTint(); });
+      }
       if (block.kind === 'coin') {
         block.used = true; block.anims.stop(); block.setFrame(2);
         this.popCoin(block.x, block.y - TILE);
@@ -392,27 +508,77 @@
         onComplete: function () { block.y = oy; if (block.body) block.refreshBody(); } });
     },
 
+    // --- 게임필 FX 헬퍼 -------------------------------------------------------
+    puff: function (x, y, scale) { // 먼지 퍼프 (점프/착지/달리기)
+      var d = this.add.sprite(x, y, 'dust').setDepth(6).setScale(scale || 1);
+      d.play('dust-puff');
+      d.once('animationcomplete', function () { d.destroy(); });
+    },
+
+    sparkleAt: function (x, y, n) { // 반짝임 버스트 (코인/스톰프)
+      var self = this;
+      for (var i = 0; i < (n || 3); i++) {
+        (function (idx) {
+          self.time.delayedCall(idx * 50, function () {
+            var sp = self.add.sprite(
+              x + Phaser.Math.Between(-7, 7), y + Phaser.Math.Between(-7, 7), 'sparkle'
+            ).setDepth(7).setScale(1 + (idx % 2) * 0.4);
+            sp.play('sparkle-pop');
+            sp.once('animationcomplete', function () { sp.destroy(); });
+          });
+        })(i);
+      }
+    },
+
+    floatText: function (x, y, str, color) { // 떠오르는 점수 텍스트
+      var t = this.add.text(x, y, str, {
+        fontFamily: 'monospace', fontSize: '9px', color: color || '#fff7c0',
+        stroke: '#1a1622', strokeThickness: 3
+      }).setOrigin(0.5).setDepth(20);
+      this.tweens.add({ targets: t, y: y - 18, alpha: 0, duration: 650, ease: 'Quad.out',
+        onComplete: function () { t.destroy(); } });
+    },
+
+    squash: function (sx, sy, dur) { // 스쿼시&스트레치 (점프 0.8/1.2 · 착지 1.25/0.75)
+      var h = this.hero;
+      if (this.squashTween) this.squashTween.stop();
+      var bx = h.baseSX || h.scaleX, by = h.baseSY || h.scaleY;
+      h.setScale(bx, by);
+      this.squashTween = this.tweens.add({
+        targets: h, scaleX: bx * sx, scaleY: by * sy, duration: dur || 70,
+        yoyo: true, ease: 'Quad.out',
+        onComplete: function () { h.setScale(bx, by); }
+      });
+    },
+
     breakBrick: function (block) {
       var x = block.x, y = block.y;
-      for (var i = 0; i < 5; i++) {
-        var p = this.add.image(x, y, 'spark').setTint(0xc0612a).setDepth(6);
-        var vx = (i - 2) * 30, vy = -120 - Math.abs(i - 2) * 20;
-        this.tweens.add({ targets: p, x: x + vx, y: y + 200, alpha: 0, duration: 700,
-          onComplete: function () { p.destroy(); } });
+      // 파편 6개 — 위로 튀었다 떨어지며 회전(Back.in 이징이 초기 상승을 만든다)
+      for (var i = 0; i < 6; i++) {
+        var p = this.add.image(x + (i % 3 - 1) * 4, y, 'spark')
+          .setTint(i % 2 ? 0xc0612a : 0xe08a4a).setDepth(6)
+          .setScale(0.8 + (i % 3) * 0.3);
+        var vx = (i - 2.5) * 26;
+        this.tweens.add({ targets: p, x: x + vx, angle: (i - 2.5) * 240, alpha: 0.2, duration: 700 });
+        this.tweens.add({ targets: p, y: y + 190, duration: 700, ease: 'Back.in',
+          onComplete: function (tw, targets) { targets[0].destroy(); } });
       }
+      this.puff(x, y, 1.2);
       block.destroy();
     },
 
     popCoin: function (x, y) {
       this.addScore(200); this.state.coins++; GAME_AUDIO.sfx('coin');
       var c = this.add.sprite(x, y, 'coin').setDepth(6); c.play('coin-spin');
+      this.sparkleAt(x, y - 10, 2);
+      this.floatText(x, y - 14, '+200');
       this.tweens.add({ targets: c, y: y - 22, duration: 260, ease: 'Quad.out',
         onComplete: function () { c.destroy(); } });
     },
 
     spawnMushroom: function (x, y) {
       var m = this.items.create(x, y, 'mushroom').setDepth(4);
-      m.body.setSize(12, 11);
+      m.body.setSize(11, 9);
       m.setVelocityX(40); m.setBounceX(1);
       m.body.setCollideWorldBounds(false);
       // 블록 위로 살짝
@@ -420,16 +586,22 @@
     },
 
     onCoin: function (hero, coin) {
+      var x = coin.x, y = coin.y;
       coin.destroy();
       this.addScore(100); this.state.coins++;
       GAME_AUDIO.sfx('coin');
+      this.sparkleAt(x, y, 3);
+      this.floatText(x, y - 8, '+100');
       this.maybe1up();
     },
 
     onItem: function (hero, item) {
+      var x = item.x, y = item.y;
       item.destroy();
       this.addScore(1000);
       GAME_AUDIO.sfx('powerup');
+      this.sparkleAt(x, y, 5);
+      this.floatText(x, y - 10, '+1000', '#9fffb0');
       if (!hero.big) this.grow();
     },
 
@@ -441,6 +613,10 @@
         hero.setVelocityY(-260);
         this.addScore(100);
         GAME_AUDIO.sfx('stomp');
+        this.cameras.main.shake(60, 0.0045);
+        this.puff(enemy.x, enemy.body.bottom, 1.1);
+        this.floatText(enemy.x, enemy.y - 12, '+100');
+        this.squash(1.15, 0.85, 60);
       } else if (!hero.invuln) {
         this.hurt(false);
       }
@@ -448,7 +624,7 @@
 
     stompEnemy: function (enemy) {
       enemy.dead = true; enemy.setVelocityX(0); enemy.body.enable = false;
-      enemy.anims.stop(); enemy.setFrame(2);
+      enemy.anims.stop(); enemy.setFrame(4);
       var self = this;
       this.time.delayedCall(450, function () { enemy.destroy(); });
     },
@@ -471,14 +647,16 @@
       this.hero.big = true;
       this.hero.setScale(1.0); // 스프라이트는 setDisplaySize 로
       this.hero.setDisplaySize(this.hero.width * 1.35, this.hero.height * 1.45);
-      this.hero.body.setSize(9, 15); this.hero.body.setOffset(1.5, 1);
+      this.hero.baseSX = this.hero.scaleX; this.hero.baseSY = this.hero.scaleY;
+      this.hero.body.setSize(9, 15); this.hero.body.setOffset(2, 2);
       this.flashHero(700);
     },
 
     shrink: function () {
       this.hero.big = false;
-      this.hero.setDisplaySize(this.hero.width, this.hero.height);
-      this.hero.body.setSize(9, 15); this.hero.body.setOffset(1.5, 1);
+      this.hero.setScale(1.0);
+      this.hero.baseSX = 1; this.hero.baseSY = 1;
+      this.hero.body.setSize(9, 15); this.hero.body.setOffset(2, 2);
     },
 
     flashHero: function (dur) {
@@ -502,7 +680,7 @@
       this.state.dead = true;
       this.hero.invuln = true;
       this.hero.body.enable = false;
-      this.hero.anims.stop(); this.hero.setFrame(3);
+      this.hero.anims.stop(); this.hero.setFrame(8);
       this.hero.setVelocity(0, -320);
       this.hero.body.enable = true; this.hero.body.checkCollision.none = true;
       GAME_AUDIO.sfx('die'); GAME_AUDIO.stopBgm();
@@ -524,6 +702,17 @@
       GAME_AUDIO.sfx('flag'); GAME_AUDIO.stopBgm();
       // 깃발 내리기
       this.tweens.add({ targets: this.flagSpr, y: (LEVEL.groundTop - 2) * TILE, duration: 700, ease: 'Bounce.out' });
+      // 콘페티 — 깃대 주변에서 색색 파편이 흩날림
+      var gx = LEVEL.goal.c * TILE + 8, gy = 5 * TILE;
+      var tints = [0xffd23f, 0xff5a4d, 0x5bbf4a, 0x66c7ff, 0xffffff];
+      for (var ci = 0; ci < 22; ci++) {
+        var p = this.add.image(gx + Phaser.Math.Between(-14, 14), gy + Phaser.Math.Between(-10, 10), 'spark')
+          .setTint(tints[ci % tints.length]).setDepth(8).setScale(0.7 + (ci % 3) * 0.3);
+        this.tweens.add({ targets: p, x: p.x + Phaser.Math.Between(-30, 30), angle: Phaser.Math.Between(-360, 360), duration: 1400 });
+        this.tweens.add({ targets: p, y: p.y + 130 + Phaser.Math.Between(0, 50), alpha: 0, duration: 1400,
+          ease: 'Quad.in', onComplete: function (tw, targets) { targets[0].destroy(); } });
+      }
+      this.sparkleAt(gx, gy, 6);
       this.events.emit('banner', 'STAGE CLEAR!');
       var self = this;
       // 남은 타임 → 점수
@@ -585,17 +774,51 @@
         h.setVelocityY(-380);
         this.jumpBuffer = 0; this.coyote = 0;
         GAME_AUDIO.sfx('jump');
+        this.puff(h.x, h.body.bottom, 0.9);          // 점프 먼지
+        this.squash(0.8, 1.2, 90);                   // 스트레치(도약)
       }
       // 가변 점프 (버튼 떼면 상승 컷)
       if (!jumpHeld && h.body.velocity.y < -140) h.setVelocityY(-140);
 
-      // 애니메이션
+      // 착지 감지 — 낙하 최고 속도 기준으로 먼지·스쿼시 강도 결정
       if (!onGround) {
-        h.play('hero-jump', true);
+        this.peakFall = Math.max(this.peakFall, h.body.velocity.y);
+      } else if (!this.wasOnGround && this.peakFall > 160) {
+        this.puff(h.x - 4, h.body.bottom, 1);
+        this.puff(h.x + 4, h.body.bottom, 0.8);
+        this.squash(1.25, 0.75, 80);                 // 스쿼시(착지)
+        this.peakFall = 0;
+      }
+      if (onGround) this.peakFall = 0;
+      this.wasOnGround = onGround;
+
+      // 달리기 먼지 (지면에서 일정 속도 이상일 때 발 뒤꿈치)
+      if (onGround && Math.abs(h.body.velocity.x) > 90) {
+        this.runDustT += dt;
+        if (this.runDustT > 170) {
+          this.runDustT = 0;
+          this.puff(h.x - h.facing * 6, h.body.bottom - 1, 0.7);
+        }
+      } else {
+        this.runDustT = 0;
+      }
+
+      // 애니메이션 — 상승/낙하 분리
+      if (!onGround) {
+        h.play(h.body.velocity.y < -40 ? 'hero-jump' : 'hero-fall', true);
       } else if (Math.abs(h.body.velocity.x) > 12) {
         h.play('hero-run', true);
       } else {
         h.play('hero-idle', true);
+      }
+
+      // 구름 앰비언트 드리프트 (왼쪽으로 흐르고 레이어 폭에서 랩)
+      if (this.driftClouds) {
+        for (var dc = 0; dc < this.driftClouds.length; dc++) {
+          var cl = this.driftClouds[dc];
+          cl.spr.x -= cl.speed * dt / 1000;
+          if (cl.spr.x < -50) cl.spr.x = cl.max + 30;
+        }
       }
 
       // 적 AI (벽/월드끝에서 방향 전환)
