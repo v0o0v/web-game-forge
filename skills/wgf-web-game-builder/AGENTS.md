@@ -16,8 +16,9 @@
 |-----------|---------|
 | `reference/` | 게임 제작 지식 라이브러리(아래 분해) |
 | `reference/phaser/` | **Phaser 공식 v4 에이전트 스킬 문서 28종 + INDEX.md** (MIT 벤더링). 씬·물리·스케일·입력·파티클·필터·v3→v4 마이그레이션. 라우팅은 `phaser/INDEX.md` |
-| `reference/game-dna/` | 인기 2D 게임 35종 재미요소 분석(장르별 6파일) + `fun-elements.md`(재미요소 사전 21종·조합 레시피·안티패턴) + `INDEX.md` |
+| `reference/game-dna/` | 인기 2D 게임 35종 재미요소 분석(장르별 6파일) + `fun-elements.md`(재미요소 사전 25종·조합 레시피·안티패턴) + `INDEX.md` |
 | `reference/game-dna/puzzle/` | 퍼즐 심화 — 35종 분석(낙하·매치병합·논리연역·공간물리 + 보드게임 드래프트패턴·패킹·세트롤앤라이트 7하위장르 ×5) + 퍼즐 전용 재미요소 사전(특화 13종) + `INDEX.md` |
+| `reference/game-dna/board/` | 보드게임 아틀라스 — 100종 컴팩트 카탈로그(덱빌딩·푸시유어럭·타일경로·경매경제·워커·협력·블러프추리·추상듀얼·단어파티·순발기억 10클러스터 ×10) + `INDEX.md` |
 
 | Reference File | Description |
 |----------------|-------------|

@@ -260,6 +260,14 @@ Phaser 4 API 의 정확한 사용법(씬 라이프사이클·물리·스케일·
 ([`puzzle/INDEX.md`](skills/wgf-web-game-builder/reference/game-dna/puzzle/INDEX.md)). `puzzle-game` 스킬이
 연역 그리드·규칙조작·공간 푸시·물리 + 드래프트 시장·폴리오미노 패킹·롤앤라이트·세트 재배열 스캐폴드까지 다룹니다.
 
+**🎲 보드게임 아틀라스** — 유명 보드게임 **100종을 컴팩트 카탈로그**(`game-dna/board/`, 2티어)로 추가 분석했습니다.
+덱빌딩·엔진빌딩(Dominion·Splendor·Wingspan 등), 푸시유어럭·주사위(Can't Stop·Quacks 등), 타일·경로(Carcassonne·Ticket to Ride 등),
+경매·경제(Modern Art·Ra·Catan 등), 워커 플레이스먼트(Agricola·Everdell 등), 협력(Pandemic·Spirit Island 등),
+추리·블러프(Mastermind·Coup 등), 추상 듀얼(Hive·Onitama 등), 단어·파티(Scrabble·Codenames 등), 순발력·기억(Dobble·Simon 등)의
+**10개 메카닉 클러스터 × 10종** + 전역 재미요소 4종 신설(`FE-DECKCRAFT` 덱 조형·`FE-AUCTION` 경매·`FE-BLUFF` 심리전·`FE-MEMORY` 기억)
+([`board/INDEX.md`](skills/wgf-web-game-builder/reference/game-dna/board/INDEX.md)). 게임당 코어·재미요소·메카닉·웹 솔로 번안·조합 훅·IP 주의를 압축 수록해
+game-dna 총 **164작**이 명확화 단계의 조합 재료가 됩니다.
+
 ---
 
 ## ⚙️ 엔진 라이브러리 12종 (`engine/`)
@@ -406,7 +414,7 @@ var joy = JoystickKit.create(this, { twin:true });
 web-game-forge/
 ├── .claude-plugin/  plugin.json · marketplace.json   # 플러그인 매니페스트
 ├── skills/                                            # 29종 스킬 (메인 1 + 전문 28)
-│   ├── wgf-web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 분석 + game-dna/puzzle/ 퍼즐 35종 심화 — 보드게임 15종 포함)
+│   ├── wgf-web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 분석 + game-dna/puzzle/ 퍼즐 35종 심화 + game-dna/board/ 보드게임 아틀라스 100종)
 │   ├── wgf-platformer-game/  wgf-topdown-shooter/  wgf-arcade-classic/  wgf-puzzle-game/  wgf-endless-runner/
 │   ├── wgf-world-map-architect/  (+ reference/map-interview · map-design/ MAP-* 원칙 + 위상 카탈로그 + 빌드 패턴)
 │   ├── wgf-level-architect/  (+ reference/level-interview · level-design/ LD-* 원칙 + 장르별 레벨 설계)  wgf-level-designer/
