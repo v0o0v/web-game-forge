@@ -72,6 +72,8 @@
 
   // 컬러 그레이딩 — preset 이름(문자열) 또는 fn(colorMatrix) 콜백.
   //  내장 프리셋: sepia/grayscale/night/brown/vintagePinhole/kodachrome/... (레퍼런스 참조)
+  //  ⚠ 콜백 안에서 둘째 연산부터는 multiply=true 로 합성할 것 — 아니면 ColorMatrix 가
+  //    행렬을 리셋·대체한다. brightness(v) 는 RGB×v 스케일(1=원본, 0=검정).
   ScreenFX.colorGrade = function (cam, preset) {
     var l = list(cam, false);
     if (!l) return null;
@@ -104,7 +106,7 @@
     if (!ScreenFX.supported(cam)) return null;
     var r = {};
     if (name === 'night') {
-      r.grade = ScreenFX.colorGrade(cam, function (m) { m.night(0.45); m.brightness(0.03); });
+      r.grade = ScreenFX.colorGrade(cam, function (m) { m.night(0.45); m.brightness(1.03, true); });
       r.bloom = ScreenFX.bloom(cam, { threshold: 0.5, amount: 0.72 });
       r.vignette = ScreenFX.vignette(cam, { radius: 0.62, strength: 0.55 });
     } else if (name === 'neon') {
@@ -114,7 +116,7 @@
       r.crt = ScreenFX.crt(cam, { pixelate: 2 });
     } else if (name === 'dream') {
       r.bloom = ScreenFX.bloom(cam, { threshold: 0.3, amount: 0.5, x: 3, y: 3 });
-      r.grade = ScreenFX.colorGrade(cam, function (m) { m.saturate(0.15); m.brightness(0.05); });
+      r.grade = ScreenFX.colorGrade(cam, function (m) { m.saturate(0.15); m.brightness(1.05, true); });
     }
     return r;
   };

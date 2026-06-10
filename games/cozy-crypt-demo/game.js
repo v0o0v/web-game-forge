@@ -45,7 +45,7 @@
     shading: { model: 'cell', light_dir: 'NW', ramp_steps: 3, hue_shift: 'warm-light-cool-shadow' },
     lighting: {
       ambient: { color: '#171320', alpha: 0.55 },
-      point_lights: { color: '#ffd9a0', radius: 110, intensity: 0.9 },
+      point_lights: { color: '#ffd9a0', radius: 110, intensity: 0.4 },
       fog: { enabled: false }
     },
     postfx: {
@@ -253,8 +253,9 @@
       // ── 스타일 무드 배선 ──────────────────────────────────────────────────
       // WebGL: 따뜻한 앰비언트 어둠 + 횃불 위치 포인트라이트 + 포스트FX.
       // Canvas: 틴트 오버레이 폴백(R4).
+      // 플레이어 글로우는 횃불(0.4)보다 약하게 — 영웅 스프라이트가 광원 코어에 묻히지 않게.
       this.styleResult = StyleKit.apply(this, STYLE, {
-        lights: torchSpots.concat([{ x: this.hero.x, y: this.hero.y, color: STYLE.role_colors.player, radius: 80 }])
+        lights: torchSpots.concat([{ x: this.hero.x, y: this.hero.y, color: STYLE.role_colors.player, radius: 70, intensity: 0.22 }])
       });
 
       // game-qa 노출 — verify.* 로 AC2 검증.

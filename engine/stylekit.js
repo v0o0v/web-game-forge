@@ -333,11 +333,14 @@
       });
     }
     // color_grade.warm(0..1) → 따뜻한 컬러매트릭스(채도/밝기 미세 보정).
+    // ⚠ ColorMatrix 풋건: 각 연산은 multiply=true 가 아니면 행렬을 리셋·대체하고,
+    //   brightness(v) 는 "+v 밝기"가 아니라 RGB×v 스케일(1=원본, 0=검정)이다.
+    //   brightness(warm*0.08) 처럼 쓰면 화면 전체가 ~1% 밝기 → 검은 화면이 된다.
     if (pf.color_grade && typeof pf.color_grade.warm === 'number') {
       var warm = pf.color_grade.warm;
       out.grade = global.ScreenFX.colorGrade(camera, function (m) {
         if (m.saturate) m.saturate(warm * 0.4);
-        if (m.brightness) m.brightness(warm * 0.08);
+        if (m.brightness) m.brightness(1 + warm * 0.08, true);
       });
     }
     return out;
