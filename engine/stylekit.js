@@ -18,7 +18,7 @@
  *    어댑터. LightingKit·ScreenFX 처럼 WebGL 전용 — Canvas 면 graceful no-op 후
  *    applyCanvasFallback 으로 룩을 근사 유지(R4).
  *
- * style.json 계약(요약 — 정식 스펙은 skills/style-architect/reference/cohesion-tools.md):
+ * style.json 계약(요약 — 정식 스펙은 skills/wgf-style-architect/reference/cohesion-tools.md):
  *   { slug, schema_version, medium:"pixel"|"vector", tier:0..3, mood,
  *     master_palette:{ ramps:{<material>:[dark..light]}, neutrals:{black,white}, background },
  *     role_colors:{ player,enemy,danger,pickup,ui_accent, ... },

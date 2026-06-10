@@ -64,8 +64,8 @@
   "renderStyleNote": "픽셀 게임은 PixelForge(pixelArt:true), 미려한 스무스 게임은 VectorForge(pixelArt:false, antialias:true). SVG는 this.load.svg(key,url,{width,height})로 임의 크기 또렷이 래스터화. 외부 에셋은 games/<slug>/assets/에 벤더링 + 아래 entries 에 CC0 로 등록.",
   "spritePickerCatalog": {
     "note": "실제 스프라이트/시트를 시각적으로 골라 적용하려면 sprite-picker 스킬을 쓴다. 위 recommended* 목록보다 광범위·검증된 CC0 소스 카탈로그가 아래 경로에 캐싱돼 있다. 갱신은 sprite-catalog-refresh 스킬.",
-    "sources": "skills/sprite-picker/catalog/sources.json",
-    "packs": "skills/sprite-picker/catalog/packs.json",
+    "sources": "skills/wgf-sprite-picker/catalog/sources.json",
+    "packs": "skills/wgf-sprite-picker/catalog/packs.json",
     "localLibrary": "assets-library/library.json",
     "safetyTiers": [
       "cc0",

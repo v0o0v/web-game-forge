@@ -19,7 +19,7 @@
 | Directory | Purpose |
 |-----------|---------|
 | `.claude-plugin/` | 플러그인·마켓플레이스 매니페스트 (see `.claude-plugin/AGENTS.md`) |
-| `commands/` | 슬래시 커맨드 `/web-game-builder:make-game` (see `commands/AGENTS.md`) |
+| `commands/` | 슬래시 커맨드 `/web-game-builder:wgf-make-game` (see `commands/AGENTS.md`) |
 | `hooks/` | `UserPromptSubmit` 의도 감지 훅 등록 (see `hooks/AGENTS.md`) |
 | `scripts/` | 한/영 게임 의도 감지 스크립트 3종 (see `scripts/AGENTS.md`) |
 | `engine/` | 재사용 엔진 라이브러리 12종 + vendored Phaser/Tone.js (see `engine/AGENTS.md`) |

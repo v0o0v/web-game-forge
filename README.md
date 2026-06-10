@@ -104,7 +104,7 @@ make a top-down shooter with waves of enemies
 명시적 슬래시 커맨드로도 호출할 수 있습니다:
 
 ```
-/web-game-builder:make-game 벽돌깨기 게임
+/web-game-builder:wgf-make-game 벽돌깨기 게임
 ```
 
 세부 작업도 해당 전문 스킬이 자동으로 잡습니다 — "효과음 추가해줘", "레벨 하나 더 만들어줘",
@@ -178,7 +178,7 @@ http://127.0.0.1:8766/games/super-runner/index.html
 - **3가지 출처** — ① 큐레이션된 CC0 카탈로그(Kenney·OpenGameArt 등, 라이선스 적대적 검증), ② 사용자
   로컬 파일, ③ `assets-library/`에 쌓인 **이전 사용분** — 또는 ④ 설명을 받아 `sprite-forge`/`vector-graphics`
   로 **절차 생성**(위임). 게임 생성 시 "실제 에셋 vs 절차 생성"을 먼저 묻습니다.
-- **캐싱 우선** — 카탈로그는 미리 조사·검증해 `skills/sprite-picker/catalog/`에 캐싱되어 **매번 웹을
+- **캐싱 우선** — 카탈로그는 미리 조사·검증해 `skills/wgf-sprite-picker/catalog/`에 캐싱되어 **매번 웹을
   뒤지지 않습니다.** 외부 재조사는 `sprite-catalog-refresh`로 사용자가 명시 요청할 때만.
 - **로컬 라이브러리** — 한 번 쓴 스프라이트는 `assets-library/`에 보관해 언제든 다시 고릅니다.
 - **끈질긴 인터뷰** — 의도가 모호하면 탑다운 1문1답으로 스타일·에셋 목록·애니·라이선스·적용 매핑을 캐묻습니다.
@@ -230,7 +230,7 @@ http://127.0.0.1:8766/games/super-runner/index.html
 
 ### 📚 Phaser 4 API 레퍼런스 라이브러리
 
-`skills/web-game-builder/reference/phaser/` 디렉터리에 **Phaser 공식 v4 에이전트용 스킬 문서
+`skills/wgf-web-game-builder/reference/phaser/` 디렉터리에 **Phaser 공식 v4 에이전트용 스킬 문서
 28종 + INDEX.md** 를 벤더링하고 있습니다. 게임 생성 시 우리 스킬들이 이 레퍼런스를 직접 참조해
 Phaser 4 API 의 정확한 사용법(씬 라이프사이클·물리·스케일·입력·파티클 등)을 LLM 코드생성에
 반영합니다. 벤더링 출처: Phaser 공식 skills(MIT 라이선스). v3 API 혼용으로 인한 코드생성 오류를
@@ -238,24 +238,24 @@ Phaser 4 API 의 정확한 사용법(씬 라이프사이클·물리·스케일·
 
 ### 🧬 게임 DNA 레퍼런스 라이브러리
 
-`skills/web-game-builder/reference/game-dna/` 디렉터리에 **지난 10여 년간 많은 사람이 플레이한
+`skills/wgf-web-game-builder/reference/game-dna/` 디렉터리에 **지난 10여 년간 많은 사람이 플레이한
 2D 게임 35종의 재미 요소 분석**을 담았습니다. 플랫포머(Celeste·Hollow Knight·Cuphead…),
 러너(Flappy Bird·Geometry Dash·Canabalt…), 아케이드(Snake·Crossy Road·Pac-Man…),
 퍼즐(Tetris·Candy Crush·2048·Baba Is You…), 슈터·로그라이트(Vampire Survivors·Brotato·Geometry Wars…),
 물리·메가히트(Angry Birds·Cut the Rope·Plants vs. Zombies…)를 장르별 6개 파일로 분석합니다.
 
 각 게임은 **코어 루프·재미요소(`FE-*` 태그)·메카닉·난이도 곡선·게임필·리텐션·우리 엔진 재현도(✅/⚠️/❌)·
-조합 훅·IP 안전 메모** 템플릿으로 분해되며, [`fun-elements.md`](skills/web-game-builder/reference/game-dna/fun-elements.md)에
+조합 훅·IP 안전 메모** 템플릿으로 분해되며, [`fun-elements.md`](skills/wgf-web-game-builder/reference/game-dna/fun-elements.md)에
 **재미요소 사전 21종 + 검증된 조합 레시피 11종 + 안티패턴 + 4단계 조합 설계법**을 정리했습니다.
 게임 제작 명확화 단계에서 이 자료로 **"어떤 게임을 만들지" 제안하고, 여러 게임의 재미를 조합해
 새 게임에 녹입니다.** 분석 대상은 **메카닉·재미뿐** — 이름·캐릭터·스프라이트·음악 등 저작물은 쓰지 않습니다.
-색인·사용법: [`game-dna/INDEX.md`](skills/web-game-builder/reference/game-dna/INDEX.md).
+색인·사용법: [`game-dna/INDEX.md`](skills/wgf-web-game-builder/reference/game-dna/INDEX.md).
 
 **🧩 퍼즐 심화 서브라이브러리** — 퍼즐은 별도로 **20종 심화 분석**(`game-dna/puzzle/`)으로 확장했습니다.
 낙하·실시간(Tetris·Puyo Puyo·Dr. Mario·Lumines·Puzzle Bobble), 매치·병합(Bejeweled·Candy Crush·Puzzle & Dragons·2048·Threes),
 논리·연역(Sudoku·Picross·Minesweeper·Wordle·Flow Free), 공간·물리·규칙(Sokoban·Baba Is You·Monument Valley·Lemmings·Cut the Rope)의
 **4개 하위장르 × 5종 + 퍼즐 전용 재미요소 사전(연역·규칙발견·공간추론·선계획 등 특화 8종 포함) + 조합 레시피 14종**
-([`puzzle/INDEX.md`](skills/web-game-builder/reference/game-dna/puzzle/INDEX.md)). `puzzle-game` 스킬이
+([`puzzle/INDEX.md`](skills/wgf-web-game-builder/reference/game-dna/puzzle/INDEX.md)). `puzzle-game` 스킬이
 연역 그리드·규칙조작·공간 푸시·물리 신규 하위장르 스캐폴드까지 다룹니다.
 
 ---
@@ -293,7 +293,7 @@ VectorForge.bake(this, 'orb', { w:24, h:24, draw:(ctx,w,h,t,VF) => {
 SFX(트랜지언트+바디+테일)를 코드 합성. 오디오 파일 0, 100% CC0(절차 합성 오리지널). `Tone.Transport`
 샘플정확 스케줄러로 박자 지터 제거. **`ChipAudio`와 동일 인터페이스**(`unlock/resume/suspend/toggleMute/
 startBgm/stopBgm/sfx`)라 `mobile.js`가 무수정 동작. `audio.json`을 데이터로 로드, 디렉터 스킬
-[`sound-architect`](skills/sound-architect/SKILL.md)가 무드 인터뷰로 설계.
+[`sound-architect`](skills/wgf-sound-architect/SKILL.md)가 무드 인터뷰로 설계.
 
 ```js
 var GAME_AUDIO = new SoundForge(AUDIO_SPEC);  window.GAME_AUDIO = GAME_AUDIO;
@@ -340,8 +340,8 @@ var res = TiledForge.loadTiledMap(this, 'pack-map', {
 });
 ```
 
-> 자세한 API는 [skills/web-game-builder/reference/engine-api.md](skills/web-game-builder/reference/engine-api.md).
-> Tiled 저작 가이드: [skills/level-designer/reference/tiled/authoring.md](skills/level-designer/reference/tiled/authoring.md).
+> 자세한 API는 [skills/wgf-web-game-builder/reference/engine-api.md](skills/wgf-web-game-builder/reference/engine-api.md).
+> Tiled 저작 가이드: [skills/wgf-level-designer/reference/tiled/authoring.md](skills/wgf-level-designer/reference/tiled/authoring.md).
 
 ### AbilityKit (`abilitykit.js`)
 **캐릭터 능력/스킬 시스템 런타임**(`ability-architect` 디렉터가 설계). `games/<slug>/abilities.json` 을 로드해 능력의
@@ -394,7 +394,7 @@ var joy = JoystickKit.create(this, { twin:true });
 2. **2차 — UserPromptSubmit 훅 (결정론적)** — `scripts/detect-game-intent.js`(Node, 크로스플랫폼)가
    정규식으로 의도를 감지하면 `additionalContext`를 `<system-reminder>`로 주입(넛지). `decision:block`이
    아니라 사용자 프롬프트는 보존됩니다.
-3. **3차 — 슬래시 커맨드 (명시적)** — `/web-game-builder:make-game <설명>`.
+3. **3차 — 슬래시 커맨드 (명시적)** — `/web-game-builder:wgf-make-game <설명>`.
 
 ---
 
@@ -404,22 +404,22 @@ var joy = JoystickKit.create(this, { twin:true });
 web-game-forge/
 ├── .claude-plugin/  plugin.json · marketplace.json   # 플러그인 매니페스트
 ├── skills/                                            # 29종 스킬 (메인 1 + 전문 28)
-│   ├── web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 분석 + game-dna/puzzle/ 퍼즐 20종 심화)
-│   ├── platformer-game/  topdown-shooter/  arcade-classic/  puzzle-game/  endless-runner/
-│   ├── world-map-architect/  (+ reference/map-interview · map-design/ MAP-* 원칙 + 위상 카탈로그 + 빌드 패턴)
-│   ├── level-architect/  (+ reference/level-interview · level-design/ LD-* 원칙 + 장르별 레벨 설계)  level-designer/
-│   ├── story-architect/  (+ reference/story-interview · story-design/ ST~TL-* 원칙)
-│   ├── item-architect/  (+ reference/item-interview · item-design/ SCOPE~UX-* 원칙 100여종 + tools/lint-items.mjs 밸런스 validator)
-│   ├── ability-architect/  (+ reference/ability-interview · ability-design/ SCOPE~UX-* 원칙 + tools/lint-abilities.mjs · sim-abilities.mjs) — 캐릭터 능력/스킬(Claude 스킬 아님)
+│   ├── wgf-web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 분석 + game-dna/puzzle/ 퍼즐 20종 심화)
+│   ├── wgf-platformer-game/  wgf-topdown-shooter/  wgf-arcade-classic/  wgf-puzzle-game/  wgf-endless-runner/
+│   ├── wgf-world-map-architect/  (+ reference/map-interview · map-design/ MAP-* 원칙 + 위상 카탈로그 + 빌드 패턴)
+│   ├── wgf-level-architect/  (+ reference/level-interview · level-design/ LD-* 원칙 + 장르별 레벨 설계)  wgf-level-designer/
+│   ├── wgf-story-architect/  (+ reference/story-interview · story-design/ ST~TL-* 원칙)
+│   ├── wgf-item-architect/  (+ reference/item-interview · item-design/ SCOPE~UX-* 원칙 100여종 + tools/lint-items.mjs 밸런스 validator)
+│   ├── wgf-ability-architect/  (+ reference/ability-interview · ability-design/ SCOPE~UX-* 원칙 + tools/lint-abilities.mjs · sim-abilities.mjs) — 캐릭터 능력/스킬(Claude 스킬 아님)
 │   │                       └ 런타임은 engine/abilitykit.js
-│   ├── sprite-picker/  (+ catalog/ 검증된 CC0 소스 캐시 · picker/ 브라우저 갤러리 · reference/ 인터뷰·소싱·프로토콜·라이브러리)
-│   ├── sprite-catalog-refresh/  (sprite-picker 카탈로그 웹 재조사·갱신)
-│   ├── sprite-forge/  vector-graphics/  sound-architect/(+reference/sound-design 8종·lint-audio.mjs)  chip-sound/  game-ui-hud/  juice-fx/
-│   ├── matter-physics/  screen-fx/  lighting-mood/  path-motion/  virtual-joystick/   # Phaser 고급·입력 킷 5종 스킬
-│   └── mobile-webview-tune/  game-qa/  ip-license-guard/  perf-60fps/
+│   ├── wgf-sprite-picker/  (+ catalog/ 검증된 CC0 소스 캐시 · picker/ 브라우저 갤러리 · reference/ 인터뷰·소싱·프로토콜·라이브러리)
+│   ├── wgf-sprite-catalog-refresh/  (sprite-picker 카탈로그 웹 재조사·갱신)
+│   ├── wgf-sprite-forge/  wgf-vector-graphics/  wgf-sound-architect/(+reference/sound-design 8종·lint-audio.mjs)  wgf-chip-sound/  wgf-game-ui-hud/  wgf-juice-fx/
+│   ├── wgf-matter-physics/  wgf-screen-fx/  wgf-lighting-mood/  wgf-path-motion/  wgf-virtual-joystick/   # Phaser 고급·입력 킷 5종 스킬
+│   └── wgf-mobile-webview-tune/  wgf-game-qa/  wgf-ip-license-guard/  wgf-perf-60fps/
 ├── hooks/hooks.json                                   # UserPromptSubmit 의도 감지 등록
 ├── scripts/detect-game-intent.{js,ps1,sh}            # 한/영 게임·에셋 의도 감지(크로스플랫폼)
-├── commands/make-game.md                              # /web-game-builder:make-game
+├── commands/wgf-make-game.md                              # /web-game-builder:wgf-make-game
 ├── engine/  phaser.min.js · pixelforge · vectorforge · audio · soundforge · tone(Tone.js v15) · mobile · tiled · abilitykit(능력 런타임) · matterkit · screenfx · lightingkit · pathkit · joystickkit   # 재사용 엔진(+Phaser 고급·입력 킷 5종)
 ├── games/  super-runner/(픽셀 플랫포머·?tiled=1) · runeburst/ · is-rule/ · style-preview/
 │          · tiled-topdown/(GEM DUNGEON) · tiled-iso/(등각·육각, ?orient=hex) · tiled-pack/(GPU+CC0팩 임포트)

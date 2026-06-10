@@ -21,7 +21,7 @@
 |------|----|----|
 | `medium` | `pixel` | NES풍 절차 픽셀아트(PixelForge). `render.pixelArt:true` 와 1:1(D7). |
 | `tier` | 2 | 팔레트 + 폼언어 + 라이팅/포스트FX 무드까지(0=팔레트만, 3=풀 가이드). |
-| `mood` | `cozy-dungeon` | 프리셋 `skills/style-architect/reference/presets/cozy-dungeon.json` 기반. |
+| `mood` | `cozy-dungeon` | 프리셋 `skills/wgf-style-architect/reference/presets/cozy-dungeon.json` 기반. |
 
 ## 3. master_palette (상류 진실)
 

@@ -161,7 +161,7 @@ var result = TiledForge.loadTiledMap(scene, 'map', {
 
 1. **설계 문서**(이 파일).
 2. **`engine/tiled.js`** — `bakeTileset` + `buildTilesetBlock` + `injectMap` + `loadTiledMap`.
-3. **저작 도구**(무의존성 Node, `skills/level-designer/tools/`):
+3. **저작 도구**(무의존성 Node, `skills/wgf-level-designer/tools/`):
    - `level-to-tmj.mjs` — `LEVEL` 피처리스트 → `.tmj`(super-runner 이전·라운드트립).
    - `ascii-to-tmj.mjs` — ASCII 격자 → `.tmj`(LLM 친화 저작; 탑다운 맵에 사용).
 4. **super-runner 플러거블 이전** — `?tiled=1`에서 베이크+로드, 스포너가 기존 메서드 재사용.

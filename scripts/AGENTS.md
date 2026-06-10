@@ -17,7 +17,7 @@
 
 ### Working In This Directory
 - **`.js`가 정본**이다 — 훅(`hooks.json`)이 Node 버전만 호출한다. 감지 규칙(정규식·키워드)을 바꾸면 `.ps1`·`.sh` 포팅도 함께 갱신해 3종을 정합 유지한다.
-- 감지 정규식은 한국어(게임 + 만들/제작/개발/코딩…)·영어(make/build/create … game/platformer…)·고유 장르명(클론 이름 단독)을 커버한다. `skills/web-game-builder/SKILL.md`의 description 키워드와 의미상 정합.
+- 감지 정규식은 한국어(게임 + 만들/제작/개발/코딩…)·영어(make/build/create … game/platformer…)·고유 장르명(클론 이름 단독)을 커버한다. `skills/wgf-web-game-builder/SKILL.md`의 description 키워드와 의미상 정합.
 - 출력은 반드시 `additionalContext` 형식(넛지). 프롬프트를 차단·변형하지 않는다.
 - 무의존성(Node 표준 라이브러리만) 유지.
 

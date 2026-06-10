@@ -15,7 +15,7 @@
  *  - AbilityKit.attach(scene, spec) 는 scene 'update' 에 tick(dt) 를 자동 훅(JoystickKit 패턴).
  *  - tick(dt) 는 결정론적(Date.now 미사용) → game-qa step 하니스로 결정적 검증 가능.
  *
- * abilities.json 계약(요약 — 정식 스펙은 skills/ability-architect/reference/ability-design/
+ * abilities.json 계약(요약 — 정식 스펙은 skills/wgf-ability-architect/reference/ability-design/
  * consistency-tools.md): { meta, resources[], abilities[], tree?, gates?, sets?, balanceConfig }.
  *   ability: { id,name,kind,input,slot?, resource?,cost?, cooldown?,charges?, cast?,active?,recovery?,
  *              effect{}, scaling?, maxStacks?,cap?, tags[],role, grantsVerb?,unlocks?,requires[]?,
