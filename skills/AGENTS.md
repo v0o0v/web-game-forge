@@ -21,7 +21,7 @@ WebGameForge의 **29종 스킬 체계**가 사는 곳. 메인 오케스트레이
 | `wgf-platformer-game/` | 옆스크롤 플랫포머(마리오류) — 플래그십 |
 | `wgf-topdown-shooter/` | 탑다운/트윈스틱 슈팅 |
 | `wgf-arcade-classic/` | 벽돌깨기·뱀·퐁·인베이더 |
-| `wgf-puzzle-game/` | 테트리스·매치3·2048·뿌요뿌요 (퍼즐 신규 하위장르 포함) |
+| `wgf-puzzle-game/` | 테트리스·매치3·2048·뿌요뿌요 + 퍼즐 보드게임(드래프트·패킹·세트·롤앤라이트) 디지털 번안 |
 | `wgf-endless-runner/` | 무한 러너·플래피류 |
 
 ### 🛠 제작요소 (13)
