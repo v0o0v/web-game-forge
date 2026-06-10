@@ -1,6 +1,6 @@
 # 게임 DNA 레퍼런스 라이브러리 — 색인 (INDEX)
 
-> 지난 10여 년간 많은 사람이 플레이한 **인기 2D 게임**의 **재미 요소·메카닉**을 분석해, WebGameForge(`web-game-builder`)가 새 게임을 설계할 때 쓰는 **템플릿/조합 자료**다. 전 장르 29작 + **퍼즐 심화 20작**([puzzle/](./puzzle/INDEX.md) 서브라이브러리) = 49작.
+> 지난 10여 년간 많은 사람이 플레이한 **인기 2D 게임**의 **재미 요소·메카닉**을 분석해, WebGameForge(`web-game-builder`)가 새 게임을 설계할 때 쓰는 **템플릿/조합 자료**다. 전 장르 29작 + **퍼즐 심화 35작**(디지털 퍼즐 20 + 퍼즐 보드게임 15, [puzzle/](./puzzle/INDEX.md) 서브라이브러리) = 64작.
 > 핵심 목적: 사용자에게 "어떤 게임 만들지" 물을 때 이 자료로 **검증된 재미를 제안**하고, 여러 게임의 재미 요소를 **조합해 새 게임에 녹이는** 것.
 > 분석 대상은 **메카닉·재미뿐**이다 — 이름·캐릭터·스프라이트·음악 등 저작물은 절대 쓰지 않는다(각 파일의 IP 안전 메모 참고).
 
@@ -48,9 +48,9 @@
 | Fruit Ninja (2010) | `FE-JUICE` `FE-COMBO` `FE-TENSION` | `arcade-classic` | ✅ |
 | Pac-Man (1980) | `FE-TENSION` `FE-RISK-REWARD` `FE-MASTERY` | `arcade-classic` | ✅ |
 
-### [puzzle/](./puzzle/INDEX.md) — 퍼즐 (심화 서브라이브러리, 20종)
-> 퍼즐은 **20종 심화 분석 서브라이브러리**로 확장됐다 → **[puzzle/INDEX.md](./puzzle/INDEX.md)**.
-> 4개 하위장르 × 5종 + 퍼즐 전용 재미요소 사전·조합 플레이북([puzzle/fun-elements.md](./puzzle/fun-elements.md)).
+### [puzzle/](./puzzle/INDEX.md) — 퍼즐 (심화 서브라이브러리, 35종)
+> 퍼즐은 **35종 심화 분석 서브라이브러리**(디지털 퍼즐 20 + 퍼즐 보드게임 15)로 확장됐다 → **[puzzle/INDEX.md](./puzzle/INDEX.md)**.
+> 7개 하위장르 × 5종 + 퍼즐 전용 재미요소 사전·조합 플레이북([puzzle/fun-elements.md](./puzzle/fun-elements.md)).
 
 | 하위장르 | 게임 | 주 스킬 |
 |---|---|---|
@@ -58,6 +58,9 @@
 | [매치·병합](./puzzle/match-merge.md) | Bejeweled · Candy Crush · Puzzle & Dragons · 2048 · Threes | `puzzle-game` |
 | [논리·연역](./puzzle/logic-deduction.md) | Sudoku · Picross · Minesweeper · Wordle · Flow Free | `puzzle-game` |
 | [공간·물리·규칙](./puzzle/spatial-physics.md) | Sokoban · Baba Is You · Monument Valley · Lemmings · Cut the Rope | `puzzle-game` |
+| [보드: 드래프트·패턴](./puzzle/board-draft-pattern.md) | Azul · Sagrada · Kingdomino · Cascadia · Take It Easy | `puzzle-game` |
+| [보드: 폴리오미노·패킹](./puzzle/board-packing.md) | Patchwork · Blokus · Ubongo · NMBR 9 · Project L | `puzzle-game` |
+| [보드: 세트·재배열·롤앤라이트](./puzzle/board-set-rollwrite.md) | Rummikub · SET · Qwirkle · Ganz schön clever · Railroad Ink | `puzzle-game` |
 
 ### [shooters-roguelite.md](./shooters-roguelite.md) — 슈터 · 로그라이트
 | 게임 | 대표 재미요소 | 주 스킬 | 재현 |
@@ -84,7 +87,7 @@
 
 `FE-JUST-ONE-MORE`(한 판 더) · `FE-FLOW`(몰입 흐름) · `FE-MASTERY`(숙련 표현) · `FE-RISK-REWARD`(위험-보상) · `FE-SURPRISE`(변주·무작위) · `FE-COLLECT`(수집·성장) · `FE-COMBO`(연쇄·콤보) · `FE-TIMING`(타이밍·리듬) · `FE-POWER-FANTASY`(파워 판타지) · `FE-TENSION`(긴장·니어미스) · `FE-AHA`(통찰·아하) · `FE-BUILD`(빌드·시너지) · `FE-ESCALATION`(점증 압박) · `FE-EXPRESSION`(자기표현·창의) · `FE-NARRATIVE`(서사·분위기) · `FE-EXPLORE`(탐험·발견) · `FE-JUICE`(감각 피드백) · `FE-SOCIAL`(경쟁·공유) · `FE-FAIRNESS`(공정한 죽음) · `FE-CONSTRAINT`(제약 퍼즐) · `FE-EMERGENCE`(창발·시스템 상호작용)
 
-> **퍼즐 특화 재미요소 8종** — `FE-DEDUCTION`·`FE-RULE-DISCOVERY`·`FE-ELEGANCE`·`FE-SPATIAL`·`FE-PLANNING`·`FE-TRANSFORM`·`FE-HIDDEN-INFO`·`FE-OPTIMIZE`는 [puzzle/fun-elements.md](./puzzle/fun-elements.md)에서 정식 정의한다(전역 21종을 퍼즐 도메인으로 확장).
+> **퍼즐 특화 재미요소 13종** — `FE-DEDUCTION`·`FE-RULE-DISCOVERY`·`FE-ELEGANCE`·`FE-SPATIAL`·`FE-PLANNING`·`FE-TRANSFORM`·`FE-HIDDEN-INFO`·`FE-OPTIMIZE` + 보드게임 계열 `FE-DRAFT`·`FE-PACKING`·`FE-LUCK-TAME`·`FE-REARRANGE`·`FE-SET-LOGIC`은 [puzzle/fun-elements.md](./puzzle/fun-elements.md)에서 정식 정의한다(전역 21종을 퍼즐 도메인으로 확장).
 
 ## 조합 레시피 빠른 색인 — 자세한 내용은 [fun-elements.md](./fun-elements.md) §2
 

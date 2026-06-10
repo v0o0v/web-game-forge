@@ -1,6 +1,6 @@
 # 게임 DNA · 퍼즐 — 논리 · 연역 퍼즐
 
-> WebGameForge `puzzle-game` 템플릿 레퍼런스(퍼즐 심화 20종 중 일부). 아래 게임들의 **메카닉·재미요소만** 분석한 자료다(저작물 미사용 — 각 IP 안전 메모 참고). 새 퍼즐 설계 시 **퍼즐 코어 1개 + 다른 게임의 재미요소를 조합**한다. 퍼즐 재미요소 태그 정의·조합 플레이북은 [fun-elements.md](./fun-elements.md), 색인은 [INDEX.md](./INDEX.md). 전역 게임 DNA는 [../INDEX.md](../INDEX.md).
+> WebGameForge `puzzle-game` 템플릿 레퍼런스(퍼즐 심화 35종 중 일부). 아래 게임들의 **메카닉·재미요소만** 분석한 자료다(저작물 미사용 — 각 IP 안전 메모 참고). 새 퍼즐 설계 시 **퍼즐 코어 1개 + 다른 게임의 재미요소를 조합**한다. 퍼즐 재미요소 태그 정의·조합 플레이북은 [fun-elements.md](./fun-elements.md), 색인은 [INDEX.md](./INDEX.md). 전역 게임 DNA는 [../INDEX.md](../INDEX.md).
 
 ## 한눈에 보기
 | 게임 | 코어 | 대표 재미요소 | 재현 |

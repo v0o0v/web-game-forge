@@ -251,12 +251,14 @@ Phaser 4 API 의 정확한 사용법(씬 라이프사이클·물리·스케일·
 새 게임에 녹입니다.** 분석 대상은 **메카닉·재미뿐** — 이름·캐릭터·스프라이트·음악 등 저작물은 쓰지 않습니다.
 색인·사용법: [`game-dna/INDEX.md`](skills/wgf-web-game-builder/reference/game-dna/INDEX.md).
 
-**🧩 퍼즐 심화 서브라이브러리** — 퍼즐은 별도로 **20종 심화 분석**(`game-dna/puzzle/`)으로 확장했습니다.
+**🧩 퍼즐 심화 서브라이브러리** — 퍼즐은 별도로 **35종 심화 분석**(`game-dna/puzzle/`)으로 확장했습니다.
 낙하·실시간(Tetris·Puyo Puyo·Dr. Mario·Lumines·Puzzle Bobble), 매치·병합(Bejeweled·Candy Crush·Puzzle & Dragons·2048·Threes),
-논리·연역(Sudoku·Picross·Minesweeper·Wordle·Flow Free), 공간·물리·규칙(Sokoban·Baba Is You·Monument Valley·Lemmings·Cut the Rope)의
-**4개 하위장르 × 5종 + 퍼즐 전용 재미요소 사전(연역·규칙발견·공간추론·선계획 등 특화 8종 포함) + 조합 레시피 14종**
+논리·연역(Sudoku·Picross·Minesweeper·Wordle·Flow Free), 공간·물리·규칙(Sokoban·Baba Is You·Monument Valley·Lemmings·Cut the Rope),
+그리고 **유명 퍼즐 보드게임 15종** — 드래프트·패턴(Azul·Sagrada·Kingdomino·Cascadia·Take It Easy),
+폴리오미노·패킹(Patchwork·Blokus·Ubongo·NMBR 9·Project L), 세트·재배열·롤앤라이트(Rummikub·SET·Qwirkle·Ganz schön clever·Railroad Ink)의
+**7개 하위장르 × 5종 + 퍼즐 전용 재미요소 사전(특화 13종 — 연역·규칙발견·공간추론·선계획 + 드래프트·패킹·운길들이기·판재구성·세트로직) + 조합 레시피 20종**
 ([`puzzle/INDEX.md`](skills/wgf-web-game-builder/reference/game-dna/puzzle/INDEX.md)). `puzzle-game` 스킬이
-연역 그리드·규칙조작·공간 푸시·물리 신규 하위장르 스캐폴드까지 다룹니다.
+연역 그리드·규칙조작·공간 푸시·물리 + 드래프트 시장·폴리오미노 패킹·롤앤라이트·세트 재배열 스캐폴드까지 다룹니다.
 
 ---
 
@@ -404,7 +406,7 @@ var joy = JoystickKit.create(this, { twin:true });
 web-game-forge/
 ├── .claude-plugin/  plugin.json · marketplace.json   # 플러그인 매니페스트
 ├── skills/                                            # 29종 스킬 (메인 1 + 전문 28)
-│   ├── wgf-web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 분석 + game-dna/puzzle/ 퍼즐 20종 심화)
+│   ├── wgf-web-game-builder/  (+ reference/engine-api · mobile-webview · phaser/ 28종 · game-dna/ 인기게임 분석 + game-dna/puzzle/ 퍼즐 35종 심화 — 보드게임 15종 포함)
 │   ├── wgf-platformer-game/  wgf-topdown-shooter/  wgf-arcade-classic/  wgf-puzzle-game/  wgf-endless-runner/
 │   ├── wgf-world-map-architect/  (+ reference/map-interview · map-design/ MAP-* 원칙 + 위상 카탈로그 + 빌드 패턴)
 │   ├── wgf-level-architect/  (+ reference/level-interview · level-design/ LD-* 원칙 + 장르별 레벨 설계)  wgf-level-designer/
