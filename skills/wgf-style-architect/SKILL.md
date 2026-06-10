@@ -94,6 +94,7 @@ assets/palette.master.json 마스터 팔레트로 산출 → ⑤ 게임 적용(e
 - **탑다운 순서**(S1 매체·복잡도 **★먼저** → S2 무드·레퍼런스(이미지 인제스트) → S3 팔레트 → S4 비율·라인 → S5 셰이딩·조명 → S6 포스트FX → S7 응집·검증), 약점 차원 하나씩 + "왜 지금".
 - **S1에서 매체와 복잡도 티어(0~3)를 못 박는다.** Tier 0(팔레트만)·1이면 인터뷰 대부분을 건너뛰고 바로 청사진으로 — **간단해도 된다고 적극 안내**한다.
 - **매 라운드 Claude가 먼저 무드·팔레트·룩을 제안**(백지 금지)하고 의견을 밝힌다. 추상적 답("예쁘게")은 구체 무드·키 색·셰이딩 모델로 되묻는다.
+- **기성 프리셋을 선택지로:** S2(무드) 라운드에서 [reference/presets/](./reference/presets/) 카탈로그(cozy-dungeon·bright-arcade·mono-noir·grim-roguelike)를 맞춤 제안과 나란히 올린다 — 고르면 그 JSON을 `games/<slug>/style.json` 시작점으로 복사해 게임에 맞게 조정한다([style-interview.md](./reference/style-interview.md) §2.5).
 - **레퍼런스 이미지 인제스트:** 사용자가 레퍼런스를 주면 팔레트·무드·셰이딩 결을 추출해 제안에 반영하되, **에셋/이름/시그니처를 복제하지 않고** 스타일만 차용한다(IP 안전).
 - 사용자가 "알아서/그냥 만들어"면 분석 기반 추천 기본값(매체에 맞는 무드 프리셋)으로 채워 진행한다.
 
@@ -146,7 +147,7 @@ style-architect의 `style.json` / `assets/palette.master.json`은 **게임 전�
 - **자매 디렉터:** [`story-architect`](../wgf-story-architect/SKILL.md)(톤↔무드 정합, STYLE는 STORY 상속) · [`item-architect`](../wgf-item-architect/SKILL.md)(§7 master_palette 상속) · [`ability-architect`](../wgf-ability-architect/SKILL.md)(§8 master_palette 상속) · [`level-architect`](../wgf-level-architect/SKILL.md)/[`world-map-architect`](../wgf-world-map-architect/SKILL.md)(진행) · [`sound-architect`](../wgf-sound-architect/SKILL.md)(청각 무드 정합).
 - **이미지 생성기(style.json 상속):** [`sprite-forge`](../wgf-sprite-forge/SKILL.md)(PixelForge 팔레트) · [`vector-graphics`](../wgf-vector-graphics/SKILL.md)(VectorForge 재질 램프) · [`sprite-picker`](../wgf-sprite-picker/SKILL.md)(CC0 검색 style 필터).
 - **무드·UI 구현:** [`lighting-mood`](../wgf-lighting-mood/SKILL.md)(라이팅) · [`screen-fx`](../wgf-screen-fx/SKILL.md)(포스트FX) · [`level-designer`](../wgf-level-designer/SKILL.md)(타일 색) · [`game-ui-hud`](../wgf-game-ui-hud/SKILL.md)(role_colors HUD) · [`juice-fx`](../wgf-juice-fx/SKILL.md)(파티클 색) · [`game-qa`](../wgf-game-qa/SKILL.md)(룩·무드·폴백 검증).
-- **레퍼런스:** 색인 [reference/INDEX.md](./reference/INDEX.md) · 복잡도·매체 [style-scope.md](./reference/style-scope.md) · 팔레트 [palette-theory.md](./reference/palette-theory.md) · 비율·라인 [proportion-form.md](./reference/proportion-form.md) · 셰이딩·광원 [shading-light.md](./reference/shading-light.md) · 무드·그레이드 [mood-grade.md](./reference/mood-grade.md) · 응집·툴 [cohesion-tools.md](./reference/cohesion-tools.md) · 인터뷰 [style-interview.md](./reference/style-interview.md). 런타임 [engine/stylekit.js](../../engine/stylekit.js) · 툴 [tools/lint-style.mjs](./tools/lint-style.mjs).
+- **레퍼런스:** 색인 [reference/INDEX.md](./reference/INDEX.md) · 복잡도·매체 [style-scope.md](./reference/style-scope.md) · 팔레트 [palette-theory.md](./reference/palette-theory.md) · 비율·라인 [proportion-form.md](./reference/proportion-form.md) · 셰이딩·광원 [shading-light.md](./reference/shading-light.md) · 무드·그레이드 [mood-grade.md](./reference/mood-grade.md) · 응집·툴 [cohesion-tools.md](./reference/cohesion-tools.md) · 인터뷰 [style-interview.md](./reference/style-interview.md) · 프리셋 카탈로그 [presets/](./reference/presets/). 런타임 [engine/stylekit.js](../../engine/stylekit.js) · 툴 [tools/lint-style.mjs](./tools/lint-style.mjs).
 
 ## IP 안전
 - 시각 스타일 **기법·구조**(제한 팔레트·hue-shift 셰이딩·셀셰이딩·NW 광원·치비 비율·라이팅/포스트FX 무드 등)는 저작권 대상이 아니므로 자유롭게 차용한다.

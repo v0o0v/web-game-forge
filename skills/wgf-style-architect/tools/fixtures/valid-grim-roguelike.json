@@ -1,0 +1,74 @@
+{
+  "slug": "grim-roguelike-demo",
+  "schema_version": 1,
+  "medium": "pixel",
+  "tier": 3,
+  "mood": "grim-roguelike",
+
+  "master_palette": {
+    "ramps": {
+      "dungeon_earth": ["#241d14", "#3d3122", "#5a4a33", "#7d6a4a"],
+      "mossy_stone":   ["#1a2417", "#2e4026", "#476038", "#65854d"],
+      "torch_ember":   ["#56200e", "#9c4a16", "#e8862a", "#ffc46a"],
+      "arcane_mist":   ["#1d2440", "#2e4070", "#4a68a8", "#7a9ad8"],
+      "loot_gold":     ["#574207", "#94711c", "#d4a92c", "#f7d75c"]
+    },
+    "neutrals": { "black": "#0d0b08", "white": "#f2e8d0" },
+    "background": "#12100c"
+  },
+
+  "role_colors": {
+    "player":    "#6fc7e0",
+    "enemy":     "#a05ac8",
+    "danger":    "#e8483f",
+    "pickup":    "#ffd23f",
+    "ui_accent": "#d4a92c"
+  },
+
+  "proportions": {
+    "head_to_body": "1:1.1",
+    "silhouette": "chunky-compact",
+    "min_feature_px": 1
+  },
+
+  "line": {
+    "outline": "none",
+    "outline_color": "darker-of-fill",
+    "weight_px": 1
+  },
+
+  "shading": {
+    "model": "flat",
+    "light_dir": "N",
+    "ramp_steps": 2,
+    "hue_shift": "warm-light-cool-shadow"
+  },
+
+  "lighting": {
+    "ambient": { "color": "#12100c", "alpha": 0.6 },
+    "point_lights": { "color": "#ffc46a", "radius": 96, "intensity": 0.85 },
+    "fog": { "enabled": false }
+  },
+
+  "postfx": {
+    "preset": "grim-dungeon",
+    "bloom": { "threshold": 0.65, "amount": 0.3 },
+    "vignette": { "radius": 0.65, "strength": 0.5 },
+    "color_grade": { "warm": 0.08 }
+  },
+
+  "canvas_fallback": {
+    "ambient_overlay": "#12100ccc",
+    "pre_shade_sprites": true
+  },
+
+  "render": { "pixelArt": true, "antialias": false, "roundPixels": true },
+
+  "lintConfig": {
+    "min_contrast_ratio": 3.0,
+    "max_palette_colors": 40,
+    "known_moods": ["grim-roguelike", "custom"],
+    "known_postfx_presets": ["grim-dungeon", "custom"],
+    "ip_redwords": ["shattered", "shatteredpixel", "pixel dungeon", "darkest dungeon", "dungeon crawl stone soup", "nethack", "diablo", "gungeon", "isaac"]
+  }
+}

@@ -434,21 +434,13 @@ if (data.role_colors) {
 }
 
 // ── (f) preset-exists: lighting/postfx.preset·mood 알려진 집합 검사 ─────────
-// presets 폴더 스캔(있으면 동적 확장)
-const presetsDir = join(dirname(dirname(resolve(file))), 'skills', 'style-architect', 'reference', 'presets')
-if (existsSync(presetsDir)) {
-  try {
-    const { readdirSync } = await import('node:fs')
-    // ESM 동적 import 대신 동기 readdir 사용
-    // 이미 상단에서 readFileSync import 함 — readdirSync 추가
-  } catch {}
-}
-// readdirSync 는 이미 fs 모듈에서 사용 가능 — 별도 동적 import 불필요
 // 스킬 자체 presets 폴더에서 알려진 프리셋 동적 확장
+// (게임 로컬 presets/ 우선 + 이 스크립트 기준 reference/presets — 입력 파일 위치와 무관하게 동작)
 const { readdirSync } = await import('node:fs')
+const { fileURLToPath } = await import('node:url')
 const presetsSearchDirs = [
   join(dirname(resolve(file)), 'presets'),
-  join(dirname(dirname(dirname(resolve(file)))), 'skills', 'style-architect', 'reference', 'presets'),
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'reference', 'presets'),
 ]
 for (const dir of presetsSearchDirs) {
   if (existsSync(dir)) {

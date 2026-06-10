@@ -33,6 +33,7 @@
 | [mood-grade.md](./mood-grade.md) | `STY-MOOD-*` (9) | style.json lighting/postfx → [lighting-mood](../../wgf-lighting-mood/SKILL.md)(lightingkit)·[screen-fx](../../wgf-screen-fx/SKILL.md)(screenfx) 프리셋 매핑 표·무드 레시피(따뜻한 던전·밤·호러)·**R4 Canvas-safe 폴백**·무드는 팔레트를 따른다·과FX 금지. 무드·포스트FX를 정할 때(T3). |
 | **[cohesion-tools.md](./cohesion-tools.md)** | (스펙) | **STYLE.md/style.json 섹션 스펙 + style.json 스키마 계약 전재 + 린트 체크리스트 + 어댑터(visual.* → sprite-forge/vector-graphics/sprite-picker) + master_palette↔palette.master.json↔item §7/ability §8 상속**. 바이블을 산출·검수할 때. |
 | [style-interview.md](./style-interview.md) | (플레이북) | 탑다운 1문1답: S1 매체·복잡도 → S2 무드·레퍼런스 → S3 팔레트 → S4 비율·라인 → S5 셰이딩·조명 → S6 포스트FX → S7 응집·검증. 매 라운드 Claude가 먼저 제안. 의도가 모호할 때. |
+| [presets/](./presets/) | (카탈로그) | 기성 무드 프리셋 4종 — cozy-dungeon(따뜻한 던전)·bright-arcade(쨍한 아케이드)·mono-noir(흑백 누아르)·grim-roguelike(고전 톱다운 로그라이크 던전). S2 무드 라운드 선택지 + style.json 시작점([style-interview.md](./style-interview.md) §2.5). |
 
 ## 빠른 처방 (장르 스캐폴드 → 디폴트 스타일) — 자세히는 [style-scope.md](./style-scope.md)
 
@@ -44,6 +45,7 @@
 | puzzle-game | 벡터/픽셀·차분한 파스텔 | T0~T1 |
 | endless-runner | 픽셀·단순 실루엣 | T1 |
 | 던전/호러/밤 | 픽셀·warm-dungeon/night(라이팅+포스트FX) | T3 |
+| 톱다운 로그라이크/던전 크롤 | 픽셀·grim-roguelike(흙빛 환경+보석빛 강조색+횃불 어둠) | T2~T3 |
 | 캐주얼/하이퍼 | 벡터·플랫 컬러풀 | T0~T1 |
 
 > 항상 **한 게임 한 스타일**(`STY-SCOPE-ONE-STYLE`), 디폴트 **팔레트만(T0)에서 한 칸씩**(`STY-SCOPE-DEFAULT-MINIMAL`).

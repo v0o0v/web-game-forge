@@ -61,6 +61,23 @@
 
 > **Tier 0이면 S1 직후 청사진으로 점프**(S2 무드 한 줄 + S3 팔레트만, S4~S6 스킵). Tier 1~2는 S3·S4·S5 가 핵심. Tier 3이면 S6(무드·라이팅·Canvas 폴백)이 가장 무겁다.
 
+### 2.5 무드 프리셋 카탈로그 (S2 라운드에서 선택지로 제시)
+
+[`reference/presets/`](./presets/)에 기성 무드 프리셋이 있다 — **S2(무드) 라운드에서 Claude의 맞춤 제안과 나란히
+선택지로 제시**한다. 사용자가 고르면 해당 JSON을 `games/<slug>/style.json` 시작점으로 복사하고 slug·역할색을
+게임에 맞게 조정한다(나머지 차원은 프리셋 값을 기본값 삼아 빠르게 통과).
+
+| id | 한 컷 | 어울리는 게임 |
+|---|---|---|
+| [`cozy-dungeon`](./presets/cozy-dungeon.json) | 차가운 보랏빛 돌 + 따뜻한 횃불의 아늑한 던전 | 지하 탐험·메트로배니아, 따뜻한 픽셀 룩 |
+| [`bright-arcade`](./presets/bright-arcade.json) | 검은 배경 위 쨍한 원색·가벼운 블룸의 하이키 아케이드 | 캐주얼/스코어어택·슈무프·고전 아케이드 |
+| [`mono-noir`](./presets/mono-noir.json) | 회청색 흑백 + 핏빛 강조색 하나의 필름누아르 | 느와르/스텔스/미스터리, 무드 중심 단편 |
+| [`grim-roguelike`](./presets/grim-roguelike.json) | 흙빛 던전·횃불 어둠 위에 보석빛 전리품이 쨍하게 떠 보이는 고전 톱다운 로그라이크 | 톱다운 로그라이크/던전 크롤러, 16px 타일 그리드 탐험 |
+
+> 프리셋은 *시작점*이지 강제가 아니다. 모든 프리셋은 IP-safe 일반화(상용 게임의 무드 관습만 차용, 에셋·이름·시그니처
+> 미복제)이며 `lintConfig.ip_redwords`로 기계 검증된다. 이 폴더에 새 프리셋 JSON을 추가하면
+> [lint-style.mjs](../tools/lint-style.mjs)가 자동으로 알려진 mood 집합에 포함시킨다.
+
 ---
 
 ## 3. 라운드 진행 (deep-interview Phase 2 적응)
