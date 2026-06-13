@@ -255,6 +255,41 @@ let iaFull, iaMissing, iaNoSpec
   ok('합성 검은화면 ok=false (VU 미달)', bad.ok === false, `vu=${bad.vu} ok=${bad.ok}`)
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// 5) 수정 케이스 — threshold-0·lintOk 모순·require-vu·빈 항목
+// ════════════════════════════════════════════════════════════════════════════
+{
+  // [MEDIUM] threshold-0: composeReport 에 threshold=0 전달 시 세 축 모두 0 이상이면 ok=true.
+  // (파싱 버그는 qa-score.mjs 에서 수정. 코어 composeReport 는 threshold 를 그대로 쓰므로
+  //  threshold=0 을 정상 입력으로 받아야 한다 — 0점도 통과로 치는 특수 모드.)
+  const r0 = composeReport({ bh: { bh: 0 }, vu: { vu: 0 }, ia: { ia: 0 } }, { threshold: 0 })
+  ok('threshold=0 → 0점도 통과(composeReport 동작 정확)', r0.ok === true && r0.threshold === 0,
+    `ok=${r0.ok} threshold=${r0.threshold}`)
+
+  // 반대로 threshold=0 이어도 진짜 ok 는 세 축이 모두 ≥0 이어야 함(bh=-1 이면 실패 없음 — 실제 -1 은 없음).
+  const r0pass = composeReport({ bh: { bh: 55 }, vu: { vu: 55 }, ia: { ia: 55 } }, { threshold: 0 })
+  ok('threshold=0 + 55/55/55 → ok=true', r0pass.ok === true, `ok=${r0pass.ok}`)
+
+  // [LOW] lintOk 모순 입력: { ok:true, errors:5 } → errors 우선으로 실패 처리되어야 함.
+  const contradictLint = [{ id: 'rng', ok: true, errors: 5, warnings: 0 }]
+  const bhContradicted = bhScore({ lints: contradictLint, consoleErrors: 0, stepFrames: 1, stepTarget: 1 })
+  ok('lintOk 모순(ok:true + errors:5) → errors 우선으로 lint 실패 처리', bhContradicted.lintTerm < 1 && bhContradicted.failedLints.includes('rng'),
+    `lintTerm=${bhContradicted.lintTerm} failedLints=${JSON.stringify(bhContradicted.failedLints)}`)
+
+  // [MEDIUM] require-vu: composeReport 에서 VU -1 전달 시(--require-vu + skipped 시뮬) → ok=false.
+  const vuMinus = { vu: -1 }   // --require-vu 모드가 주입하는 "스킵=실패" 신호
+  const rRequireVu = composeReport({ bh: bhHealthy, vu: vuMinus, ia: iaFull }, { threshold: 60 })
+  ok('require-vu 시뮬: VU=-1 → ok=false(임계 미달)', rRequireVu.ok === false,
+    `vu=${rRequireVu.vu} ok=${rRequireVu.ok}`)
+
+  // [LOW] specItemPresent 빈 항목: 빈 문자열 require 는 이제 자동충족 방지 → 누락으로.
+  const specWithEmpty = { require: ['coin', '', 'jump'] }
+  const artifactForEmpty = 'function jump() {} this.coinTxt = coins;'
+  const iaEmpty = iaScore(specWithEmpty, artifactForEmpty)
+  ok('빈 항목 자동충족 방지 → 누락(missing) 처리', iaEmpty.missing.includes('') && iaEmpty.ia < 100,
+    `missing=${JSON.stringify(iaEmpty.missing)} ia=${iaEmpty.ia}`)
+}
+
 // ── 출력 계약: 마지막 줄 단일 JSON ───────────────────────────────────────────
 console.log(`— pass ${pass} · fail ${fail}`)
 console.log(JSON.stringify({ ok: fail === 0, pass, fail, cases }))

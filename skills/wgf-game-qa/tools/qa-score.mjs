@@ -68,6 +68,7 @@ let specFile = null
 let framesFile = null
 let runtimeFile = null
 let threshold = 60
+let requireVu = false   // --require-vu: VU skipped 를 게이트 실패로 처리
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--json') jsonOnly = true
@@ -75,7 +76,8 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--spec') specFile = argv[++i]
   else if (a === '--frames') framesFile = argv[++i]
   else if (a === '--runtime') runtimeFile = argv[++i]
-  else if (a === '--threshold') threshold = parseInt(argv[++i], 10) || 60
+  else if (a === '--require-vu') requireVu = true
+  else if (a === '--threshold') { const t = parseInt(argv[++i], 10); threshold = Number.isFinite(t) ? t : 60 }
   else if (!a.startsWith('--')) target = a
 }
 
@@ -285,14 +287,22 @@ say(`  → IA ${ia.ia}/100`)
 // ════════════════════════════════════════════════════════════════════════════
 // 3축 합성 + 출력 계약
 // ════════════════════════════════════════════════════════════════════════════
-// VU skipped 면 ok 게이트에서 VU 를 중립(임계 충족)으로 처리 — 거짓 실패 방지.
-const vuForGate = vuSkipped ? { vu: threshold } : vu
+// VU skipped 처리:
+//   기본(--require-vu 없음): ok 게이트에서 VU 를 중립(임계 충족)으로 처리 — 거짓 실패 방지.
+//   --require-vu 모드:       VU skipped 를 게이트 실패(ok:false)로 간주 — 시각 미검증을 차단.
+const vuForGate = vuSkipped
+  ? (requireVu ? { vu: -1 } : { vu: threshold })  // -1 은 임계 미달을 확실히 보장
+  : vu
 const report = composeReport({ bh, vu: vuForGate, ia }, { threshold })
 
 say('')
 say('## 종합')
+if (vuSkipped) {
+  say('  ⚠ VU 미검증 — 시각 통과 보장 안 함. --frames <file> 로 픽셀 주입해야 VU 게이트 활성화.')
+  if (requireVu) say('  ✗ --require-vu 모드: VU skipped → 게이트 실패(ok:false) 처리')
+}
 say(`  BH ${bh.bh} · VU ${vuSkipped ? 'skipped' : vu.vu} · IA ${ia.ia}  (임계 ${threshold})`)
-say(`  ${report.ok ? '✓ 통과' : '✗ 미달'} — 3축${vuSkipped ? '(VU 제외)' : ''} 모두 임계 이상이어야 통과`)
+say(`  ${report.ok ? '✓ 통과' : '✗ 미달'} — 3축${vuSkipped && !requireVu ? '(VU 미검증 중립)' : ''} 모두 임계 이상이어야 통과`)
 
 // 마지막 줄 단일 JSON — vu 는 skipped 면 null.
 const out = {

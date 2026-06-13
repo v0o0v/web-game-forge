@@ -225,7 +225,7 @@ export function bhScore(bhInput) {
   if (lints.length > 0) {
     let passed = 0
     for (const l of lints) {
-      const lintOk = l && (l.ok === true || ((l.errors | 0) === 0 && l.ok !== false))
+      const lintOk = l && l.ok !== false && (l.errors | 0) === 0
       if (lintOk) passed++
       else failedLints.push(l && l.id ? l.id : 'unknown')
     }
@@ -282,7 +282,7 @@ function normalizeArtifact(artifact) {
 /** 한 요구 항목이 산출물에 존재하는가(대소문자 무시 부분일치). */
 function specItemPresent(item, hayLower) {
   const needle = String(item == null ? '' : item).toLowerCase().trim()
-  if (needle === '') return true   // 빈 항목은 무의미 → 충족으로(스펙 작성자 의도 보존)
+  if (needle === '') return false  // 빈 항목은 자동충족 방지 — 누락으로 처리해 스펙 품질 드러냄
   return hayLower.indexOf(needle) !== -1
 }
 
