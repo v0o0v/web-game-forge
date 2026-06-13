@@ -68,6 +68,11 @@ const CHAT_FILE = process.env.WGF_BRIDGE_CHAT_FILE ||
 const HEARTBEAT_TIMEOUT_MS = parseInt(process.env.WGF_BRIDGE_HEARTBEAT_MS || '5000', 10);
 // editor_next_message long-poll 타임아웃(ms) — 미처리 메시지 없으면 이 시간 후 빈 응답.
 const CHAT_POLL_TIMEOUT_MS = parseInt(process.env.WGF_BRIDGE_CHAT_POLL_MS || '25000', 10);
+// 브리지↔MCP 토큰 공유 파일(같은 신뢰경계). 브리지가 기동 시 {port,token} 을 쓰고,
+// mcp.mjs 가 읽어 localhost HTTP 프록시에 사용. games/ 밖(.omc/ 격리). 환경변수
+// WGF_BRIDGE_TOKEN/WGF_BRIDGE_PORT 가 있으면 mcp.mjs 가 파일보다 우선 사용.
+const ENDPOINT_FILE = process.env.WGF_BRIDGE_ENDPOINT_FILE ||
+  path.resolve(REPO_ROOT, '.omc', 'wgf-editor', 'bridge-endpoint.json');
 
 // ── 토큰(보안 §6) ─────────────────────────────────────────────────────────────
 const TOKEN = crypto.randomBytes(24).toString('hex');
@@ -636,9 +641,26 @@ function handleApi(req, res, u, p) {
   sendJSON(res, 404, { ok: false, error: 'unknown api' });
 }
 
+// 브리지 엔드포인트(port·token)를 토큰 공유 파일에 기록 — mcp.mjs 프록시가 읽는다.
+function writeEndpointFile(port) {
+  try {
+    fs.mkdirSync(path.dirname(ENDPOINT_FILE), { recursive: true });
+    fs.writeFileSync(ENDPOINT_FILE, JSON.stringify({ port, token: TOKEN, host: HOST, pid: process.pid }), 'utf8');
+  } catch (e) {
+    process.stderr.write(`[wgf-bridge] 엔드포인트 파일 기록 실패: ${String(e)}\n`);
+  }
+}
+function removeEndpointFile() {
+  try { fs.unlinkSync(ENDPOINT_FILE); } catch (e) { /* 이미 없음 */ }
+}
+process.on('exit', removeEndpointFile);
+process.on('SIGINT', () => { removeEndpointFile(); process.exit(0); });
+process.on('SIGTERM', () => { removeEndpointFile(); process.exit(0); });
+
 server.listen(PORT, HOST, () => {
   const actual = server.address().port;
   const url = `http://${HOST}:${actual}/editor/ui/`;
+  writeEndpointFile(actual);
   // 첫 줄: 테스트 하니스가 파싱하는 구조화 라인(포트·토큰).
   process.stderr.write(`[wgf-bridge] READY ${JSON.stringify({ port: actual, token: TOKEN, host: HOST })}\n`);
   process.stderr.write(`[wgf-bridge] 브리지 기동 → ${url}\n`);
