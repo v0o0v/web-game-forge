@@ -1,0 +1,96 @@
+{
+  "format": "wgf-scene@1",
+  "slug": "topdown-min",
+  "meta": {
+    "title": "최소 탑다운 예시",
+    "genre": "topdown",
+    "viewport": { "w": 320, "h": 240 },
+    "pixelArt": true
+  },
+  "assets": {
+    "sprites": [
+      {
+        "id": "spr_player",
+        "source": "procedural",
+        "desc": "플레이어 캐릭터 — 초록 원형 아이콘",
+        "w": 16,
+        "h": 16
+      },
+      {
+        "id": "spr_enemy",
+        "source": "procedural",
+        "desc": "적 캐릭터 — 빨간 원형 아이콘",
+        "w": 16,
+        "h": 16
+      }
+    ]
+  },
+  "walls": [
+    { "x": 0,   "y": 0,   "w": 320, "h": 8  },
+    { "x": 0,   "y": 232, "w": 320, "h": 8  },
+    { "x": 0,   "y": 0,   "w": 8,   "h": 240 },
+    { "x": 312, "y": 0,   "w": 8,   "h": 240 }
+  ],
+  "scenes": [
+    {
+      "id": "main",
+      "systems": {},
+      "entities": [
+        {
+          "id": "player",
+          "name": "플레이어",
+          "transform": {
+            "x": 80,
+            "y": 120,
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "depth": 10
+          },
+          "components": [
+            {
+              "type": "Sprite",
+              "sprite": "spr_player"
+            },
+            {
+              "type": "Body",
+              "shape": "circle",
+              "radius": 7,
+              "isStatic": false
+            },
+            {
+              "type": "TopDownController",
+              "speed": 80,
+              "input": "wasd"
+            }
+          ]
+        },
+        {
+          "id": "enemy_01",
+          "name": "적01",
+          "transform": {
+            "x": 220,
+            "y": 120,
+            "rotation": 0,
+            "scaleX": 1,
+            "scaleY": 1,
+            "depth": 10
+          },
+          "components": [
+            {
+              "type": "Sprite",
+              "sprite": "spr_enemy"
+            },
+            {
+              "type": "Body",
+              "shape": "circle",
+              "radius": 7,
+              "isStatic": false
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "dataLayers": {}
+}
