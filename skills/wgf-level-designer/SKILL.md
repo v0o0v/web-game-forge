@@ -163,6 +163,32 @@ this.physics.add.collider(this.hero, res.solids[0]); // 충돌 설정된 타일 
 > [`games/tiled-topdown`](../../games/tiled-topdown/)(GEM DUNGEON) ·
 > [`games/tiled-iso`](../../games/tiled-iso/)(등각/육각) · [`games/tiled-pack`](../../games/tiled-pack/)(GPU+팩 임포트).
 
+## 절차적 생성(PCG) 알고리즘 메뉴
+
+레벨 지형·오브젝트 배치·이름 생성을 자동화할 때 아래 4개 알고리즘을 참고한다.
+모든 예제는 **RngForge 시드 고정 결정론**을 사용하며 `node` 헤드리스 실행 가능하다.
+
+| 알고리즘 | 주 용도 |
+|----------|---------|
+| Cellular Automata | 동굴·유기적 지형 자동 생성 |
+| Wave Function Collapse (WFC) | 타일 인접 규칙 제약 생성 |
+| Poisson Disk Sampling | 오브젝트 자연 분포·스폰 배치 |
+| n-gram / Markov 체인 | NPC 이름·텍스트 생성 |
+
+> 전체 레퍼런스(각 알고리즘 절차·파라미터·교차 스킬·스니펫):
+> [`reference/pcg/algorithms.md`](reference/pcg/algorithms.md)
+>
+> 동작 예제(시드 42 결정론 동굴, `--test` 플래그로 단독 검증 가능):
+> [`examples/pcg-cave-cellular.mjs`](examples/pcg-cave-cellular.mjs)
+
+```sh
+# 동굴 생성 시각 확인
+node skills/wgf-level-designer/examples/pcg-cave-cellular.mjs
+
+# 결정론 단독 테스트 (exit 0 = 통과)
+node skills/wgf-level-designer/examples/pcg-cave-cellular.mjs --test
+```
+
 ## 연계 / 원칙
 - 설계 의도·난이도 곡선·재미는 [`level-architect`](../wgf-level-architect/SKILL.md)가 결정 → 이 스킬이 빌드. 레벨이 "재미없다/단조롭다" 진단·리밸런싱도 level-architect 소관.
 - web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(CC0/절차적).
