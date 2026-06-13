@@ -42,7 +42,10 @@ function App({ controller }) {
   const [redoDepth, setRedoDepth] = useState(0);
   const [docState, setDocState] = useState(null);
 
-  const tick = useRef(0);
+  // syncState 가 강제 재렌더를 트리거하기 위한 카운터. useRef 가 아니라 useState 여야
+  // 한다 — getWorld() 는 어댑터의 안정적(in-place 변형) 참조라 setWorld(sameRef) 만으로는
+  // Preact 가 재렌더를 bail 한다. 이 카운터 bump 로 매 변경마다 Hierarchy/Inspector 를 갱신.
+  const [, forceRender] = useState(0);
 
   // 컨트롤러 변경 → 상태 동기화.
   function syncState() {
@@ -52,7 +55,7 @@ function App({ controller }) {
     setMode(controller.getMode());
     setUndoDepth(controller.undoDepth());
     setRedoDepth(controller.redoDepth());
-    tick.current++;
+    forceRender((n) => n + 1);
   }
 
   useEffect(() => {

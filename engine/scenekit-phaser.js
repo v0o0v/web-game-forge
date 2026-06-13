@@ -110,6 +110,7 @@
       gridSize: num(opts.gridSize, 16),
       gizmoMode: validGizmo(opts.gizmoMode),
       onCommandCb: (typeof opts.onCommand === 'function') ? opts.onCommand : null,
+      onReadyCb: (typeof opts.onReady === 'function') ? opts.onReady : null,
       selectionListeners: []
     };
     if (typeof opts.onSelectionChange === 'function') state.selectionListeners.push(opts.onSelectionChange);
@@ -270,6 +271,12 @@
 
       // GAME_INPUT 키보드 브리지(play 프리뷰 대비). edit 에선 step 안 하므로 무영향.
       installInputBridge();
+
+      // Phaser 씬은 비동기로 부트되므로 world 는 이 시점(_init)에야 채워진다. 구독자(에디터
+      // 셸)에게 "world 준비 완료"를 알려 Hierarchy/Inspector 가 초기 상태를 동기화하게 한다.
+      // 이게 없으면 mount() 동기 시점엔 getWorld()=null 이라 셸 world state 가 비어
+      // Hierarchy 가 "엔티티 없음" 으로 굳는다(특히 remote 부트).
+      if (state.onReadyCb) { try { state.onReadyCb(); } catch (e) { /* 격리 */ } }
     };
 
     // ── world 로드 ──────────────────────────────────────────────────────────────

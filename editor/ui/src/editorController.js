@@ -81,7 +81,9 @@ export function createController(opts) {
         }
         notifyChange();
       },
-      onSelectionChange: (ids) => { notifySelection(ids); notifyChange(); }
+      onSelectionChange: (ids) => { notifySelection(ids); notifyChange(); },
+      // Phaser 비동기 부트(world 로드) 완료 시 셸 UI 동기화 — remote/local 초기 Hierarchy 채움.
+      onReady: () => { notifyChange(); notifySelection(getSelection()); }
     }, mountOpts || {}));
     wireRemote();
     // remote: 어댑터(미러)가 준비됐으니 이제 SSE 델타 흐름을 켠다(첫 델타 무손실 적용 보장).
