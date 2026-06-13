@@ -86,9 +86,16 @@
 
   // ── 생성자 ────────────────────────────────────────────────────────────────
   // rng: RngForge.create(seed) 로 만든 난수기(callable). 미주입 시 기본 시드로 자동 생성.
+  // 내부적으로 용도별 스트림을 분리(_shakeRng/_fxRng)해 셰이크·파티클 수열이 서로 영향을
+  // 주지 않는다(등록 순서·호출 수 무관 결정론 보장).
   function JuiceKit(rng) {
     // 무작위 소스 — 주입 우선, 없으면 전역 RngForge 의 기본 시드, 그래도 없으면 null.
     this.rng = rng || (global.RngForge ? global.RngForge.create('juicekit') : null);
+
+    // 용도별 스트림 분리. RngForge 주입 시 stream() 으로 독립 파생, 없으면 rng 그대로.
+    // stream 없는 폴백(rng 미주입·비-RngForge 주입)에서도 기존 동작(0 폴백) 을 유지한다.
+    this._shakeRng = (this.rng && this.rng.stream) ? this.rng.stream('jk:shake') : this.rng;
+    this._fxRng    = (this.rng && this.rng.stream) ? this.rng.stream('jk:fx')    : this.rng;
 
     // trauma 셰이크
     this.trauma = 0;            // [0,1] 누적 충격량
@@ -96,7 +103,6 @@
     this.maxOffset = 24;        // trauma=1 일 때 최대 픽셀 오프셋
     this.maxRotation = 0.08;    // trauma=1 일 때 최대 회전(rad)
     this._shake = { x: 0, y: 0, rotation: 0 };
-    this._noiseT = 0;           // 노이즈 위상(결정적으로 진행)
 
     // 파티클
     this.particles = [];        // 활성 파티클 풀
@@ -111,12 +117,17 @@
     this.tweens = [];           // 활성 트윈
   }
 
-  // 난수기 교체(테스트·리시드용).
-  JuiceKit.prototype.setRng = function (rng) { this.rng = rng; return this; };
+  // 난수기 교체(테스트·리시드용). 스트림도 새 rng 에서 파생해 재설정한다.
+  JuiceKit.prototype.setRng = function (rng) {
+    this.rng = rng;
+    this._shakeRng = (rng && rng.stream) ? rng.stream('jk:shake') : rng;
+    this._fxRng    = (rng && rng.stream) ? rng.stream('jk:fx')    : rng;
+    return this;
+  };
 
-  // 내부: [-1,1) 결정적 노이즈 1샘플. rng 없으면 0(무흔들림, graceful).
+  // 내부: [-1,1) 결정적 노이즈 1샘플 — 전용 셰이크 스트림 사용. rng 없으면 0(graceful).
   JuiceKit.prototype._noise = function () {
-    return this.rng ? (this.rng() * 2 - 1) : 0;
+    return this._shakeRng ? (this._shakeRng() * 2 - 1) : 0;
   };
 
   // ── 1) trauma 스크린셰이크 ─────────────────────────────────────────────────
@@ -172,7 +183,7 @@
 
     var created = [];
     for (var i = 0; i < count; i++) {
-      var r = this.rng;
+      var r = this._fxRng;
       var u = r ? r() : 0.5;
       var v = r ? r() : 0.5;
       var w = r ? r() : 0.5;
@@ -276,18 +287,20 @@
   };
 
   // 내부: 트윈 진행. dt 는 (스케일 적용된) 초 델타.
+  // step: 트윈-로컬 진행량. 공용 루프 변수 dt 를 덮어쓰지 않아 등록 순서 무관 결정론 보장.
   JuiceKit.prototype._updateTweens = function (dt) {
     var anyDone = false;
     for (var i = 0; i < this.tweens.length; i++) {
       var tw = this.tweens[i];
       if (tw.done) { anyDone = true; continue; }
+      var step = dt;
       if (tw.delay > 0) {
         tw.delay -= dt;
         if (tw.delay > 0) continue;
-        dt = -tw.delay;        // 지연을 다 쓰고 남은 시간만큼 진행
+        step = -tw.delay;      // 지연을 다 쓰고 남은 시간만큼만 진행(트윈-로컬)
         tw.delay = 0;
       }
-      tw.elapsed += dt;
+      tw.elapsed += step;
       var t = tw.dur > 0 ? clamp01(tw.elapsed / tw.dur) : 1;
       var k = tw.ease(t);
       tw.value = tw.from + (tw.to - tw.from) * k;
@@ -306,22 +319,30 @@
   // dt: 초 단위 프레임 델타. trauma decay·파티클·히트스톱·트윈을 한 번에 진행한다.
   // 히트스톱 중에는 scaledDt=0 → trauma/파티클/트윈 정지. 단 셰이크 오프셋은 매 프레임
   // 갱신(정지된 화면이 떨리는 타격 연출). freeze 카운트다운은 실시간 dt 로 줄어든다.
+  // NaN·Infinity 는 0 으로 처리(오염 방지). dt < 0 도 0 처리.
   JuiceKit.prototype.update = function (dt) {
-    if (dt == null || dt < 0) dt = 0;
+    if (!Number.isFinite(dt) || dt < 0) dt = 0;
 
     // 히트스톱: timeScale 결정 + freeze 카운트다운(실시간).
+    // freeze 해제 프레임의 초과분(overflow)은 scaledDt 로 환원해 잔여 시간만큼 정상 진행.
+    var scaledDt;
     if (this._freezeRemaining > 0) {
       this.timeScale = 0;
-      this._freezeRemaining -= dt / this._frameDur; // dt(초) → 프레임 환산해 차감
-      if (this._freezeRemaining <= 0) { this._freezeRemaining = 0; this.timeScale = 1; }
+      var frames = dt / this._frameDur;            // dt(초) → 프레임 환산
+      this._freezeRemaining -= frames;
+      if (this._freezeRemaining <= 0) {
+        // 해제 프레임: 초과분(-_freezeRemaining 프레임)을 초로 환산해 정상 진행
+        var overflow = -this._freezeRemaining * this._frameDur;
+        this._freezeRemaining = 0;
+        this.timeScale = 1;
+        scaledDt = overflow > 0 ? overflow : 0;   // 잔여 시간만큼만 진행
+      } else {
+        scaledDt = 0;
+      }
     } else {
       this.timeScale = 1;
+      scaledDt = dt;
     }
-
-    var scaledDt = dt * this.timeScale;
-
-    // 노이즈 위상 진행(셰이크 결정성: 위상 누적은 실시간 dt 로, 멈춤 중에도 떨림).
-    this._noiseT += dt;
 
     // trauma 자연 감쇠(스케일된 시간 — 히트스톱 중 멈춤).
     if (this.trauma > 0) {
@@ -337,11 +358,10 @@
     return this;
   };
 
-  // 전부 초기화(씬 전환·재시작용). rng 는 유지(별도 setRng/reseed 로 교체).
+  // 전부 초기화(씬 전환·재시작용). rng/스트림은 유지(별도 setRng/reseed 로 교체).
   JuiceKit.prototype.reset = function () {
     this.trauma = 0;
     this._shake.x = this._shake.y = this._shake.rotation = 0;
-    this._noiseT = 0;
     this.particles.length = 0;
     this.tweens.length = 0;
     this.timeScale = 1;

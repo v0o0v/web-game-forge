@@ -7,9 +7,12 @@
 //   1) trauma decay 단조 감소 — update(dt) 마다 trauma 가 줄고 [0,1] clamp
 //   2) 셰이크 강도 = trauma^2 — 비선형(Eiserloh) 강도 공식 검증
 //   3) 결정론 — 같은 시드 + 같은 dt 시퀀스 → 동일한 셰이크 오프셋 수열
-//   4) 히트스톱 — freeze(N) 동안 timeScale 0(시간 정지) → N 프레임 후 자동 복원
+//   4) 히트스톱 — freeze(N) 동안 timeScale 0 → N 프레임 후 자동 복원 + 잔여 dt 환원
 //   5) 파티클 — burst 개수·무작위 결정성·수명 만료(0개로 GC)
 //   6) 트윈/이징 — from→to 보간, easeOutQuad 경계값, onComplete, 결정성
+//   7) NaN/Infinity 가드 — update(NaN)/update(Infinity) 후 trauma 정상 복귀
+//   8) 트윈 delay 순서 독립 — delay 트윈 + 비-delay 트윈 등록 순서 바꿔도 동일 결과
+//   9) rng 스트림 분리 — 셰이크 호출이 파티클 수열을 밀지 않음
 //
 // 사용: node skills/wgf-game-qa/tools/test-juicekit.mjs
 // 출력 계약: 사람용 라인 + 마지막 줄 단일 JSON {"ok":bool,"pass":n,"fail":n,"checks":[...]}
@@ -86,7 +89,7 @@ const DT = 1 / 60 // 표준 프레임 델타(초)
   ok('different seed → different shake sequence', !a.every((v, i) => v === c[i]))
 }
 
-// ── 4) 히트스톱 — freeze(N) 동안 timeScale 0 → 자동 복원 ─────────────────────
+// ── 4) 히트스톱 — freeze(N) 동안 timeScale 0 → 자동 복원 + 잔여 dt 환원 ────────
 {
   const jk = new JuiceKit(RngForge.create(5))
   jk.addTrauma(1.0)
@@ -105,6 +108,19 @@ const DT = 1 / 60 // 표준 프레임 델타(초)
   // 복원 후엔 trauma 가 다시 감쇠
   const t1 = jk.getTrauma(); jk.update(DT)
   ok('trauma resumes decay after hitstop', jk.getTrauma() < t1)
+
+  // 잔여 dt 환원: freeze 해제 프레임의 overflow 만큼 트윈/파티클이 진행돼야 함.
+  // freeze(1프레임) 후 DT=1/60 을 주면 →  freeze 소진(1프레임) 후 남은 0이 아닌 overflow 가
+  // scaledDt 로 환원돼 트윈이 조금 진행됨을 확인.
+  // (정확히: freeze=1프레임=DT, DT 를 주면 남은=0 → overflow=0. 2프레임분 dt 를 주면 overflow=1*DT)
+  {
+    const jkF = new JuiceKit(RngForge.create(42))
+    let tweenVal = 0
+    jkF.tween(0, 1, 1.0, 'linear', { onUpdate: v => { tweenVal = v } })
+    jkF.freeze(1)                        // 1프레임 정지
+    jkF.update(DT * 2)                   // 2프레임분 dt → 1프레임 freeze 소진 + 1프레임 overflow
+    ok('freeze overflow dt propagates to tween', tweenVal > 0, `tweenVal=${tweenVal}`)
+  }
 }
 
 // ── 5) 파티클 — 개수·결정성·수명 만료 ────────────────────────────────────────
@@ -169,6 +185,77 @@ const DT = 1 / 60 // 표준 프레임 델타(초)
   }
   const s1 = tweenSeq(), s2 = tweenSeq()
   ok('tween value sequence is deterministic', s1.length === s2.length && s1.every((v, i) => v === s2[i]))
+}
+
+// ── 7) NaN/Infinity 가드 — 이상값 프레임 후 정상 복귀 ────────────────────────
+{
+  const jk = new JuiceKit(RngForge.create(77))
+  jk.addTrauma(0.5)
+  const traumaBefore = jk.getTrauma()
+
+  // NaN 프레임
+  jk.update(NaN)
+  ok('update(NaN): trauma stays finite', Number.isFinite(jk.getTrauma()), `trauma=${jk.getTrauma()}`)
+  ok('update(NaN): trauma not corrupted', approx(jk.getTrauma(), traumaBefore), `before=${traumaBefore} after=${jk.getTrauma()}`)
+
+  // Infinity 프레임
+  const t1 = jk.getTrauma()
+  jk.update(Infinity)
+  ok('update(Infinity): trauma stays finite', Number.isFinite(jk.getTrauma()), `trauma=${jk.getTrauma()}`)
+  ok('update(Infinity): trauma not corrupted', approx(jk.getTrauma(), t1), `before=${t1} after=${jk.getTrauma()}`)
+
+  // 이상값 프레임 후 정상 dt 를 주면 trauma 가 감쇠해야 함
+  const t2 = jk.getTrauma()
+  jk.update(DT)
+  ok('trauma decays normally after NaN/Inf frames', jk.getTrauma() < t2, `before=${t2} after=${jk.getTrauma()}`)
+}
+
+// ── 8) 트윈 delay 순서 독립 — 등록 순서 바꿔도 동일 결과 ─────────────────────
+// delay 있는 트윈의 지연 소진 시 남은 시간(step)이 공용 dt 를 오염시키지 않는지 검증.
+// 등록 순서를 바꿔도 각 트윈의 최종값이 동일해야 한다.
+{
+  function runOrder(delayFirst) {
+    const jk = new JuiceKit(RngForge.create(1))
+    const vals = { a: [], b: [] }
+    const optsA = { delay: 0.05, onUpdate: v => vals.a.push(parseFloat(v.toFixed(8))) }
+    const optsB = { delay: 0,    onUpdate: v => vals.b.push(parseFloat(v.toFixed(8))) }
+    if (delayFirst) {
+      jk.tween(0, 1, 0.3, 'linear', optsA)  // delay 트윈 먼저
+      jk.tween(0, 2, 0.3, 'linear', optsB)  // 비-delay 트윈 나중
+    } else {
+      jk.tween(0, 2, 0.3, 'linear', optsB)  // 비-delay 트윈 먼저
+      jk.tween(0, 1, 0.3, 'linear', optsA)  // delay 트윈 나중
+    }
+    for (let i = 0; i < 30; i++) jk.update(DT)
+    return vals
+  }
+  const vFirst  = runOrder(true)   // delay 트윈이 앞에 등록
+  const vSecond = runOrder(false)  // delay 트윈이 뒤에 등록
+  // 비-delay 트윈(b) 수열은 등록 순서에 무관하게 동일해야 함
+  ok('non-delay tween unaffected by delay tween order',
+    vFirst.b.length === vSecond.b.length && vFirst.b.every((v, i) => v === vSecond.b[i]),
+    `len=${vFirst.b.length} vs ${vSecond.b.length}`)
+  // delay 트윈(a)도 등록 순서에 무관하게 동일해야 함
+  ok('delay tween result independent of registration order',
+    vFirst.a.length === vSecond.a.length && vFirst.a.every((v, i) => v === vSecond.a[i]),
+    `len=${vFirst.a.length} vs ${vSecond.a.length}`)
+}
+
+// ── 9) rng 스트림 분리 — 셰이크 호출이 파티클 수열을 밀지 않음 ──────────────
+{
+  // 셰이크만 굴린 뒤 burst → 스트림 분리 없으면 rng 소비량이 달라 파티클 수열이 달라짐.
+  // 분리 후에는 셰이크를 굴려도 burst 결과가 동일해야 한다.
+  function burstAfterShake(shakeFrames) {
+    const jk = new JuiceKit(RngForge.create(55))
+    jk.addTrauma(1.0); jk.decayRate = 0
+    for (let i = 0; i < shakeFrames; i++) jk.update(DT)  // 셰이크 rng 소비
+    return jk.burst(0, 0, { count: 8 }).map(p => p.vx.toFixed(6))
+  }
+  const seqA = burstAfterShake(0)   // 셰이크 0프레임 후 burst
+  const seqB = burstAfterShake(50)  // 셰이크 50프레임 후 burst
+  ok('burst result independent of shake rng consumption',
+    seqA.every((v, i) => v === seqB[i]),
+    `first vx: A=${seqA[0]} B=${seqB[0]}`)
 }
 
 console.log(`— pass ${pass} · fail ${fail}`)
