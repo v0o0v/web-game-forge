@@ -36,9 +36,9 @@ function ok(name, cond, detail) {
 }
 
 // ── 브리지 spawn + READY 파싱 ─────────────────────────────────────────────────
-function startBridge() {
+function startBridge(extraEnv) {
   return new Promise((resolve, reject) => {
-    const env = Object.assign({}, process.env, { WGF_BRIDGE_PORT: '0' });
+    const env = Object.assign({}, process.env, { WGF_BRIDGE_PORT: '0' }, extraEnv || {});
     const child = spawn(process.execPath, [BRIDGE], { env, stdio: ['ignore', 'ignore', 'pipe'] });
     let buf = '';
     let done = false;
@@ -142,6 +142,49 @@ function parseEvent(handle, rawEvt) {
   if (eventName === 'resync') { handle.resyncCount++; }
   handle.events.push(obj);
   if (handle.onEvent) try { handle.onEvent(obj, eventName); } catch (e) {}
+}
+
+// 멈춘 SSE 소비자 — 응답 본문을 읽지 않고 paused 로 둔다(서버 writableLength 누적 유도).
+// consume() 를 호출하면 그때까지 흘러온 데이터를 파싱해 resyncCount 등을 갱신·반환한다.
+function openStalledSSE(info) {
+  const headers = { 'Accept': 'text/event-stream', 'Origin': `http://127.0.0.1:${info.port}` };
+  const out = { state: { resyncCount: 0, events: [] }, _started: false };
+  let sseBuf = '';
+  const handle = {
+    resyncCount: 0, events: [],   // parseEvent 가 채울 필드
+  };
+  const req = http.request({
+    host: '127.0.0.1', port: info.port,
+    path: '/api/events?token=' + encodeURIComponent(info.token), method: 'GET', headers
+  }, (res) => {
+    res.setEncoding('utf8');
+    res.pause();                  // 흐름 정지 — 본문을 읽지 않음(서버 송신 버퍼 누적).
+    out._res = res;
+    out._onData = (chunk) => {
+      sseBuf += chunk;
+      let idx;
+      while ((idx = sseBuf.indexOf('\n\n')) >= 0) {
+        const rawEvt = sseBuf.slice(0, idx);
+        sseBuf = sseBuf.slice(idx + 2);
+        parseEvent(handle, rawEvt);
+      }
+      out.state.resyncCount = handle.resyncCount;
+      out.state.events = handle.events;
+    };
+  });
+  req.on('error', () => {});
+  req.end();
+  out.consume = () => {
+    // 멈춘 응답을 흘려 그동안 버퍼된 데이터를 모두 파싱.
+    if (out._res && !out._started) {
+      out._started = true;
+      out._res.on('data', out._onData);
+      out._res.resume();
+    }
+    return out.state;
+  };
+  out.close = () => { try { req.destroy(); } catch (e) {} };
+  return out;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -294,6 +337,37 @@ async function main() {
 
       sse.close();
       await sleep(50);
+    }
+
+    // ── G4b 결정적 resync(낮은 버퍼 상한 + 멈춘 소비자) ────────────────────────
+    // 별도 브리지를 WGF_BRIDGE_SSE_LIMIT=5 로 띄워 resync 경로를 OS 소켓 버퍼 의존
+    // 없이 결정적으로 트리거(G4-3 는 정보성 — 여기서 resync 발행을 단언).
+    {
+      let b2;
+      try { b2 = await startBridge({ WGF_BRIDGE_SSE_LIMIT: '5', WGF_BRIDGE_SSE_BYTES: '1024', WGF_BRIDGE_SSE_FORCE_BP: '1' }); } catch (e) { b2 = null; }
+      if (!b2) {
+        ok('G4b resync 브리지 기동', false, '두 번째 브리지 기동 실패');
+      } else {
+        const info2 = b2.info;
+        // 멈춘 소비자: SSE 를 열되 응답 본문을 절대 읽지 않는다(data 리스너 없음).
+        // → 서버의 res.writableLength(Node 스트림 내부 버퍼)가 결정적으로 누적 → resync 트리거.
+        const stalled = openStalledSSE(info2);
+        await sleep(30);
+        // 다량 커맨드 — 낮은 바이트 상한(1024) + 프레임 상한(5) 초과를 보장.
+        for (let i = 0; i < 200; i++) {
+          await api(info2, 'POST', '/api/command', { command: { type: 'setTransform', id: 'player', transform: { x: i, y: 0 } } });
+        }
+        await sleep(100);
+        // resync 발행 검증: 멈춘 소켓을 이제 흘려보내며(읽기 시작) resync 프레임을 파싱.
+        const sawResync = await waitFor(() => stalled.consume().resyncCount > 0, 2500);
+        ok('G4b resync 발행(낮은 상한 강제)', sawResync, `resyncCount=${stalled.state.resyncCount}`);
+        // resync 후 /api/scene 재동기 가능(최신 진실 일관).
+        const snap = JSON.parse((await api(info2, 'GET', '/api/scene')).body);
+        ok('G4b resync 후 스냅샷 재동기 가능', snap.ok === true && snap.seq >= 200, `seq=${snap.seq}`);
+        stalled.close();
+        try { b2.child.kill(); } catch (e) {}
+        await sleep(50);
+      }
     }
 
     // ── G5 path-traversal 차단 ─────────────────────────────────────────────────

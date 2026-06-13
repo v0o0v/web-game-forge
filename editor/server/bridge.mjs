@@ -45,7 +45,17 @@ const REPO_ROOT = path.resolve(SERVER_DIR, '..', '..');            // 리포 루
 const PORT = parseInt(process.argv[2] || process.env.WGF_BRIDGE_PORT || '5180', 10);
 const HOST = '127.0.0.1';
 const UNDO_LIMIT = 200;            // Undo/Redo·커맨드 로그 상한(설계서 §7)
-const SSE_BUFFER_LIMIT = 1000;     // 구독자별 송신 버퍼 상한(백프레셔, §8 위험8). 초과 → resync.
+// 구독자별 송신 버퍼 상한(백프레셔, §8 위험8). 초과 → resync.
+//  - SSE_BUFFER_LIMIT: 백프레셔 진입 후 누적 프레임 수 상한.
+//  - SSE_BYTES_LIMIT: Node 스트림 내부 버퍼(res.writableLength) 바이트 상한.
+//    writableLength 는 클라가 안 읽으면 OS 소켓이 아니라 Node 스트림에 쌓이므로 결정적으로
+//    증가 → 테스트가 WGF_BRIDGE_SSE_LIMIT 만 낮춰도 resync 경로를 OS 의존 없이 트리거.
+const SSE_BUFFER_LIMIT = parseInt(process.env.WGF_BRIDGE_SSE_LIMIT || '1000', 10);
+const SSE_BYTES_LIMIT = parseInt(process.env.WGF_BRIDGE_SSE_BYTES || String(256 * 1024), 10);
+// 테스트 전용: localhost loopback 송신 버퍼가 수 MB라 실제 소켓으로는 백프레셔를 결정적
+// 으로 트리거하기 어렵다. 이 플래그가 켜지면 매 write 후 강제로 backpressured 로 간주해
+// resync 경로를 실제로 실행 검증한다(프로덕션 기본 off — OS 신호/writableLength 만 사용).
+const SSE_FORCE_BP = process.env.WGF_BRIDGE_SSE_FORCE_BP === '1';
 const DEFAULT_SCENE = 'games/_editor-samples/topdown-min/scene.json';
 
 // ── 토큰(보안 §6) ─────────────────────────────────────────────────────────────
@@ -165,23 +175,38 @@ function broadcast(evt) {
   }
 }
 
-// 구독자에게 1프레임 전송. 백프레셔: write 가 버퍼링되면 buffer 카운트, 상한 초과 시 resync.
+// 구독자에게 1프레임 전송. 백프레셔 모델:
+//  - res.write() 가 false 를 반환하면 소켓 송신 버퍼가 highWaterMark 초과(느린 소비자 신호).
+//    그 시점부터 "backpressured" 상태로, drain 이벤트가 오기 전까지 보내려는 프레임을 모두
+//    pending 으로 누적한다(Node 가 내부 버퍼에 쌓으므로 — 무한 적체 위험).
+//  - pending 이 SSE_BUFFER_LIMIT 를 넘으면 적체를 멈추고(이후 프레임 드롭) resync 1회 발행.
+//    클라는 resync 를 받으면 /api/scene 으로 재동기(무손실 — 스냅샷이 최신 진실).
 function sendToSub(sub, frame) {
-  if (sub.resyncing) return;             // 이미 resync 발행 후 — /api/scene 재요청 대기
-  // 느린 소비자 감지: 직전 write 들이 아직 flush 안 됨(needDrain) + 누적 프레임 상한 초과.
-  sub.pending += 1;
-  const flushed = sub.res.write(frame);
-  if (flushed) {
-    sub.pending = Math.max(0, sub.pending - 1);
-  } else if (sub.pending > SSE_BUFFER_LIMIT) {
-    // 백프레셔 폭주 — 버퍼 비우고 resync 1회 발행(클라가 /api/scene 재동기).
-    triggerResync(sub);
+  if (sub.resyncing) return;             // 이미 resync 발행 후 — /api/scene 재요청 대기(추가 프레임 드롭)
+  // 백프레셔 신호 = write() false 반환(OS 소켓) 또는 Node 스트림 내부 버퍼 바이트 누적.
+  // 둘 중 하나라도 상한 초과면 적체로 간주(writableLength 는 클라 미수신 시 결정적 증가).
+  const buffered = (typeof sub.res.writableLength === 'number') ? sub.res.writableLength : 0;
+  if (sub.backpressured) {
+    sub.pending += 1;
+    if (sub.pending > SSE_BUFFER_LIMIT || buffered > SSE_BYTES_LIMIT) { triggerResync(sub); return; }
+    try { sub.res.write(frame); } catch (e) { sub.alive = false; }
+    return;
+  }
+  let flushed;
+  try { flushed = sub.res.write(frame); }
+  catch (e) { sub.alive = false; return; }
+  const bufferedAfter = (typeof sub.res.writableLength === 'number') ? sub.res.writableLength : 0;
+  if (!flushed || bufferedAfter > SSE_BYTES_LIMIT || SSE_FORCE_BP) {
+    // 백프레셔 진입(이 프레임은 이미 내부 버퍼에 들어갔다 — pending=1 로 카운트).
+    sub.backpressured = true;
+    sub.pending = 1;
   }
 }
 
 function triggerResync(sub) {
   if (sub.resyncing) return;
   sub.resyncing = true;
+  sub.backpressured = false;
   sub.pending = 0;
   try {
     // resync 이벤트(id 없음 — 시퀀스에서 빼지 않음). 클라가 받으면 /api/scene 재요청.
@@ -189,9 +214,10 @@ function triggerResync(sub) {
   } catch (e) { sub.alive = false; }
 }
 
-// drain 시 pending 감소(소비자 따라잡음 → resync 해제).
+// drain 시 백프레셔 해제(소비자 따라잡음). resync 후에도 drain 되면 정상 복귀.
 function attachDrain(sub) {
   sub.res.on('drain', () => {
+    sub.backpressured = false;
     sub.pending = 0;
     sub.resyncing = false;
   });
@@ -397,7 +423,7 @@ function handleApi(req, res, u, p) {
       'Connection': 'keep-alive',
       'X-Accel-Buffering': 'no'
     });
-    const sub = { res, pending: 0, alive: true, resyncing: false };
+    const sub = { res, pending: 0, alive: true, resyncing: false, backpressured: false };
     subscribers.add(sub);
     attachDrain(sub);
     // 초기 코멘트(연결 확인 — 일부 클라가 첫 바이트 대기).
