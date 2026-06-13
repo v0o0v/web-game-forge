@@ -19,6 +19,7 @@ import { Toolbar } from './Toolbar.jsx';
 import { Hierarchy } from './Hierarchy.jsx';
 import { Viewport } from './Viewport.jsx';
 import { Inspector } from './Inspector.jsx';
+import { ChatPanel } from './ChatPanel.jsx';
 
 // 기본 자동 로드 씬 경로(dev 서버 루트 기준).
 const DEFAULT_SCENE_URL = '/games/_editor-samples/topdown-min/scene.json';
@@ -101,6 +102,9 @@ function App({ controller }) {
         <Viewport controller={controller} sceneDoc={docState} />
         <div style={{ width: '280px', flexShrink: 0 }}>
           <Inspector controller={controller} world={world} selection={selection} />
+        </div>
+        <div style={{ width: '260px', flexShrink: 0 }}>
+          <ChatPanel controller={controller} />
         </div>
       </div>
     </div>

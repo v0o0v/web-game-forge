@@ -58,6 +58,22 @@ const SSE_BYTES_LIMIT = parseInt(process.env.WGF_BRIDGE_SSE_BYTES || String(256 
 const SSE_FORCE_BP = process.env.WGF_BRIDGE_SSE_FORCE_BP === '1';
 const DEFAULT_SCENE = 'games/_editor-samples/topdown-min/scene.json';
 
+// ── P3 역채널 설정 ─────────────────────────────────────────────────────────────
+// 챗 큐 영속 경로(games/ 밖 — .gitignore 의 .omc/ 로 런타임 상태 격리, traversal 안전).
+// 테스트는 WGF_BRIDGE_CHAT_FILE 로 임시 경로를 지정해 재진입 무손실을 검증한다.
+const CHAT_FILE = process.env.WGF_BRIDGE_CHAT_FILE ||
+  path.resolve(REPO_ROOT, '.omc', 'wgf-editor', 'chat-queue.json');
+// 하트비트 임계(ms) — 마지막 하트비트로부터 이 시간 초과면 disconnected(설계서 §4.7).
+// 기본 5000ms(§5 P3 게이트 "5초 내 끊김 표시"). 테스트는 단축해 임계 로직만 검증 가능.
+const HEARTBEAT_TIMEOUT_MS = parseInt(process.env.WGF_BRIDGE_HEARTBEAT_MS || '5000', 10);
+// editor_next_message long-poll 타임아웃(ms) — 미처리 메시지 없으면 이 시간 후 빈 응답.
+const CHAT_POLL_TIMEOUT_MS = parseInt(process.env.WGF_BRIDGE_CHAT_POLL_MS || '25000', 10);
+// 브리지↔MCP 토큰 공유 파일(같은 신뢰경계). 브리지가 기동 시 {port,token} 을 쓰고,
+// mcp.mjs 가 읽어 localhost HTTP 프록시에 사용. games/ 밖(.omc/ 격리). 환경변수
+// WGF_BRIDGE_TOKEN/WGF_BRIDGE_PORT 가 있으면 mcp.mjs 가 파일보다 우선 사용.
+const ENDPOINT_FILE = process.env.WGF_BRIDGE_ENDPOINT_FILE ||
+  path.resolve(REPO_ROOT, '.omc', 'wgf-editor', 'bridge-endpoint.json');
+
 // ── 토큰(보안 §6) ─────────────────────────────────────────────────────────────
 const TOKEN = crypto.randomBytes(24).toString('hex');
 
@@ -108,6 +124,90 @@ const state = {
 // ── SSE 구독자 ────────────────────────────────────────────────────────────────
 // 각 구독자: {res, buffer:[], alive}. buffer 는 백프레셔 상한 초과 시 비우고 resync 발행.
 const subscribers = new Set();
+
+// ── P3 역채널 상태(영속 챗 큐 + 하트비트) ─────────────────────────────────────
+// chat: 에디터 → Claude 역방향. messages = 미처리 사용자 메시지 큐(FIFO, 파일 영속).
+//   재기동 후 CHAT_FILE 에서 복원 → 미처리 메시지 무손실(§5 P3 게이트).
+//   nextId = 메시지 id 단조 증가(영속). pollers = editor_next_message long-poll 대기자.
+//   lastHeartbeat = Claude 루프의 마지막 하트비트 시각(ms, 0=아직 없음).
+const chat = {
+  messages: [],          // [{id, text, at}] — 미처리(디큐 전)만 보관
+  nextId: 1,
+  pollers: [],           // [{res, timer}] — editor_next_message long-poll 대기 응답
+  lastHeartbeat: 0       // Date.now() 기준 — 토큰·씬 상태와 무관(시각 측정 예외)
+};
+
+// 챗 큐 파일에서 복원(재기동 무손실). 손상/부재 시 빈 큐로 시작.
+function loadChatQueue() {
+  try {
+    const raw = fs.readFileSync(CHAT_FILE, 'utf8');
+    const data = JSON.parse(raw);
+    if (data && Array.isArray(data.messages)) {
+      chat.messages = data.messages.filter((m) => m && typeof m.text === 'string');
+      chat.nextId = (typeof data.nextId === 'number' && data.nextId > 0)
+        ? data.nextId
+        : (chat.messages.reduce((mx, m) => Math.max(mx, m.id || 0), 0) + 1);
+    }
+  } catch (e) { /* 부재/손상 — 빈 큐로 시작 */ }
+}
+
+// 챗 큐를 파일에 영속(원자적 쓰기 — tmp 후 rename, 부분 쓰기로 인한 손상 방지).
+function persistChatQueue() {
+  try {
+    fs.mkdirSync(path.dirname(CHAT_FILE), { recursive: true });
+    const tmp = CHAT_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify({ messages: chat.messages, nextId: chat.nextId }), 'utf8');
+    fs.renameSync(tmp, CHAT_FILE);
+  } catch (e) {
+    process.stderr.write(`[wgf-bridge] 챗 큐 영속 실패: ${String(e)}\n`);
+  }
+}
+
+// 사용자 메시지 enqueue(에디터 → Claude). 영속 후, 대기 중 poller 가 있으면 즉시 디큐 전달.
+function enqueueChat(text) {
+  const msg = { id: chat.nextId++, text: String(text), at: Date.now() };
+  chat.messages.push(msg);
+  persistChatQueue();
+  drainPollers();
+  return msg;
+}
+
+// 대기 중 long-poll 응답에 미처리 메시지를 전달(있으면 디큐). FIFO 1건씩.
+function drainPollers() {
+  while (chat.pollers.length > 0 && chat.messages.length > 0) {
+    const poller = chat.pollers.shift();
+    if (poller.timer) clearTimeout(poller.timer);
+    const msg = dequeueChat();
+    try { sendJSON(poller.res, 200, { ok: true, message: msg }); } catch (e) {}
+  }
+}
+
+// 미처리 메시지 1건 디큐(영속 반영) — editor_next_message 가 소비.
+function dequeueChat() {
+  if (chat.messages.length === 0) return null;
+  const msg = chat.messages.shift();
+  persistChatQueue();
+  return msg;
+}
+
+// 하트비트 기록(Claude 루프가 살아있음). editor_next_message 호출 자체도 하트비트로 간주.
+function recordHeartbeat() {
+  chat.lastHeartbeat = Date.now();
+}
+
+// 현재 연결 상태(설계서 §4.7): disconnected/waiting/connected.
+//  - lastHeartbeat=0(아직 한 번도 없음) 또는 임계 초과 → disconnected.
+//  - 임계 내 + 미처리 메시지 있음 → waiting(Claude 가 아직 안 가져감).
+//  - 임계 내 + 미처리 없음 → connected.
+function connectionStatus() {
+  const now = Date.now();
+  if (chat.lastHeartbeat === 0 || (now - chat.lastHeartbeat) > HEARTBEAT_TIMEOUT_MS) {
+    return 'disconnected';
+  }
+  return chat.messages.length > 0 ? 'waiting' : 'connected';
+}
+
+loadChatQueue();
 
 // ── 커맨드 적용(직렬 apply 큐 — 전순서, §7) ──────────────────────────────────
 // Node 단일 스레드 + 동기 applyCommand 이므로 호출 자체가 전순서. 시퀀스 부여 후 브로드캐스트.
@@ -246,6 +346,10 @@ function replayMissed(sub, lastId) {
     let evt;
     if (entry.kind === 'undo') {
       evt = { type: 'undo', seq: entry.seq, undoDelta: entry.undoDelta };
+    } else if (entry.kind === 'chat') {
+      // [P3] 챗 델타는 'chat' 타입으로 재전송 — 라이브 브로드캐스트와 동일(씬 커맨드 아님).
+      const c = entry.command || {};
+      evt = { type: 'chat', seq: entry.seq, role: c.role, id: c.id, text: c.text, replyTo: c.replyTo, at: c.at };
     } else if (entry.kind === 'mode') {
       // [수정] mode 델타는 'mode' 타입으로 재전송 — 라이브 브로드캐스트(§4.9)와 동일.
       //  재연결 클라가 applyCommand({mode:'play'}) 대신 올바른 mode 이벤트로 처리하게.
@@ -390,9 +494,15 @@ function handleApi(req, res, u, p) {
     return;
   }
 
-  // GET /api/scene — 현재 스냅샷 + seq(초기 동기·resync 재요청).
+  // GET /api/scene — 현재 스냅샷 + seq(초기 동기·resync 재요청) + Claude 연결 상태.
   if (req.method === 'GET' && p === '/api/scene') {
-    sendJSON(res, 200, Object.assign({ ok: true }, sceneSnapshot()));
+    sendJSON(res, 200, Object.assign({ ok: true, status: connectionStatus() }, sceneSnapshot()));
+    return;
+  }
+
+  // GET /api/status — Claude 연결 상태만(하트비트 인디케이터 폴링용, 경량).
+  if (req.method === 'GET' && p === '/api/status') {
+    sendJSON(res, 200, { ok: true, status: connectionStatus(), seq: state.seq, mode: state.mode });
     return;
   }
 
@@ -456,12 +566,101 @@ function handleApi(req, res, u, p) {
     return;
   }
 
+  // ── P3 역채널: 챗 큐 + 하트비트 ──────────────────────────────────────────────
+
+  // POST /api/chat {text} — 에디터 → Claude. 사용자 메시지 enqueue(영속) → SSE 로 에코.
+  if (req.method === 'POST' && p === '/api/chat') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      const text = parsed && parsed.text;
+      if (typeof text !== 'string' || text.length === 0) { sendJSON(res, 400, { ok: false, error: 'text 누락' }); return; }
+      if (text.length > 100_000) { sendJSON(res, 413, { ok: false, error: 'text 과대' }); return; }
+      const msg = enqueueChat(text);
+      // 에디터 UI 가 자기 메시지를 채팅창에 즉시 표시하도록 SSE 로 에코(role=user).
+      state.seq += 1;
+      const entry = { seq: state.seq, kind: 'chat', command: { role: 'user', id: msg.id, text: msg.text, at: msg.at }, undoDelta: null };
+      state.log.push(entry);
+      if (state.log.length > UNDO_LIMIT) state.log.shift();
+      broadcast({ type: 'chat', seq: state.seq, role: 'user', id: msg.id, text: msg.text, at: msg.at });
+      sendJSON(res, 200, { ok: true, id: msg.id, queued: chat.messages.length });
+    });
+    return;
+  }
+
+  // GET /api/chat/next — MCP editor_next_message 가 미처리 메시지 디큐(long-poll).
+  //  미처리 있으면 즉시 1건, 없으면 long-poll 후 타임아웃 시 빈 응답(message:null).
+  //  이 호출 자체를 하트비트로 간주(Claude 루프 생존 신호, §4.7).
+  if (req.method === 'GET' && p === '/api/chat/next') {
+    recordHeartbeat();
+    const msg = dequeueChat();
+    if (msg) { sendJSON(res, 200, { ok: true, message: msg }); return; }
+    // 미처리 없음 → long-poll 대기. 타임아웃 시 빈 응답 + 재호출 유도.
+    const poller = { res, timer: null };
+    poller.timer = setTimeout(() => {
+      const i = chat.pollers.indexOf(poller);
+      if (i >= 0) chat.pollers.splice(i, 1);
+      try { sendJSON(res, 200, { ok: true, message: null }); } catch (e) {}
+    }, CHAT_POLL_TIMEOUT_MS);
+    chat.pollers.push(poller);
+    // 클라가 끊으면 poller 정리(누수 방지).
+    req.on('close', () => {
+      const i = chat.pollers.indexOf(poller);
+      if (i >= 0) { chat.pollers.splice(i, 1); if (poller.timer) clearTimeout(poller.timer); }
+    });
+    return;
+  }
+
+  // POST /api/chat/reply {text, replyTo?} — MCP editor_reply 가 응답을 에디터에 SSE 표시.
+  //  Claude 가 메시지를 처리했음을 의미하므로 하트비트도 갱신.
+  if (req.method === 'POST' && p === '/api/chat/reply') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      const text = parsed && parsed.text;
+      if (typeof text !== 'string') { sendJSON(res, 400, { ok: false, error: 'text 누락' }); return; }
+      recordHeartbeat();
+      state.seq += 1;
+      const replyTo = (parsed && parsed.replyTo != null) ? parsed.replyTo : null;
+      const entry = { seq: state.seq, kind: 'chat', command: { role: 'assistant', text, replyTo, at: Date.now() }, undoDelta: null };
+      state.log.push(entry);
+      if (state.log.length > UNDO_LIMIT) state.log.shift();
+      broadcast({ type: 'chat', seq: state.seq, role: 'assistant', text, replyTo, at: entry.command.at });
+      sendJSON(res, 200, { ok: true, seq: state.seq });
+    });
+    return;
+  }
+
+  // POST /api/heartbeat — Claude 루프가 주기적으로 호출(연결 생존). status=connected/waiting 유지.
+  if (req.method === 'POST' && p === '/api/heartbeat') {
+    recordHeartbeat();
+    sendJSON(res, 200, { ok: true, status: connectionStatus(), at: chat.lastHeartbeat });
+    return;
+  }
+
   sendJSON(res, 404, { ok: false, error: 'unknown api' });
 }
+
+// 브리지 엔드포인트(port·token)를 토큰 공유 파일에 기록 — mcp.mjs 프록시가 읽는다.
+function writeEndpointFile(port) {
+  try {
+    fs.mkdirSync(path.dirname(ENDPOINT_FILE), { recursive: true });
+    fs.writeFileSync(ENDPOINT_FILE, JSON.stringify({ port, token: TOKEN, host: HOST, pid: process.pid }), 'utf8');
+  } catch (e) {
+    process.stderr.write(`[wgf-bridge] 엔드포인트 파일 기록 실패: ${String(e)}\n`);
+  }
+}
+function removeEndpointFile() {
+  try { fs.unlinkSync(ENDPOINT_FILE); } catch (e) { /* 이미 없음 */ }
+}
+process.on('exit', removeEndpointFile);
+process.on('SIGINT', () => { removeEndpointFile(); process.exit(0); });
+process.on('SIGTERM', () => { removeEndpointFile(); process.exit(0); });
 
 server.listen(PORT, HOST, () => {
   const actual = server.address().port;
   const url = `http://${HOST}:${actual}/editor/ui/`;
+  writeEndpointFile(actual);
   // 첫 줄: 테스트 하니스가 파싱하는 구조화 라인(포트·토큰).
   process.stderr.write(`[wgf-bridge] READY ${JSON.stringify({ port: actual, token: TOKEN, host: HOST })}\n`);
   process.stderr.write(`[wgf-bridge] 브리지 기동 → ${url}\n`);

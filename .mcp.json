@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "wgf-editor": {
+      "command": "node",
+      "args": ["editor/server/mcp.mjs"]
+    }
+  }
+}
