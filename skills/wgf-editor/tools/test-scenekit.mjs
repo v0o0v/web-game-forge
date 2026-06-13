@@ -356,6 +356,113 @@ function run120(world) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// G7-D  lint-scene null·배열·스칼라 루트 입력 → crash 없이 exit 1 + 마지막 줄 JSON
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const lintScene = resolve(root, 'skills/wgf-editor/tools/lint-scene.mjs');
+  const badInputs = [
+    { label: 'null',    content: 'null'  },
+    { label: '[1,2,3]', content: '[1,2,3]' },
+    { label: '42',      content: '42'    }
+  ];
+
+  for (const { label, content } of badInputs) {
+    const tmpBad = resolve(root, `games/_editor-samples/_bad-root-${label.replace(/[^a-z0-9]/g,'_')}-tmp.json`);
+    writeFileSync(tmpBad, content, 'utf8');
+    const res = spawnSync(process.execPath, [lintScene, '--file', tmpBad], { encoding: 'utf8' });
+
+    // crash 없음: exit 코드가 0 또는 1 이어야 함(2 이상은 uncaught crash)
+    ok(`G7-D lint-scene root="${label}" crash 없음(exit 0|1)`,
+      res.status === 0 || res.status === 1,
+      `exit=${res.status} stderr=${(res.stderr || '').slice(0, 100)}`);
+
+    // exit 1 이어야 함(잘못된 입력이므로)
+    ok(`G7-D lint-scene root="${label}" exit 1`,
+      res.status === 1,
+      `exit=${res.status}`);
+
+    // 마지막 줄이 JSON.parse 가능
+    const lines = res.stdout.trim().split('\n');
+    let parsed = null;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try { parsed = JSON.parse(lines[i]); break; } catch (_) { /* 계속 */ }
+    }
+    ok(`G7-D lint-scene root="${label}" 마지막 줄 JSON 파싱 가능`,
+      parsed !== null && typeof parsed === 'object',
+      `lastLine=${lines[lines.length - 1].slice(0, 80)}`);
+
+    try { unlinkSync(tmpBad); } catch (_) { /* 무시 */ }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G8  댕글링 sprite ref → Sprite.init 자산 검증 분기 동작 확인
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  // 존재하지 않는 sprite id 를 가진 엔티티가 든 씬을 load.
+  // Sprite.init 은 world.assets.sprites 에서 id 를 못 찾으면 console.warn 을 호출한다.
+  // 이를 intercept 해 검증 분기가 실제로 실행됐는지 확인.
+  const rawDoc = {
+    assets: { sprites: [{ id: 'spr_real', source: 'procedural', w: 16, h: 16 }] },
+    walls: [],
+    entities: [
+      {
+        id: 'dangling_ent',
+        name: '댕글링엔티티',
+        transform: { x: 0, y: 0, rotation: 0, scaleX: 1, scaleY: 1, depth: 0 },
+        components: [{ type: 'Sprite', sprite: 'spr_DOES_NOT_EXIST' }]
+      }
+    ]
+  };
+
+  const warnMessages = [];
+  const origWarn = console.warn;
+  console.warn = (...args) => { warnMessages.push(args.join(' ')); };
+  try {
+    SceneKit.load(rawDoc, { mode: 'play', seed: 1 });
+  } finally {
+    console.warn = origWarn;
+  }
+
+  // world.assets 경로가 살아있으므로(sprites 배열 존재) 검증 분기 진입 후 경고 발생해야 함.
+  const warnFired = warnMessages.some(m => m.includes('spr_DOES_NOT_EXIST'));
+  ok('G8 댕글링 sprite ref → Sprite.init 경고 발생', warnFired,
+    `warnMessages=${JSON.stringify(warnMessages)}`);
+
+  // world.assets.sprites 가 올바르게 배선됐는지도 확인(경로가 살아있어야 G8 가 의미있음).
+  const wProbe2 = SceneKit.load(rawDoc, { mode: 'play', seed: 1 });
+  ok('G8 world.assets.sprites 배선 확인(길이=1)',
+    Array.isArray(wProbe2.assets && wProbe2.assets.sprites) && wProbe2.assets.sprites.length === 1,
+    `sprites=${JSON.stringify(wProbe2.assets && wProbe2.assets.sprites)}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G9  world.assets 자산 개수 + serialize→재load 라운드트립 보존
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  // 예시 씬: assets.sprites 2종(spr_player, spr_enemy)
+  const wAssets = SceneKit.load(SCENE_DOC, { mode: 'play', seed: 1 });
+
+  ok('G9-A world.assets 존재', wAssets.assets != null && typeof wAssets.assets === 'object',
+    `assets=${JSON.stringify(wAssets.assets).slice(0, 80)}`);
+  ok('G9-B world.assets.sprites 개수 > 0',
+    Array.isArray(wAssets.assets.sprites) && wAssets.assets.sprites.length > 0,
+    `count=${wAssets.assets.sprites && wAssets.assets.sprites.length}`);
+
+  // serialize → 재load 라운드트립: assets 보존
+  const serialized = SceneKit.serialize(wAssets);
+  ok('G9-C serialize 결과에 assets 필드 존재', serialized.assets != null,
+    `assets=${JSON.stringify(serialized.assets).slice(0, 80)}`);
+
+  // 재load(raw 픽스처 경로 — scenes 없는 serialize 산출물 사용)
+  const wReloaded = SceneKit.load(serialized, { mode: 'play', seed: 1 });
+  ok('G9-D 재load 후 world.assets.sprites 개수 보존',
+    Array.isArray(wReloaded.assets && wReloaded.assets.sprites) &&
+    wReloaded.assets.sprites.length === wAssets.assets.sprites.length,
+    `before=${wAssets.assets.sprites.length} after=${wReloaded.assets && wReloaded.assets.sprites && wReloaded.assets.sprites.length}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // R0  회귀 스모크 — 기존 킷 require 시 throw 없음
 // ─────────────────────────────────────────────────────────────────────────────
 {
