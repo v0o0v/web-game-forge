@@ -13,6 +13,38 @@ allowed-tools: Read, Write, Edit
 - 코인 획득·적 처치·점프 등에 시각·진동 피드백을 추가할 때
 - 씬 전환·클리어·게임오버에 연출 이펙트가 필요할 때
 
+## 두 가지 길 — Phaser 직접 호출 vs JuiceKit 런타임
+- **간단·일회성**: 아래 "핵심 레시피"의 Phaser 내장 API(`cameras.shake`·`add.particles`·`tweens.add`)를 직접 쓴다. 코드가 짧고 게임필이 부차적일 때.
+- **결정론·통합 관리**: `engine/juicekit.js`의 `JuiceKit` 런타임을 쓴다. trauma 누적 셰이크·파티클·히트스톱·트윈을 `update(dt)` 한 진입점으로 굴리고, 모든 무작위가 `RngForge`라 **헤드리스 결정 검증(`game-qa`)이 가능**하다. `cameras.shake`는 내부적으로 비결정 무작위라 step 하니스에서 재현이 깨진다 — 결정 검증이 필요하면 JuiceKit을 쓴다.
+
+### JuiceKit 배선 (engine/juicekit.js)
+```js
+// Boot/씬 생성 시 — RngForge 난수기를 주입(결정론의 핵심)
+this.jk = new JuiceKit(this.rng || RngForge.create('juice'));
+
+// 이벤트에서 — 누적 trauma·히트스톱·파티클·트윈
+this.jk.addTrauma(0.6);                 // 적 피격(셰이크 강도 = trauma^2, 비선형)
+this.jk.freeze(4);                       // 4프레임 히트스톱(timeScale 0→자동 복원)
+this.jk.burst(coin.x, coin.y, { count: 14, color: 0xffe23f, gravity: 320 });
+this.jk.tween(0, 1, 0.4, 'easeOutBack', { onUpdate: function (v) { banner.scale = v; } });
+
+// 매 프레임 update — dt는 초 단위(Phaser면 delta/1000)
+update: function (time, delta) {
+  var dt = delta / 1000;
+  this.jk.update(dt);
+  var s = this.jk.getShake();            // { x, y, rotation }
+  var cam = this.cameras.main;
+  cam.setScroll(this.baseX + s.x, this.baseY + s.y);
+  cam.setRotation(s.rotation);
+  // 파티클은 JuiceKit이 값만 계산 — 게임이 그린다(렌더 비종속)
+  var pool = this.jkSprites || (this.jkSprites = []);
+  // (간단히: 활성 파티클 수만큼 'spark' 이미지를 풀에서 빌려 위치/알파 갱신)
+}
+```
+- `getShake()`/`forEachParticle(cb)`로 값을 읽어 **게임이 그린다** — JuiceKit은 렌더링하지 않는다(엔진 비종속, 결정론 보장).
+- 표준 이징: `easeOutQuad`·`easeInOutCubic`·`easeOutBack`·`easeOutElastic`·`easeOutBounce` 등. `JuiceKit.EASING`으로 직접 참조·확장.
+- 검증: `node skills/wgf-game-qa/tools/test-juicekit.mjs` (결정론·decay·히트스톱·파티클 수명·트윈), `node skills/wgf-game-qa/tools/lint-rng.mjs engine/juicekit.js` (Math.random 미사용).
+
 ## 핵심 레시피
 
 ### 1) 'spark' 텍스처 생성 (Boot 씬)

@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-06-08 | Updated: 2026-06-08 -->
+<!-- Generated: 2026-06-08 | Updated: 2026-06-13 -->
 
 # engine/
 
@@ -22,6 +22,7 @@
 | `abilitykit.js` | **AbilityKit** (선택) — `abilities.json` 로드해 능력의 쿨다운·자원(마나/스태미나)·충전·콤보 윈도·능력 게이트·스킬트리 해금을 굴리는 데이터 구동 런타임. 효과 내용은 게임이 `onActivate`에서 실행(타이밍/자원만 킷이 관리). `AbilityKit.attach(scene,spec)`·`tick(dt)` 결정론(Node 헤드리스 검증 가능) → `ability-architect` |
 | `matterkit.js` | **MatterKit** (선택 킷) — Matter.js 래퍼. config·바디 팩토리·상자 스택·슬링샷. Arcade로 못 하는 강체 물리 → `matter-physics` |
 | `screenfx.js` | **ScreenFX** (선택 킷) — v4 Filter 포스트FX(블룸·비네트·CRT·글로우·컬러그레이딩). WebGL 전용, Canvas면 no-op → `screen-fx` |
+| `juicekit.js` | **JuiceKit** (선택 킷) — 게임필 런타임. trauma^2 스크린셰이크(Eiserloh)·파티클 버스트·히트스톱(freeze)·트윈/이징을 `update(dt)` 한 진입점으로 결정론적으로 굴린다. 모든 무작위는 RngForge 주입 → 헤드리스 검증 가능. 렌더링 안 함(`getShake()`/`forEachParticle()`로 값만 제공). ScreenFX(포스트FX)와 역할 분리 → `juice-fx` |
 | `lightingkit.js` | **LightingKit** (선택 킷) — PointLight 발광·Simplex 안개·Gradient 밤하늘·앰비언트 어둠. WebGL 전용 → `lighting-mood` |
 | `pathkit.js` | **PathKit** (선택 킷) — Curves/Path/PathFollower 래퍼. 스플라인 패트롤·방사 탄막·타워디펜스 크립 경로 → `path-motion` |
 | `joystickkit.js` | **JoystickKit** (선택 킷) — 가상 조이스틱(아날로그/트윈스틱) 터치 컨트롤. 멀티터치 포인터→360° 방향+세기 벡터. 디지털 D-패드(MobileHarness)와 공존 → `virtual-joystick` |
@@ -55,7 +56,7 @@ var res = TiledForge.loadTiledMap(this, 'map', { tilesetKey:'forge-tiles', spawn
 ## Dependencies
 
 ### Internal
-- 각 킷 파일은 대응 스킬과 1:1 — `engine/matterkit.js`↔`skills/wgf-matter-physics/`, `screenfx.js`↔`wgf-screen-fx/`, `lightingkit.js`↔`wgf-lighting-mood/`, `pathkit.js`↔`wgf-path-motion/`, `joystickkit.js`↔`wgf-virtual-joystick/`.
+- 각 킷 파일은 대응 스킬과 1:1 — `engine/matterkit.js`↔`skills/wgf-matter-physics/`, `screenfx.js`↔`wgf-screen-fx/`, `lightingkit.js`↔`wgf-lighting-mood/`, `pathkit.js`↔`wgf-path-motion/`, `joystickkit.js`↔`wgf-virtual-joystick/`, `juicekit.js`↔`wgf-juice-fx/`.
 - 상세 API 계약: `skills/wgf-web-game-builder/reference/engine-api.md`.
 - Tiled 저작 가이드: `skills/wgf-level-designer/reference/tiled/authoring.md`.
 

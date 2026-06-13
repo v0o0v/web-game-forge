@@ -258,3 +258,84 @@ var snap = this.rng.state();                    // 값-스냅샷에 포함 → �
 
 > 멀티스트림은 "용도별 주사위 통" — 파티클 스트림을 아무리 굴려도 전투 스트림 결과가 밀리지 않아
 > 검증이 안정적이다. 절차 레벨 생성 킷(`genkit.js`, 로드맵)은 이 RngForge 위에 청크 조립을 얹는다.
+
+---
+
+## JuiceKit — 게임필 런타임 (`engine/juicekit.js`)
+
+선택 킷. trauma^2 스크린셰이크(Squirrel Eiserloh)·파티클 버스트·히트스톱·트윈/이징을 `update(dt)` 한
+진입점으로 결정론적으로 굴린다. 모든 무작위는 RngForge 주입(스트림 분리로 셰이크/파티클 수열이
+서로 영향 없음) → 헤드리스 `game-qa` 검증 가능. **렌더링 없음** — 값만 계산하고 게임이 그린다.
+`ScreenFX`(포스트FX)와 역할이 분리된다. 전용 스킬: `juice-fx`.
+
+```js
+// index.html: phaser 다음에 rngforge.js, juicekit.js 로드
+// <script src="../../engine/rngforge.js"></script>
+// <script src="../../engine/juicekit.js"></script>
+
+// 씬 create():
+this.jk = new JuiceKit(RngForge.create(12345));  // rng 주입(결정론)
+
+// 이벤트에서:
+this.jk.addTrauma(0.6);                          // 피격 셰이크 누적
+this.jk.freeze(4);                               // 4프레임 히트스톱
+this.jk.burst(x, y, { count: 14, color: 0xffe23f, gravity: 320 });
+this.jk.tween(0, 1, 0.4, 'easeOutBack', { onUpdate: function(v){ banner.scale = v; } });
+
+// 매 프레임 update — dt 는 초 단위(Phaser: delta/1000)
+this.jk.update(delta / 1000);
+var s = this.jk.getShake();                      // { x, y, rotation }
+this.cameras.main.setScroll(baseX + s.x, baseY + s.y);
+this.cameras.main.setRotation(s.rotation);
+this.jk.forEachParticle(function(p){ /* draw p.x,p.y,p.color,p.alpha,p.size */ });
+```
+
+### 생성자
+
+| 호출 | 설명 |
+|------|------|
+| `new JuiceKit(rng)` | `rng`: `RngForge.create(seed)` 로 만든 난수기. 미주입 시 전역 `RngForge` 기본 시드. 내부에서 `jk:shake`·`jk:fx` 두 스트림을 자동 파생 |
+
+### trauma 스크린셰이크
+
+| 메서드 / 속성 | 설명 |
+|---|---|
+| `jk.addTrauma(amount)` | 충격 누적. `trauma = clamp(trauma + amount, 0, 1)`. 반환: 현재 trauma |
+| `jk.getTrauma()` | 현재 trauma `[0,1]` |
+| `jk.getShake()` | `{ x, y, rotation }` — 현재 셰이크 오프셋. 강도 = `trauma^2`(비선형) |
+| `jk.decayRate` | trauma 감쇠 속도(초당, 기본 `1.2`) |
+| `jk.maxOffset` | trauma=1 일 때 최대 픽셀 오프셋(기본 `24`) |
+| `jk.maxRotation` | trauma=1 일 때 최대 회전 rad(기본 `0.08`) |
+
+### 파티클 버스트
+
+| 메서드 | 설명 |
+|---|---|
+| `jk.burst(x, y, opts)` | 파티클 생성. opts: `count`(기본12)·`speed:[min,max]`·`life:[min,max]`·`gravity`·`color`·`size:[min,max]`·`angle`·`spread`·`fade`. 반환: 생성된 파티클 배열 |
+| `jk.forEachParticle(cb)` | 활성 파티클 순회. `cb(p)` — `p.{x,y,vx,vy,color,alpha,size,life,maxLife}` |
+| `jk.particleCount()` | 활성 파티클 수 |
+
+### 히트스톱
+
+| 메서드 | 설명 |
+|---|---|
+| `jk.freeze(frames)` | N 프레임 `timeScale` 0(시간 정지) → 자동 복원. 해제 프레임의 잔여 dt 는 정상 진행에 환원. 누적 시 max 적용 |
+| `jk.isFrozen()` | 정지 중 여부 |
+
+### 트윈/이징
+
+| 메서드 | 설명 |
+|---|---|
+| `jk.tween(from, to, dur, ease, opts)` | `dur` 초 동안 `from→to` 보간. `ease`: 이름(문자열) 또는 함수. opts: `onUpdate(value,t)`·`onComplete()`·`delay`. 반환 핸들에 `.value`·`.cancel()` |
+| `JuiceKit.EASING` | 표준 이징 테이블. 키: `linear`·`easeOutQuad`·`easeInOutCubic`·`easeOutBack`·`easeOutElastic`·`easeOutBounce` 등 |
+
+### update / reset
+
+| 메서드 | 설명 |
+|---|---|
+| `jk.update(dt)` | **단일 진입점**. dt: 초 단위 프레임 델타. NaN·Infinity·음수는 0 처리. trauma decay·파티클·트윈·히트스톱 한 번에 진행 |
+| `jk.reset()` | trauma·셰이크·파티클·트윈·히트스톱 초기화. rng/스트림은 유지 |
+| `jk.setRng(rng)` | 난수기 교체(스트림도 재파생) |
+
+> 검증: `node skills/wgf-game-qa/tools/test-juicekit.mjs` (결정론·decay·히트스톱·파티클·트윈),
+> `node skills/wgf-game-qa/tools/lint-rng.mjs engine/juicekit.js` (Math.random 미사용 확인).
