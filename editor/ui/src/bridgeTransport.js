@@ -56,6 +56,8 @@ export function createRemoteTransport(config) {
   let es = null;                  // EventSource
   let stopped = false;
   let reconnectTimer = null;
+  let authFailCount = 0;          // [수정] SSE onerror 연속 실패 카운터(401 무한 루프 방지)
+  let authWarnSent = false;       // 콘솔 경고 1회만 출력
 
   function apiUrl(p) {
     // 토큰은 헤더로(POST/GET). SSE 만 쿼리로.
@@ -86,6 +88,8 @@ export function createRemoteTransport(config) {
     es = new EventSource(url);
 
     es.onmessage = (ev) => {
+      // 정상 메시지 수신 → 인증 실패 카운터 리셋(연결 성공 확인).
+      authFailCount = 0;
       let delta;
       try { delta = JSON.parse(ev.data); } catch (e) { return; }
       // ev.lastEventId = 서버 id:(=seq). lastSeq 갱신.
@@ -100,11 +104,26 @@ export function createRemoteTransport(config) {
       await doResync();
     });
 
-    es.onerror = () => {
+    es.onerror = (ev) => {
       // EventSource 는 자체 재연결하지만, 우리는 Last-Event-ID 를 쿼리로 넣어 무손실 복구하기
       // 위해 직접 닫고 재연결한다(브라우저 기본 재연결은 Last-Event-ID 헤더를 쓰지만 쿼리 토큰
       // 유지·복구 일관을 위해 수동 제어).
       if (stopped) return;
+      // [수정] 401 인증 실패 시 무한 재시도 방지 — 토큰이 바뀌었거나 만료된 경우 루프 중단.
+      // EventSource onerror 의 HTTP 상태는 브라우저마다 노출 방식이 달라 직접 확인이 어렵다.
+      // 대신 EventSource.readyState === CLOSED(2) + 연결 직후(lastSeq===0) 면 auth 실패 가능성.
+      // 실용적 접근: onerror 에서 연속 재시도 횟수를 카운트해 상한 초과 시 중단 + 경고 1회.
+      authFailCount = (authFailCount || 0) + 1;
+      if (authFailCount > 5) {
+        if (!authWarnSent) {
+          authWarnSent = true;
+          console.warn('[wgf-transport] SSE 재연결 반복 실패 — 토큰 갱신 필요. 재연결 중단.');
+        }
+        // 중단: 재연결 타이머 설정 안 함.
+        try { es.close(); } catch (e) {}
+        es = null;
+        return;
+      }
       try { es.close(); } catch (e) {}
       es = null;
       if (!reconnectTimer) {

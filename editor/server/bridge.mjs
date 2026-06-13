@@ -228,14 +228,31 @@ function attachDrain(sub) {
 }
 
 // Last-Event-ID 이후 누락 델타 재전송(무손실 복구, §8 위험8).
+// [수정] 로그 상한(UNDO_LIMIT) 에 의해 이미 잘린 구간을 요청받으면 resync 발행.
+//  - since+1 < oldest: 로그에 없는 seq 를 요청 → 갭 있음 → resync.
+//  - since === state.seq: 갭 없음(완전 최신) → 재전송 0건이 정상, resync 불필요.
+//  - off-by-one 주의: since+1 < oldest 만 resync(since+1 === oldest 는 갭 없이 연속).
 function replayMissed(sub, lastId) {
   const since = parseInt(lastId, 10);
   if (!isFinite(since)) return;
+  // 갭 검사: 로그에 보관된 가장 오래된 seq 보다 since+1 이 앞서면 복구 불가 → resync.
+  const oldest = state.log.length ? state.log[0].seq : (state.seq + 1);
+  if (since + 1 < oldest) {
+    triggerResync(sub);
+    return;
+  }
   for (const entry of state.log) {
     if (entry.seq <= since) continue;
     let evt;
-    if (entry.kind === 'undo') evt = { type: 'undo', seq: entry.seq, undoDelta: entry.undoDelta };
-    else evt = { type: 'command', seq: entry.seq, command: entry.command };
+    if (entry.kind === 'undo') {
+      evt = { type: 'undo', seq: entry.seq, undoDelta: entry.undoDelta };
+    } else if (entry.kind === 'mode') {
+      // [수정] mode 델타는 'mode' 타입으로 재전송 — 라이브 브로드캐스트(§4.9)와 동일.
+      //  재연결 클라가 applyCommand({mode:'play'}) 대신 올바른 mode 이벤트로 처리하게.
+      evt = { type: 'mode', seq: entry.seq, mode: entry.command.mode };
+    } else {
+      evt = { type: 'command', seq: entry.seq, command: entry.command };
+    }
     sendToSub(sub, formatEvent(evt));
   }
 }

@@ -305,6 +305,101 @@ async function main() {
       await sleep(50);
     }
 
+    // ── G3-gap 로그 상한 초과 후 오래된 Last-Event-ID 재연결 → resync 단언 ────────
+    // UNDO_LIMIT(200) 초과 후 이미 잘린 seq 로 재연결 시 부분 재전송이 아닌 resync 를 발행해야 함.
+    // §8 위험8: replayMissed 갭 검사 누락 시 클라 미러가 브리지와 hashState 발산.
+    {
+      let bgap;
+      try { bgap = await startBridge(); } catch (e) { bgap = null; }
+      if (!bgap) {
+        ok('G3-gap 브리지 기동', false, '기동 실패');
+      } else {
+        const ig = bgap.info;
+        // seq=1 을 확인해두기 위해 첫 커맨드 1개 전송.
+        const r0 = JSON.parse((await api(ig, 'POST', '/api/command', {
+          command: { type: 'addEntity', entity: { name: 'gap0', transform: { x: 0, y: 0 }, components: [] } }
+        })).body);
+        const staleId = r0.seq;  // 이 seq 를 Last-Event-ID 로 쓸 것.
+
+        // UNDO_LIMIT(200) 초과 커맨드 발행 → staleId 가 로그에서 잘림.
+        for (let i = 0; i < 250; i++) {
+          await api(ig, 'POST', '/api/command', {
+            command: { type: 'setTransform', id: 'player', transform: { x: i, y: 0 } }
+          });
+        }
+
+        // staleId 로 재연결 — 로그에서 이미 잘린 구간 → resync 이벤트가 와야 함.
+        const sseGap = await openSSE(ig, { lastEventId: staleId });
+        const gotResync = await waitFor(() => sseGap.resyncCount > 0, 2000);
+        ok('G3-gap resync 발행(잘린 구간 요청)', gotResync,
+          `resyncCount=${sseGap.resyncCount} staleId=${staleId}`);
+
+        // resync 후 /api/scene 으로 최신 상태 재동기 가능.
+        const snapG = JSON.parse((await api(ig, 'GET', '/api/scene')).body);
+        ok('G3-gap resync 후 스냅샷 최신 일치', snapG.ok === true && snapG.seq >= 250,
+          `seq=${snapG.seq}`);
+
+        sseGap.close();
+        try { bgap.child.kill(); } catch (e) {}
+        await sleep(50);
+      }
+    }
+
+    // ── G3-mode SSE 끊김 중 mode 전환 → 재연결 시 mode 델타 수신 ──────────────────
+    // replayMissed 의 mode 분기 수정 검증: 재연결 클라가 {type:'mode'} 이벤트를 받아야 함.
+    // applyCommand({mode:'play'}) 가 아닌 올바른 mode 이벤트 타입이어야 §4.9 권위 유지.
+    {
+      let bmode;
+      try { bmode = await startBridge(); } catch (e) { bmode = null; }
+      if (!bmode) {
+        ok('G3-mode 브리지 기동', false, '기동 실패');
+      } else {
+        const im = bmode.info;
+
+        // SSE 연결 → 첫 커맨드 수신 확인 → 끊기.
+        const sseM1 = await openSSE(im);
+        const rc1 = JSON.parse((await api(im, 'POST', '/api/command', {
+          command: { type: 'addEntity', entity: { name: 'gmode0', transform: { x: 0, y: 0 }, components: [] } }
+        })).body);
+        await waitFor(() => sseM1.events.some((e) => e.seq === rc1.seq), 2000);
+        const lastModeId = rc1.seq;
+        sseM1.close();
+        await sleep(80);
+
+        // 끊긴 동안 mode=play 전환.
+        const modeRes = await api(im, 'POST', '/api/mode', { mode: 'play' });
+        ok('G3-mode mode=play 전환', modeRes.status === 200 && JSON.parse(modeRes.body).mode === 'play',
+          `status=${modeRes.status}`);
+
+        // lastModeId 로 재연결 → mode 델타 수신 단언(type='mode' 여야 함).
+        const sseM2 = await openSSE(im, { lastEventId: lastModeId });
+        // 갭 없이(로그 안에 있는 경우) mode 이벤트가 재전송 되어야 함.
+        // 또는 로그 잘림이 발생했다면 resync 로 대체됨(두 경우 모두 단일 진실 보장).
+        const gotModeEvt = await waitFor(() =>
+          sseM2.events.some((e) => e.type === 'mode') || sseM2.resyncCount > 0, 2000);
+        ok('G3-mode 재연결 시 mode 이벤트(또는 resync) 수신', gotModeEvt,
+          `events=${JSON.stringify(sseM2.events.map((e) => e.type))} resync=${sseM2.resyncCount}`);
+
+        // mode=play 가 전달됐다면 type='mode' & mode='play' 여야 함(type='command' 금지).
+        const modeEvt = sseM2.events.find((e) => e.type === 'mode');
+        if (modeEvt) {
+          ok('G3-mode 이벤트 타입 정합(type=mode, mode=play)',
+            modeEvt.type === 'mode' && modeEvt.mode === 'play',
+            `type=${modeEvt.type} mode=${modeEvt.mode}`);
+        } else {
+          // resync 로 대체된 경우 — resync 가 왔다면 타입 정합 게이트는 스킵(resync 자체가 통과).
+          ok('G3-mode resync 로 대체(타입 정합 스킵)', sseM2.resyncCount > 0,
+            `resync=${sseM2.resyncCount}`);
+        }
+
+        // edit 복귀.
+        await api(im, 'POST', '/api/mode', { mode: 'edit' });
+        sseM2.close();
+        try { bmode.child.kill(); } catch (e) {}
+        await sleep(50);
+      }
+    }
+
     // ── G4 백프레셔(느린 소비자 — 버퍼 무한적체 없음) ──────────────────────────
     {
       // 느린 소비자: SSE 응답 스트림을 pause 해 소켓 버퍼를 막고 다량 커맨드 발행.
