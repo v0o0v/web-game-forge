@@ -46,6 +46,11 @@ export function createLocalTransport() {
     onStatus() {},
     async sendChat() { return { ok: false, error: '브리지 없음(local 모드) — 챗 비활성' }; },
     async fetchStatus() { return { status: 'disconnected' }; },
+    // local(P4): 결정형 스킬·에셋도 브리지 전용 → 안전 비활성.
+    onAsset() {},
+    async runSkill() { return { ok: false, error: '브리지 없음(local 모드) — 스킬 실행은 /wgf-editor 브리지에서만 동작' }; },
+    async addAsset() { return { ok: false, error: '브리지 없음(local 모드) — 에셋 추가는 브리지에서만 동작' }; },
+    async listAssets() { return { sprites: [] }; },
     stop() {}
   };
 }
@@ -58,6 +63,7 @@ export function createRemoteTransport(config) {
   let resyncCb = null;            // (snapshot) => void — 컨트롤러가 미러 재구성
   let modeCb = null;              // (mode) => void
   let chatCb = null;              // (chatEvt) => void — 챗 델타(user/assistant)
+  let assetCb = null;             // (assetEvt) => void — 에셋 델타(P4 asset add)
   let statusCb = null;            // (status) => void — Claude 연결 상태(connected/waiting/disconnected)
   let statusTimer = null;         // 상태 폴링 타이머
   let lastSeq = 0;                // 마지막으로 처리한 seq(Last-Event-ID 재연결용)
@@ -144,6 +150,7 @@ export function createRemoteTransport(config) {
     if (!delta || typeof delta !== 'object') return;
     if (delta.type === 'mode') { if (modeCb) modeCb(delta.mode); return; }
     if (delta.type === 'chat') { if (chatCb) chatCb(delta); return; }   // 챗 델타는 씬 미러 미반영
+    if (delta.type === 'asset') { if (assetCb) assetCb(delta); return; }  // 에셋 델타(P4) — assets 미러 동기
     if (deltaCb) deltaCb(delta);
   }
 
@@ -183,6 +190,7 @@ export function createRemoteTransport(config) {
     onResync(cb) { resyncCb = cb; },
     onMode(cb) { modeCb = cb; },
     onChat(cb) { chatCb = cb; },
+    onAsset(cb) { assetCb = cb; },
     onStatus(cb) { statusCb = cb; },
     async start() {
       // 초기 스냅샷 → 미러 부트 → SSE 연결 → 상태 폴링.
@@ -208,6 +216,27 @@ export function createRemoteTransport(config) {
     async fetchStatus() {
       const { json } = await apiFetch('GET', '/api/status');
       return { status: (json && json.status) || 'disconnected' };
+    },
+    // ── P4 결정형 스킬 실행(에디터 직접 트랙) ──────────────────────────────────
+    // POST /api/skill/run {tool, args}. 반환 {ok, exit, json, stdout, error?}.
+    async runSkill(tool, args) {
+      const { status, json } = await apiFetch('POST', '/api/skill/run', { tool, args: args || {} });
+      if (status !== 200 || !json || json.ok !== true) {
+        return { ok: false, error: (json && json.error) || ('스킬 실행 실패 status=' + status) };
+      }
+      return { ok: true, tool: json.tool, exit: json.exit, json: json.json, stdout: json.stdout, stderr: json.stderr, timedOut: json.timedOut };
+    },
+    // ── P4 에셋 ────────────────────────────────────────────────────────────────
+    async addAsset(kind, asset) {
+      const { status, json } = await apiFetch('POST', '/api/asset/add', { kind, asset });
+      if (status !== 200 || !json || json.ok !== true) {
+        return { ok: false, error: (json && json.error) || ('에셋 추가 실패 status=' + status) };
+      }
+      return { ok: true, asset: json.asset, seq: json.seq };
+    },
+    async listAssets() {
+      const { json } = await apiFetch('GET', '/api/asset/list');
+      return (json && json.assets) || { sprites: [] };
     },
     async sendCommand(cmd) {
       const { status, json } = await apiFetch('POST', '/api/command', { command: cmd });
