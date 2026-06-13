@@ -115,6 +115,8 @@
       gridSize: num(opts.gridSize, 16),
       gizmoMode: validGizmo(opts.gizmoMode),
       chrome: opts.chrome !== false,    // 가산적 — 기본 true(에디터 크롬 표시). false=게임만(play/export).
+      seed: (typeof opts.seed === 'number') ? opts.seed : undefined,   // QA 가능성: ?seed=N 전파
+      rng: (typeof opts.rng === 'function') ? opts.rng : null,         // 단일 rng — export game.js 가 주입한 RngForge 인스턴스
       onCommandCb: (typeof opts.onCommand === 'function') ? opts.onCommand : null,
       onReadyCb: (typeof opts.onReady === 'function') ? opts.onReady : null,
       selectionListeners: []
@@ -298,9 +300,15 @@
     };
 
     // ── world 로드 ──────────────────────────────────────────────────────────────
+    // seed/rng 를 SceneKit.load 에 전달 → ?seed=N QA 가능성 계약 완전 배선.
+    // applyModeChange(play 진입)도 이 함수를 거치므로 play world 도 동일 시드 사용.
+    // ※ bakedTextures 는 reloadScene 에서만 리셋(applyModeChange 는 의도적으로 유지).
     function loadWorld(doc, mode) {
       state.sceneDoc = doc;
-      state.world = SceneKit.load(doc, { mode: mode });
+      var loadOpts = { mode: mode };
+      if (state.seed !== undefined) loadOpts.seed = state.seed;
+      if (state.rng) loadOpts.rng = state.rng;
+      state.world = SceneKit.load(doc, loadOpts);
     }
 
     // ── 좌표 변환 — 코어 좌표(씬 px)는 그대로 화면 px 로 매핑(1:1, 원점 좌상단) ──
@@ -696,7 +704,7 @@
       }
       refreshOutlines();
       // 기즈모는 이동 중에는 중심 따라가게(move 만).
-      if (drag.kind === 'gizmo-move') {
+      if (drag.kind === 'gizmo-move' && gizmoGfx) {   // chrome=false 방어: gizmoGfx null 가드
         gizmoGfx.clear();
         var c = { x: toScreenX(drag.center.x + dx), y: toScreenY(drag.center.y + dy) };
         gizmoGfx.lineStyle(2, 0x4fd0ff, 0.6);
@@ -711,7 +719,7 @@
         // 드롭 좌표로 박스 끝점 갱신(pointermove 누락/단발 드래그 견고성).
         drag.x1 = pointer.x; drag.y1 = pointer.y;
         commitMarquee();
-        marqueeGfx.clear();
+        if (marqueeGfx) marqueeGfx.clear();            // chrome=false 방어: marqueeGfx null 가드
         drag = null;
         return;
       }
@@ -751,6 +759,7 @@
     }
 
     function drawMarquee() {
+      if (!marqueeGfx) return;                         // chrome=false 방어: marqueeGfx null 가드
       marqueeGfx.clear();
       var x = Math.min(drag.x0, drag.x1), y = Math.min(drag.y0, drag.y1);
       var w = Math.abs(drag.x1 - drag.x0), h = Math.abs(drag.y1 - drag.y0);

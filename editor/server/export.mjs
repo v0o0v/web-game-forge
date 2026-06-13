@@ -176,18 +176,27 @@ function main() {
 }
 
 // slug 정규화: 소문자·영숫자·하이픈만(URL-safe). 경로 조작 문자 제거.
-function sanitizeSlug(s) {
-  return String(s || '')
-    .trim()
+// 원본에 '/' '..' 등 경로 조작 문자가 포함된 경우 stderr 경고(거부까진 하지 않음 — games/ 밖
+// 쓰기는 isInsideRepo 로 이미 차단. 의도치 않은 slug 왜곡만 알림).
+function sanitizeSlug(s, warnFn) {
+  const raw = String(s || '').trim();
+  const normalized = raw
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 64);
+  if (warnFn && raw !== raw.toLowerCase().slice(0, 64) && /[/\\.]/.test(raw)) {
+    warnFn(`slug 에 경로 조작 문자(/, \\, .)가 포함되어 정규화했습니다: "${raw}" → "${normalized}"`);
+  }
+  return normalized;
 }
 
 // 결정적 JSON 직렬화(들여쓰기 2). 키 순서는 입력 보존(JSON.parse→stringify).
+// U+2028(행 구분자)/U+2029(단락 구분자) 이스케이프 — 구엔진 <script> 내 JS 호환.
 function stableJson(obj) {
-  return JSON.stringify(obj, null, 2);
+  return JSON.stringify(obj, null, 2)
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
 }
 
 // cc0 자산 수집(assets.sprites + scenes[].assets.sprites 등 source:'cc0').
