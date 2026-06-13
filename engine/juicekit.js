@@ -107,6 +107,7 @@
     // 파티클
     this.particles = [];        // 활성 파티클 풀
     this.defaultGravity = 320;  // burst opts.gravity 미지정 시 기본 중력(px/s^2)
+    this.presets = {};          // 이름→burst opts 프리셋(loadPresets 로 적재, burstPreset 로 발사)
 
     // 히트스톱
     this.timeScale = 1;         // update(dt) 에 곱해지는 시간 배율(freeze 중 0)
@@ -210,6 +211,78 @@
       created.push(p);
     }
     return created;
+  };
+
+  // ── 2-b) 파티클 프리셋 ──────────────────────────────────────────────────────
+  // 재사용 파티클 프리셋(particles.json)을 데이터로 적재해 이름으로 발사한다.
+  // burst() 는 그대로 — burstPreset 은 프리셋 opts 를 병합 후 동일 burst() 를 호출하므로,
+  // 같은 시드·같은 opts 면 직접 burst() 호출과 **비트 동일**한 결과(결정론 보존).
+
+  // 내부: color 정규화 — '#rrggbb' / 'rrggbb' 6자리 hex 문자열이면 0xRRGGBB 정수로 변환.
+  // lint-particles.checkColor 와 동일한 강도: 정확히 6자리 hex여야 통과, 그 외는 0xffffff 폴백.
+  // 정수 입력은 & 0xffffff 마스킹(오버플로 방지). undefined/null 은 그대로(burst 기본값에 위임).
+  function normalizeColor(c) {
+    if (typeof c === 'string') {
+      var h = c.charAt(0) === '#' ? c.slice(1) : c;
+      return /^[0-9a-fA-F]{6}$/.test(h) ? parseInt(h, 16) : 0xffffff;  // 6자리 정확 검증
+    }
+    if (typeof c === 'number') return (c & 0xffffff) >>> 0;             // 오버플로 마스킹
+    return c;                                                             // undefined 등 → burst 기본값
+  }
+
+  // loadPresets(json): particles.json 형태({ presets: { name: opts } }) 또는 평면
+  // ({ name: opts }) 맵을 적재. 기존 프리셋에 병합(merge=false 면 교체). color 는 적재 시
+  // 1회 정수 정규화해 burst() 가 기대하는 형식과 일치(직접 burst 와 동일 결과 보장).
+  JuiceKit.prototype.loadPresets = function (json, merge) {
+    if (!json) return this;
+    var src = json.presets || json; // 래퍼({presets}) 또는 평면 맵 모두 허용
+    if (merge === false) this.presets = {};
+    for (var name in src) {
+      if (!Object.prototype.hasOwnProperty.call(src, name)) continue;
+      var raw = src[name];
+      if (!raw || typeof raw !== 'object') continue;
+      var opts = {};
+      for (var k in raw) {
+        if (!Object.prototype.hasOwnProperty.call(raw, k)) continue;
+        if (k === 'desc') continue;               // 메타(설명)는 burst opts 아님 — 제외
+        opts[k] = (k === 'color') ? normalizeColor(raw[k]) : raw[k];
+      }
+      this.presets[name] = opts;
+    }
+    return this;
+  };
+
+  // 프리셋 1개 조회(정규화된 opts **얕은 사본** 반환, 없으면 null).
+  // 주석대로 사본을 반환해 호출자가 반환값을 변형해도 내부 presets 가 오염되지 않는다.
+  JuiceKit.prototype.getPreset = function (name) {
+    var p = this.presets[name];
+    if (!p) return null;
+    var copy = {};
+    for (var k in p) if (Object.prototype.hasOwnProperty.call(p, k)) copy[k] = p[k];
+    return copy;
+  };
+
+  // burst() 가 인식하는 opts 필드 화이트리스트. burstPreset overrides 필터링에 사용.
+  // desc 등 메타 필드 + 미지 키(오타)가 burst 로 새어드는 것을 막는다.
+  var BURST_KNOWN_KEYS = { count:1, speed:1, spread:1, angle:1, life:1, gravity:1, color:1, size:1, fade:1 };
+
+  // burstPreset(name, x, y, overrides?): 적재된 프리셋을 좌표(x,y)에서 발사한다.
+  // overrides 로 프리셋 필드를 부분 덮어쓰기(color 는 문자열도 정규화). 미등록 이름이면
+  // 경고 없이 빈 배열 반환(graceful). 내부적으로 burst() 를 호출 → 동일 opts 면 결정론 동일.
+  // overrides 의 미지 키(desc, 오타 등)는 BURST_KNOWN_KEYS 화이트리스트로 걸러 burst 로 새지 않는다.
+  JuiceKit.prototype.burstPreset = function (name, x, y, overrides) {
+    var base = this.presets[name];
+    if (!base) return [];
+    var opts = {};
+    for (var k in base) if (Object.prototype.hasOwnProperty.call(base, k)) opts[k] = base[k];
+    if (overrides) {
+      for (var o in overrides) {
+        if (!Object.prototype.hasOwnProperty.call(overrides, o)) continue;
+        if (!BURST_KNOWN_KEYS[o]) continue;  // 미지 키 필터링(desc·오타 등 차단)
+        opts[o] = (o === 'color') ? normalizeColor(overrides[o]) : overrides[o];
+      }
+    }
+    return this.burst(x, y, opts);
   };
 
   // 활성 파티클 순회(렌더용). dead 는 제외. 콜백(p) 호출.
