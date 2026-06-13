@@ -143,6 +143,40 @@ node skills/wgf-game-qa/tools/qa-score.mjs <slug> --json
 node skills/wgf-game-qa/tools/test-qa-score.mjs   # 순수 코어 단위테스트(전부 통과 0 / 실패 1)
 ```
 
+## 9단계: 적응형 입력 playtest (adaptive-playtest)
+
+정적 step 시퀀스(미리 짠 입력)를 넘어, **게임 현재상태(뷰)를 요약 → '다음 입력 액션'을
+제한된 구조화 액션 집합 중 결정적으로 선택 → 적응형 플레이**하는 검증 도구. 매 N프레임마다
+3단계 루프를 돈다.
+
+- **① 상태요약(summarizeView)**: `scene.registry` 상태(score/lives) + 주인공 좌표 +
+  8단계 ① VU 휴리스틱(`frameEntropy`/`isBlackFrame`, `qa-score-core.mjs` 재활용)으로 현재
+  뷰를 한 객체로 요약. 진행 정체(stagnation)·막힘(blocked)·코앞 구덩이(센서) 신호를 함께 계산.
+- **② 액션선택(chooseAction)**: 제한된 구조화 액션 집합 `{left,right,jump,idle}` 중 '다음
+  액션'을 **결정적 정책**으로 선택 — 휴리스틱(정체/막힘 감지 시 점프, 구덩이 선제 도약)
+  + RngForge 시드 탐험(국소최적 탈출). **LLM 호출 0**(헤드리스 결정적).
+- **③ 주입**: 선택 액션을 input 플래그(left/right/jump)로 주입 → `game.step` 계속.
+
+```bash
+node skills/wgf-game-qa/tools/adaptive-playtest.mjs           # 자기검증: 적응형>정적 + 결정론 2회
+node skills/wgf-game-qa/tools/adaptive-playtest.mjs --json    # 사람용 라인 생략, JSON 만
+node skills/wgf-game-qa/tools/adaptive-playtest.mjs --trace   # 적응형 액션 결정 로그 상세
+# 전부 통과 0 / 하나라도 실패 1. 마지막 줄 단일 JSON {"ok",...}.
+```
+
+- **적응형 vs 정적 대비(실증)**: 합성 게임 `corridor-climb`(벽·구덩이가 있는 횡스크롤 코스)에서
+  (a) 고정 정적 시퀀스(`always-right`)와 (b) 적응형 루프를 같은 시드로 돌린다. 정적은 **첫 벽에서
+  막혀**(maxX≈176) 골에 못 닿지만, 상태를 읽는 적응형은 **벽을 점프로 넘고 구덩이를 선제 도약으로
+  건너** 골(maxX=1180)에 도달한다 — 약 +1004px 더 멀리, +200 점 더 높이(정적이 못 닿는 상태 도달).
+- **결정론**: 시드 고정 시 적응형 루프가 **2회 동일 궤적**(상태 시퀀스 해시 동일, djb2+FNV).
+  정책 무작위는 RngForge `policy` 스트림 하나에서만 — `Math.random`/`Date.now`/`performance.now`
+  미사용(lint-rng 0).
+- **헤드리스 한계(정직)**: 7단계 replay-determinism 과 동일하게, 실게임의 `resolveStep` 은 Phaser
+  scene/tween/timer 에 묶여 Node 헤드리스 step 이 불가하다. 따라서 실제 `engine/rngforge.js` 를 유일
+  엔트로피원으로 쓰는 **합성 게임**(시드 RNG 가 모든 무작위를 구동 — runeburst 의 "rng 하나가 진실"
+  모델과 동형)으로 적응형>정적 + 결정론을 실증한다. VU 픽셀도 8단계처럼 합성 래스터화로 ① 코어에
+  먹인다(실게임 픽셀은 외부 캡처 경계 — 코어는 완전 검증, 어댑터 경계만 한계).
+
 ## QA 절차
 
 ### 1단계: 로컬 서버 기동
