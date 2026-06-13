@@ -213,3 +213,48 @@ window.MyGame.joy = joy;
 > 데모: `games/tiled-topdown/index.html?stick=1` (GEM DUNGEON 트윈스틱 모드 — 좌스틱 이동,
 > 우스틱 조준·마법볼트 발사). 기본 경로(`?stick=1` 없음)는 디지털 D-패드 그대로.
 > 멀티터치는 `game.input.manager.pointers`를 스틱별 id 로 바인딩한다(씬-로컬 input.pointers 금지).
+
+---
+
+## RngForge — 시드 결정론 난수 (`engine/rngforge.js`)
+
+게임 내 모든 무작위의 단일 진실. 같은 시드 → 항상 같은 수열(mulberry32, 의존성 0). `Math.random()`
+을 대체해 헤드리스 step 하니스가 재현 가능한 검증을 하게 한다. **게임 무작위는 RngForge 로만** —
+검증: `node skills/wgf-game-qa/tools/lint-rng.mjs games/<slug>/game.js`.
+
+### `RngForge.create(seed)` → `rng`
+- `seed`: 숫자 또는 문자열(문자열은 FNV-1a 로 해싱). 미지정 시 고정 기본 시드.
+- 반환 `rng` 은 **callable** — `rng()` 가 float `[0,1)` (Math.random 드롭인). 메서드도 부착:
+
+| 메서드 | 동작 |
+|--------|------|
+| `rng()` / `rng.next()` | float `[0,1)` |
+| `rng.float(min,max)` | float `[min,max)` (인자 1개면 `[0,min)`) |
+| `rng.int(min,max)` | 정수 `[min,max]` 양끝 포함 |
+| `rng.bool(p)` / `rng.chance(p)` | 확률 p(기본 .5)로 `true` |
+| `rng.sign()` | `-1` 또는 `1` |
+| `rng.pick(arr)` | 배열에서 하나(빈 배열 → undefined) |
+| `rng.shuffle(arr)` | Fisher–Yates 제자리 셔플(같은 배열 반환) |
+| `rng.weighted(items, weights)` | 가중 선택(또는 `[{value,weight}]`) |
+| `rng.stream(name)` | 이름별 독립 난수기(캐싱·원본 시드에서 파생) |
+| `rng.state()` / `rng.setState(s)` | 직렬화/복원(상태=32-bit 정수) |
+| `rng.clone()` | 현재 상태 그대로 독립 복제 |
+| `rng.reseed(s)` | 새 시드로 리셋(스트림 캐시 비움) |
+
+### `RngForge.fromUrl(defaultSeed[, param])` → `rng`
+URL `?seed=` 를 읽어 생성, 없으면 `defaultSeed`(Node 등 location 없으면 기본값 폴백). QA 시드 주입용.
+
+### `RngForge.hashSeed(str)` → int
+문자열(날짜키·이름 등) → 32-bit 정수 시드.
+
+```js
+// index.html: phaser 다음, game.js 이전에 로드
+// <script src="../../engine/rngforge.js"></script>
+this.rng = RngForge.fromUrl(20260613);          // ?seed=N 재현 지원
+var loot = this.rng.weighted(DROPS, WEIGHTS);   // 가중 드랍
+var fx = this.rng.stream('particles');          // 시각 효과는 게임플레이 RNG와 분리
+var snap = this.rng.state();                    // 값-스냅샷에 포함 → 무작위 경로까지 고정 검증
+```
+
+> 멀티스트림은 "용도별 주사위 통" — 파티클 스트림을 아무리 굴려도 전투 스트림 결과가 밀리지 않아
+> 검증이 안정적이다. 절차 레벨 생성 킷(`genkit.js`, 로드맵)은 이 RngForge 위에 청크 조립을 얹는다.

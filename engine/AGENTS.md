@@ -18,6 +18,7 @@
 | `tone.js` | **vendored Tone.js v15** (MIT). SoundForge 합성 토대. 직접 수정 금지 |
 | `mobile.js` | **MobileHarness** — `scaleConfig()`(FIT+CENTER), `installDomGuards()`(iOS 줌/스크롤 차단), `TouchControls`(멀티터치 D-패드+점프 버튼 Scene) |
 | `tiled.js` | **TiledForge** — Tiled `.tmj` 로더/베이커. `bakeTileset()`이 절차 타일셋 아틀라스를 굽고, `loadTiledMap()`이 충돌·오브젝트 스포너·iso/hex·GPU 레이어·라이선스 게이트를 처리 |
+| `rngforge.js` | **RngForge** — 시드 결정론 난수 인프라. `create(seed)`가 mulberry32 난수기(callable, `Math.random()` 드롭인)를 만들고 `int/pick/shuffle/weighted`·멀티스트림(`stream(name)`)·직렬화(`state()/setState()`)를 제공. 게임 내 모든 무작위는 이걸로만 — 헤드리스 결정 검증의 "나머지 절반". Node require 가능. 검증: `wgf-game-qa/tools/lint-rng.mjs` → `game-qa` |
 | `abilitykit.js` | **AbilityKit** (선택) — `abilities.json` 로드해 능력의 쿨다운·자원(마나/스태미나)·충전·콤보 윈도·능력 게이트·스킬트리 해금을 굴리는 데이터 구동 런타임. 효과 내용은 게임이 `onActivate`에서 실행(타이밍/자원만 킷이 관리). `AbilityKit.attach(scene,spec)`·`tick(dt)` 결정론(Node 헤드리스 검증 가능) → `ability-architect` |
 | `matterkit.js` | **MatterKit** (선택 킷) — Matter.js 래퍼. config·바디 팩토리·상자 스택·슬링샷. Arcade로 못 하는 강체 물리 → `matter-physics` |
 | `screenfx.js` | **ScreenFX** (선택 킷) — v4 Filter 포스트FX(블룸·비네트·CRT·글로우·컬러그레이딩). WebGL 전용, Canvas면 no-op → `screen-fx` |
