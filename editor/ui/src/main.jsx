@@ -1,0 +1,134 @@
+/* ============================================================================
+ * WGF Studio — 에디터 셸 진입점 (Preact + esbuild) / P1
+ * ----------------------------------------------------------------------------
+ * 레이아웃: [툴바] / [Hierarchy | Viewport | Inspector].
+ * 기본 씬 = topdown-min(dev 서버 /games/_editor-samples/topdown-min/scene.json).
+ *
+ * window.WGFEditor 프로그래매틱 API(e2e 게이트 검증용):
+ *   loadScene(doc) serialize() hash() addEntity(partial) setTransform(id,patch)
+ *   select(ids) getSelection() undo() redo() undoDepth() save() reloadFromSaved()
+ *   entityCount()
+ * 이 API 만으로 "10엔티티 추가→save→reload→hash/좌표 동일", "10커맨드→undo×10→
+ * redo×10 hash 일치" 를 콘솔에서 구동 가능.
+ * ==========================================================================*/
+import { render } from 'preact';
+import { useState, useEffect, useRef } from 'preact/hooks';
+import { createController } from './editorController.js';
+import { Toolbar } from './Toolbar.jsx';
+import { Hierarchy } from './Hierarchy.jsx';
+import { Viewport } from './Viewport.jsx';
+import { Inspector } from './Inspector.jsx';
+
+// 기본 자동 로드 씬 경로(dev 서버 루트 기준).
+const DEFAULT_SCENE_URL = '/games/_editor-samples/topdown-min/scene.json';
+
+// 폴백 최소 씬(fetch 실패 시 — 빈 화면 방지, e2e 구동 보장).
+const FALLBACK_SCENE = {
+  format: 'wgf-scene@1', slug: 'fallback',
+  meta: { title: '폴백 씬', genre: 'topdown', viewport: { w: 320, h: 240 }, pixelArt: true },
+  assets: { sprites: [] }, walls: [],
+  scenes: [{ id: 'main', systems: {}, entities: [] }], dataLayers: {}
+};
+
+function App({ controller }) {
+  const [world, setWorld] = useState(null);
+  const [selection, setSelection] = useState([]);
+  const [gizmoMode, setGizmoMode] = useState('move');
+  const [snap, setSnap] = useState(false);
+  const [snapSize, setSnapSize] = useState(16);
+  const [mode, setMode] = useState('edit');
+  const [undoDepth, setUndoDepth] = useState(0);
+  const [redoDepth, setRedoDepth] = useState(0);
+  const [docState, setDocState] = useState(null);
+
+  const tick = useRef(0);
+
+  // 컨트롤러 변경 → 상태 동기화.
+  function syncState() {
+    setWorld(controller.getWorld());
+    setSelection(controller.getSelection());
+    setGizmoMode(controller.getGizmoMode());
+    setMode(controller.getMode());
+    setUndoDepth(controller.undoDepth());
+    setRedoDepth(controller.redoDepth());
+    tick.current++;
+  }
+
+  useEffect(() => {
+    const offChange = controller.onChange(syncState);
+    const offSel = controller.onSelectionChange(() => syncState());
+    return () => { offChange(); offSel(); };
+  }, []);
+
+  // 초기 씬 로드(fetch topdown-min). 마운트는 Viewport 가 담당.
+  useEffect(() => {
+    fetch(DEFAULT_SCENE_URL)
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error('fetch ' + r.status)))
+      .then((doc) => { setDocState(doc); })
+      .catch(() => { setDocState(FALLBACK_SCENE); });
+  }, []);
+
+  function onSnapChange(on, size) {
+    setSnap(on); setSnapSize(size);
+    controller.setSnap(on, size);
+  }
+
+  if (!docState) {
+    return <div style={{ padding: '20px', color: '#8a93a8' }}>씬 로딩 중…</div>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <Toolbar controller={controller} gizmoMode={gizmoMode} snap={snap} snapSize={snapSize}
+               mode={mode} undoDepth={undoDepth} redoDepth={redoDepth} onSnapChange={onSnapChange} />
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        <div style={{ width: '220px', flexShrink: 0 }}>
+          <Hierarchy controller={controller} world={world} selection={selection} />
+        </div>
+        <Viewport controller={controller} sceneDoc={docState} />
+        <div style={{ width: '280px', flexShrink: 0 }}>
+          <Inspector controller={controller} world={world} selection={selection} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 부트 ──────────────────────────────────────────────────────────────────────
+function boot() {
+  if (typeof window === 'undefined') return;
+  if (!window.SceneKit || !window.SceneKitPhaser) {
+    document.getElementById('app').textContent =
+      'SceneKit/SceneKitPhaser 전역이 없습니다 — engine/*.js 로드 순서를 확인하세요.';
+    return;
+  }
+
+  const controller = createController();
+
+  // window.WGFEditor — e2e 프로그래매틱 API(편집 인스턴스 래핑).
+  window.WGFEditor = {
+    _controller: controller,
+    loadScene: (doc) => controller.loadScene(doc),
+    serialize: () => controller.serialize(),
+    hash: () => controller.hash(),
+    addEntity: (partial) => controller.addEntity(partial),
+    setTransform: (id, patch) => controller.setTransform(id, patch),
+    select: (ids) => controller.select(ids),
+    getSelection: () => controller.getSelection(),
+    undo: () => controller.undo(),
+    redo: () => controller.redo(),
+    undoDepth: () => controller.undoDepth(),
+    redoDepth: () => controller.redoDepth(),
+    save: () => controller.save(false),       // API 경유 save 는 파일 다운로드 없이 localStorage + 직렬화 반환
+    reloadFromSaved: () => controller.reloadFromSaved(),
+    entityCount: () => controller.entityCount(),
+    // 보조(편의)
+    getWorld: () => controller.getWorld(),
+    setSnap: (on, size) => controller.setSnap(on, size),
+    setMode: (m) => controller.setMode(m)
+  };
+
+  render(<App controller={controller} />, document.getElementById('app'));
+}
+
+boot();

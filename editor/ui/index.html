@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WGF Studio</title>
+<!--
+  에디터 UI 셸. 엔진은 무빌드 <script> 로 vendoring(로드 순서 §4.8):
+    phaser → pixelforge → vectorforge → audio → mobile → rngforge
+    → scenekit → scenekit-components → scenekit-phaser → dist/bundle.js
+  셸(Preact)은 window.SceneKit / window.SceneKitPhaser 전역만 참조한다(무빌드 경계).
+  경로는 dev 서버(editor/serve.mjs)가 리포 루트에서 서빙하므로 /engine/, /games/ 절대경로.
+-->
+<style>
+  :root {
+    --bg: #14171f; --panel: #1b1f2a; --panel2: #222838; --border: #2c3346;
+    --text: #d7def0; --text-dim: #8a93a8; --accent: #4fd0ff; --accent2: #ffd23f;
+    --danger: #ff6b6b; --ok: #9bff8f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 13px; }
+  #app { height: 100vh; }
+  button { font: inherit; }
+</style>
+</head>
+<body>
+<div id="app">로딩 중…</div>
+
+<script src="/engine/phaser.min.js"></script>
+<script src="/engine/pixelforge.js"></script>
+<script src="/engine/vectorforge.js"></script>
+<script src="/engine/audio.js"></script>
+<script src="/engine/mobile.js"></script>
+<script src="/engine/rngforge.js"></script>
+<script src="/engine/scenekit.js"></script>
+<script src="/engine/scenekit-components.js"></script>
+<script src="/engine/scenekit-phaser.js"></script>
+<script src="/editor/ui/dist/bundle.js"></script>
+</body>
+</html>

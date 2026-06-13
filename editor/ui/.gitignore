@@ -1,0 +1,6 @@
+# npm 의존(루트 무빌드 불변식 — editor/ui 에만 격리, 커밋 안 함)
+node_modules/
+# esbuild 산출물(재생성 가능 — 커밋 안 함)
+dist/
+# lock 파일은 재현성 위해 유지하고 싶으면 주석 해제. P1 은 단순화로 제외.
+package-lock.json

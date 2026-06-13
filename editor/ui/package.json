@@ -1,0 +1,15 @@
+{
+  "name": "wgf-studio-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WGF Studio 에디터 UI 셸 (Preact + esbuild). 루트 무빌드 불변식을 깨지 않도록 npm 의존은 이 디렉터리에만 격리한다.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "preact": "^10.22.0"
+  }
+}
