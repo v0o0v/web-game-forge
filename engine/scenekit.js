@@ -273,6 +273,9 @@
     var srcEntities = scene ? arr(scene.entities) : arr(sceneDoc.entities);
     // walls: 활성 scene.walls 우선, 없으면 최상위 sceneDoc.walls.
     var srcWalls = (scene && scene.walls != null) ? arr(scene.walls) : arr(sceneDoc.walls);
+    // assets: 활성 scene.assets 우선, 없으면 최상위 sceneDoc.assets(walls 패턴 동일).
+    // P1 어댑터/컴포넌트가 ctx.world.assets 로 자산 def 에 접근(Sprite.init 등).
+    var srcAssets = (scene && scene.assets != null) ? scene.assets : sceneDoc.assets;
     // meta: sceneDoc.meta(깊은 복제) + 활성 scene.systems 를 meta.systems 로 보존.
     var meta = isObj(sceneDoc.meta) ? deepCloneValue(sceneDoc.meta) : {};
     if (scene && isObj(scene.systems)) meta.systems = deepCloneValue(scene.systems);
@@ -294,6 +297,7 @@
       sceneId: scene ? (scene.id != null ? String(scene.id) : null) : null,
       entities: [],
       walls: [],
+      assets: isObj(srcAssets) ? deepCloneValue(srcAssets) : {},
       rng: rng,
       time: 0,
       meta: meta,
@@ -456,7 +460,7 @@
     var dy = b.cy - a.cy;
     var py = (a.hh + b.hh) - Math.abs(dy);
     if (py <= 0) return null;
-    if (px < py || (px === py)) {                    // x축 분리(동점 x 우선)
+    if (px <= py) {                                  // x축 분리(동점 x 우선)
       var sx = dx < 0 ? -1 : 1;                       // dx=0 이면 +x(결정적)
       return { x: sx * px, y: 0 };
     }
@@ -489,7 +493,7 @@
       var left = (c.cx - (r.cx - r.hw)), right = ((r.cx + r.hw) - c.cx);
       var top = (c.cy - (r.cy - r.hh)), bottom = ((r.cy + r.hh) - c.cy);
       var minX = Math.min(left, right), minY = Math.min(top, bottom);
-      if (minX < minY || minX === minY) {            // x 우선(결정적)
+      if (minX <= minY) {                            // x 우선(결정적)
         var sx = (left < right) ? -1 : 1;             // 더 가까운 변 쪽으로(c→r 는 반대)
         return { x: sx * (minX + c.r), y: 0 };
       }
@@ -509,6 +513,7 @@
     var doc = {
       schema: SCHEMA_ID,
       meta: deepCloneValue(world.meta || {}),
+      assets: isObj(world.assets) ? deepCloneValue(world.assets) : {},
       walls: [],
       entities: []
     };
@@ -556,7 +561,7 @@
     // rng 상태도 해시에 포함(난수 진행이 다르면 상태도 다름을 반영).
     if (world.rng && typeof world.rng.state === 'function') {
       var st = world.rng.state();
-      parts.push('|rng:', (typeof st === 'number') ? (st | 0) : String(st));
+      parts.push('|rng:', (typeof st === 'number') ? (st >>> 0) : String(st));
     }
     return fnv1a(parts.join(','));
   }
