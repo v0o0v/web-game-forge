@@ -1,8 +1,18 @@
-/* Toolbar — 기즈모 모드 토글, 스냅 토글, Undo/Redo, Save, 엔티티 추가, Play/Edit. */
-import { useState } from 'preact/hooks';
+/* Toolbar — 기즈모 모드 토글, 스냅 토글, Undo/Redo, Save, 엔티티 추가, Play/Edit,
+ *           Claude 연결 하트비트 인디케이터(P3). */
+import { useState, useEffect } from 'preact/hooks';
 
 export function Toolbar({ controller, gizmoMode, snap, snapSize, mode, undoDepth, redoDepth, onSnapChange }) {
   const [savedMsg, setSavedMsg] = useState('');
+  const [claudeStatus, setClaudeStatus] = useState(
+    controller.getClaudeStatus ? controller.getClaudeStatus() : 'local');
+
+  // Claude 연결 상태 구독(하트비트 인디케이터). remote 만 의미 있음.
+  useEffect(() => {
+    if (!controller.onStatusChange) return;
+    const off = controller.onStatusChange((s) => setClaudeStatus(s));
+    return off;
+  }, []);
 
   function setGizmo(m) { controller.setGizmoMode(m); }
   function toggleSnap() { onSnapChange(!snap, snapSize); }
@@ -59,7 +69,29 @@ export function Toolbar({ controller, gizmoMode, snap, snapSize, mode, undoDepth
           {mode === 'play' ? '⏹ Stop' : '▶ Play'}</Btn>
       </Group>
 
-      {savedMsg && <span style={{ color: 'var(--ok)', marginLeft: 'auto', alignSelf: 'center' }}>{savedMsg}</span>}
+      {savedMsg && <span style={{ color: 'var(--ok)', alignSelf: 'center', marginLeft: '8px' }}>{savedMsg}</span>}
+      <HeartbeatIndicator status={claudeStatus} remote={controller.isRemote} />
+    </div>
+  );
+}
+
+// Claude 연결 하트비트 인디케이터(설계서 §4.7·§5 P3 — 5초 임계로 끊김 표시).
+//  connected(초록)·waiting(노랑)·disconnected(빨강)·local(회색, 브리지 없음).
+function HeartbeatIndicator({ status, remote }) {
+  const map = {
+    connected: { c: 'var(--ok)', t: 'Claude 연결됨' },
+    waiting: { c: 'var(--accent2)', t: 'Claude 대기' },
+    disconnected: { c: 'var(--danger)', t: 'Claude 끊김' },
+    local: { c: 'var(--text-dim)', t: '브리지 없음(local)' }
+  };
+  const s = remote ? (map[status] || map.disconnected) : map.local;
+  return (
+    <div title={s.t} style={{ display: 'flex', alignItems: 'center', gap: '5px',
+        marginLeft: 'auto', alignSelf: 'center', padding: '0 4px',
+        color: 'var(--text-dim)', fontSize: '11px' }}>
+      <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: s.c,
+        boxShadow: status === 'connected' && remote ? '0 0 5px var(--ok)' : 'none' }} />
+      <span>{s.t}</span>
     </div>
   );
 }

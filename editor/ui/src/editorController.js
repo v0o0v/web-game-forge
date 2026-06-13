@@ -49,6 +49,14 @@ export function createController(opts) {
   const changeListeners = [];
   const selectionListeners = [];
 
+  // ── P3 챗 역채널 + Claude 연결 상태 ──────────────────────────────────────────
+  const chatLog = [];                 // [{role:'user'|'assistant', text, at, id?}]
+  let claudeStatus = isRemote ? 'disconnected' : 'local';   // local 은 브리지 없음
+  const chatListeners = [];           // (chatLog) => void
+  const statusListeners = [];         // (status) => void
+  function notifyChat() { for (const cb of chatListeners) { try { cb(chatLog); } catch (e) {} } }
+  function notifyStatus() { for (const cb of statusListeners) { try { cb(claudeStatus); } catch (e) {} } }
+
   function notifyChange() {
     for (const cb of changeListeners) { try { cb(); } catch (e) { /* 격리 */ } }
   }
@@ -126,6 +134,16 @@ export function createController(opts) {
       }
     });
     transport.onMode((m) => { applyRemoteMode(m); notifyChange(); });
+    // 챗 델타(user 에코 + assistant reply) → 챗 로그 적재.
+    if (transport.onChat) transport.onChat((evt) => {
+      if (!evt) return;
+      chatLog.push({ role: evt.role || 'assistant', text: String(evt.text || ''), at: evt.at || Date.now(), id: evt.id });
+      notifyChat();
+    });
+    // Claude 연결 상태(connected/waiting/disconnected) → 인디케이터.
+    if (transport.onStatus) transport.onStatus((s) => {
+      if (s !== claudeStatus) { claudeStatus = s; notifyStatus(); }
+    });
   }
 
   function applyRemoteMode(m) {
@@ -381,6 +399,30 @@ export function createController(opts) {
     return () => { const i = selectionListeners.indexOf(cb); if (i >= 0) selectionListeners.splice(i, 1); };
   }
 
+  // ── P3 챗 역채널 공개 API ─────────────────────────────────────────────────────
+  // 사용자 메시지 전송(에디터 → Claude). remote 는 user 에코를 SSE 로 돌려받아 표시하므로
+  // 여기서 로그에 직접 넣지 않는다(이중 표시 방지). local 은 비활성 안내만.
+  async function sendChat(text) {
+    const t = String(text || '').trim();
+    if (!t) return { ok: false, error: '빈 메시지' };
+    if (!isRemote || !transport || !transport.sendChat) {
+      chatLog.push({ role: 'system', text: '브리지 미연결 — 챗은 브리지 모드에서만 동작합니다.', at: Date.now() });
+      notifyChat();
+      return { ok: false, error: 'local 모드 — 챗 비활성' };
+    }
+    return await transport.sendChat(t);
+  }
+  function onChatChange(cb) {
+    chatListeners.push(cb);
+    return () => { const i = chatListeners.indexOf(cb); if (i >= 0) chatListeners.splice(i, 1); };
+  }
+  function onStatusChange(cb) {
+    statusListeners.push(cb);
+    return () => { const i = statusListeners.indexOf(cb); if (i >= 0) statusListeners.splice(i, 1); };
+  }
+  function getChatLog() { return chatLog; }
+  function getClaudeStatus() { return claudeStatus; }
+
   // 컴포넌트 레지스트리에서 inspectorFields 조회(Inspector UI 구동).
   function getComponentDef(type) {
     return SceneKit && SceneKit.getComponentDef ? SceneKit.getComponentDef(type) : null;
@@ -398,6 +440,7 @@ export function createController(opts) {
     setSnap, setGizmoMode, getGizmoMode, setMode, getMode,
     onChange, onSelectionChange, getComponentDef, getAdapter,
     startRemote, isRemote,
+    sendChat, onChatChange, onStatusChange, getChatLog, getClaudeStatus,
     STORAGE_KEY
   };
 }

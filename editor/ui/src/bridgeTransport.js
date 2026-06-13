@@ -41,6 +41,11 @@ export function createLocalTransport() {
     async sendRedo() { seq += 1; return { seq, applied: true }; },
     async setMode(m) { mode = (m === 'play') ? 'play' : 'edit'; return { mode }; },
     async snapshot() { return null; },
+    // local(P3): 브리지 없음 → 챗 역채널·하트비트 미동작. UI 가 안전히 비활성 표시.
+    onChat() {},
+    onStatus() {},
+    async sendChat() { return { ok: false, error: '브리지 없음(local 모드) — 챗 비활성' }; },
+    async fetchStatus() { return { status: 'disconnected' }; },
     stop() {}
   };
 }
@@ -52,6 +57,9 @@ export function createRemoteTransport(config) {
   let deltaCb = null;             // (delta) => void — 컨트롤러가 미러에 반영
   let resyncCb = null;            // (snapshot) => void — 컨트롤러가 미러 재구성
   let modeCb = null;              // (mode) => void
+  let chatCb = null;              // (chatEvt) => void — 챗 델타(user/assistant)
+  let statusCb = null;            // (status) => void — Claude 연결 상태(connected/waiting/disconnected)
+  let statusTimer = null;         // 상태 폴링 타이머
   let lastSeq = 0;                // 마지막으로 처리한 seq(Last-Event-ID 재연결용)
   let es = null;                  // EventSource
   let stopped = false;
@@ -135,7 +143,22 @@ export function createRemoteTransport(config) {
   function dispatchDelta(delta) {
     if (!delta || typeof delta !== 'object') return;
     if (delta.type === 'mode') { if (modeCb) modeCb(delta.mode); return; }
+    if (delta.type === 'chat') { if (chatCb) chatCb(delta); return; }   // 챗 델타는 씬 미러 미반영
     if (deltaCb) deltaCb(delta);
+  }
+
+  // 연결 상태 폴링(하트비트 인디케이터). 1초 간격으로 GET /api/status.
+  function startStatusPolling() {
+    if (statusTimer) return;
+    const tick = async () => {
+      if (stopped) return;
+      try {
+        const { json } = await apiFetch('GET', '/api/status');
+        if (json && json.status && statusCb) statusCb(json.status);
+      } catch (e) { if (statusCb) statusCb('disconnected'); }
+    };
+    tick();
+    statusTimer = setInterval(tick, 1000);
   }
 
   async function doResync() {
@@ -159,18 +182,33 @@ export function createRemoteTransport(config) {
     onDelta(cb) { deltaCb = cb; },
     onResync(cb) { resyncCb = cb; },
     onMode(cb) { modeCb = cb; },
+    onChat(cb) { chatCb = cb; },
+    onStatus(cb) { statusCb = cb; },
     async start() {
-      // 초기 스냅샷 → 미러 부트 → SSE 연결.
+      // 초기 스냅샷 → 미러 부트 → SSE 연결 → 상태 폴링.
       const snap = await snapshot();
       if (snap && resyncCb) resyncCb(snap);
       connect();
+      startStatusPolling();
       return snap;
     },
     // 어댑터 마운트 순서 제어용 분리 진입점:
     //  1) fetchInitial(): 스냅샷만 가져온다(어댑터 마운트 문서 확보 — SSE 미연결).
     //  2) connectStream(): 어댑터 준비 후 SSE 연결(델타 흐름 시작).
     async fetchInitial() { return await snapshot(); },
-    connectStream() { connect(); },
+    connectStream() { connect(); startStatusPolling(); },
+    // 챗 송신(에디터 → Claude). POST /api/chat. SSE 로 user 에코 + 이후 assistant reply.
+    async sendChat(text) {
+      const { status, json } = await apiFetch('POST', '/api/chat', { text });
+      if (status !== 200 || !json || json.ok !== true) {
+        return { ok: false, error: (json && json.error) || ('전송 실패 status=' + status) };
+      }
+      return { ok: true, id: json.id, queued: json.queued };
+    },
+    async fetchStatus() {
+      const { json } = await apiFetch('GET', '/api/status');
+      return { status: (json && json.status) || 'disconnected' };
+    },
     async sendCommand(cmd) {
       const { status, json } = await apiFetch('POST', '/api/command', { command: cmd });
       if (status === 409) return { rejected: true, reason: 'play-readonly' };
@@ -192,6 +230,7 @@ export function createRemoteTransport(config) {
     stop() {
       stopped = true;
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
       if (es) { try { es.close(); } catch (e) {} es = null; }
     }
   };
