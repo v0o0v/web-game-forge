@@ -75,14 +75,9 @@
     { name: '마지막 한 수', shape: 'diamond', colors: 6, moves: 22, goal: 4200, win: { type: 'score', target: 4200 }, overload: true, ice: 6, seed: 1012 }
   ];
 
-  function mulberry32(a) {
-    return function () {
-      a |= 0; a = a + 0x6D2B79F5 | 0;
-      var t = Math.imul(a ^ a >>> 15, 1 | a);
-      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-      return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    };
-  }
+  // 무작위는 RngForge(engine/rngforge.js)로 통일 — mulberry32 비트 동일, seed 로 결정적 재현.
+  // (game-qa 헤드리스 step 하니스 + lint-rng.mjs 결정론 정책)
+  function mulberry32(a) { return RngForge.create(a); }
 
   // ===========================================================================
   // 아트 베이크
@@ -248,7 +243,7 @@
       data = data || {};
       this.mode = data.mode || 'levels';
       if (this.mode === 'daily') {
-        var d = new Date();
+        var d = new Date(); // rng-ok 데일리 챌린지는 의도적으로 실제 날짜를 시드로 사용
         this.dateKey = d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
         this.cfg = { name: '데일리 ' + this.dateKey, shape: 'square', colors: 6, moves: 24, goal: 5000, win: { type: 'score', target: 5000 }, overload: true, daily: true, seed: parseInt(this.dateKey.replace(/-/g, ''), 10) };
         this.levelIndex = -1;

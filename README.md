@@ -270,7 +270,7 @@ game-dna 총 **164작**이 명확화 단계의 조합 재료가 됩니다.
 
 ---
 
-## ⚙️ 엔진 라이브러리 12종 (`engine/`)
+## ⚙️ 엔진 라이브러리 13종 (`engine/`)
 
 ### PixelForge (`pixelforge.js`)
 문자 그리드로 정의한 스프라이트를 Phaser 텍스처로 굽는 절차적 픽셀아트 생성기. 외부 이미지 0,
@@ -318,6 +318,20 @@ Web Audio API만으로 8비트(칩튠) 효과음과 **오리지널** BGM을 코�
 ### MobileHarness (`mobile.js`)
 모바일 웹뷰 베스트프랙티스를 한 곳에: `scaleConfig()`(FIT+CENTER), `installDomGuards()`(iOS 줌/스크롤
 차단), `TouchControlsClass()`(멀티터치 D-패드+점프 버튼 Scene).
+
+### RngForge (`rngforge.js`)
+**시드 결정론 난수 인프라** — "월클럭 미사용 결정론" QA 철학의 *나머지 절반*. 같은 시드 →
+항상 같은 수열(mulberry32, 의존성 0)이라 게임 내 모든 무작위를 재현·검증 가능하게 한다. `Math.random()`
+을 드롭인 대체하고, **멀티스트림**(용도별 독립 난수기)과 **직렬화**(상태 스냅샷/복원)를 제공한다.
+헤드리스(Node require) 검증 가능. `Math.random` 금지 린트는 `wgf-game-qa/tools/lint-rng.mjs`.
+
+```js
+var rng = RngForge.fromUrl(20260613);   // ?seed=N 재현, 없으면 기본 시드
+if (rng() < 0.3) dropCoin();            // rng() = Math.random() 드롭인
+var dmg = rng.int(8, 12); rng.shuffle(deck);
+var fx = rng.stream('particles');       // 파티클을 굴려도 전투 RNG 불변(검증 안정)
+var snap = rng.state();  /* ... */  rng.setState(snap);   // 같은 지점부터 동일 재생
+```
 
 ### TiledForge (`tiled.js`)
 Tiled 맵 포맷(.tmj)을 **외부 PNG 없이** 연동. `bakeTileset()`이 `PixelForge`/`VectorForge` 타일을
@@ -430,7 +444,7 @@ web-game-forge/
 ├── hooks/hooks.json                                   # UserPromptSubmit 의도 감지 등록
 ├── scripts/detect-game-intent.{js,ps1,sh}            # 한/영 게임·에셋 의도 감지(크로스플랫폼)
 ├── commands/wgf-make-game.md                              # /web-game-builder:wgf-make-game
-├── engine/  phaser.min.js · pixelforge · vectorforge · audio · soundforge · tone(Tone.js v15) · mobile · tiled · abilitykit(능력 런타임) · matterkit · screenfx · lightingkit · pathkit · joystickkit   # 재사용 엔진(+Phaser 고급·입력 킷 5종)
+├── engine/  phaser.min.js · pixelforge · vectorforge · audio · soundforge · tone(Tone.js v15) · mobile · tiled · rngforge(시드 결정론 난수) · abilitykit(능력 런타임) · matterkit · screenfx · lightingkit · pathkit · joystickkit   # 재사용 엔진(+Phaser 고급·입력 킷 5종)
 ├── games/  super-runner/(픽셀 플랫포머·?tiled=1) · runeburst/ · is-rule/ · style-preview/
 │          · tiled-topdown/(GEM DUNGEON) · tiled-iso/(등각·육각, ?orient=hex) · tiled-pack/(GPU+CC0팩 임포트)
 │          · nocturne/(야간 물리 슬링볼 — Matter+포스트FX+라이팅+경로 통합 데모)

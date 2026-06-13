@@ -21,7 +21,7 @@ allowed-tools: Read, Write, Edit, Bash
 ```js
 // game.js 또는 main.js
 const game = new Phaser.Game(config);
-window.MyGame = { game, input: GAME_INPUT, audio };
+window.MyGame = { game, input: GAME_INPUT, audio, rng };
 
 // ?autostart=1 처리 (Boot 또는 Preload 씬)
 if (new URLSearchParams(location.search).get('autostart') === '1') {
@@ -31,7 +31,54 @@ if (new URLSearchParams(location.search).get('autostart') === '1') {
 ```
 
 - `window.SuperRunner = { game, input, audio }` 는 super-runner의 실제 노출 패턴
-- 신규 게임은 `window.<GameName> = { game, input, audio }` 형식 준수
+- 신규 게임은 `window.<GameName> = { game, input, audio, rng }` 형식 준수
+- `rng`(RngForge 인스턴스)를 노출하면 QA가 시드·상태를 읽어 결정성을 검증할 수 있다(아래 6단계)
+
+## 결정론: 시드 RNG (RngForge)
+
+헤드리스 step 하니스는 **시간**을 통제하지만(수동 `game.step`), **무작위**를 통제하지 못하면
+재현성이 깨진다. 게임 내 모든 무작위는 `engine/rngforge.js`(`RngForge`)로만 다룬다 — `Math.random()`
+직접 호출 금지. 시간은 `game.step(time, delta)` 주입 인자만 쓰고 `Date.now()/performance.now()`를
+게임 로직에 쓰지 않는다.
+
+```js
+// index.html: <script src="../../engine/rngforge.js"></script>  (phaser 다음, game.js 이전)
+this.rng = RngForge.fromUrl(20260613);   // ?seed=N 있으면 그 값, 없으면 기본 시드
+if (this.rng() < 0.3) dropCoin();        // rng() = Math.random() 드롭인
+var dmg = this.rng.int(8, 12);
+this.rng.stream('particles');            // 시각 효과는 별도 스트림(게임플레이 RNG 불변)
+```
+
+**정적 검증 — `Math.random`/월클럭 린트** (PR 전 필수):
+```bash
+node skills/wgf-game-qa/tools/lint-rng.mjs games/<slug>/game.js
+# error 0 이어야 통과. 불가피한 시각 전용 라인은 끝에 `// rng-ok` 주석으로 억제.
+```
+
+**런타임 검증 — 시드 주입 재현**:
+```
+URL: http://localhost:8766/index.html?autostart=1&seed=12345
+```
+같은 `seed`로 두 번 로드 → 같은 step 시퀀스 → 상태 동일이어야 한다.
+
+## 6단계: 값-스냅샷 회귀 (선택)
+
+시드 고정 후 N프레임 전진한 직렬화 상태를 값으로 박아 회귀를 잡는다(이미지 캡처보다 가볍고
+디프가 읽히며 `preserveDrawingBuffer` 정지프레임 함정을 회피).
+
+```js
+const m = window.MyGame;
+const scene = m.game.scene.getScene('Game');
+const FRAME = 1000 / 60; let t = 0;
+for (let i = 0; i < 120; i++) { m.game.step(t, FRAME); t += FRAME; }
+// 좌표는 양자화(부동소수 지터 흡수)
+const snap = {
+  x: Math.round(scene.hero?.x), y: Math.round(scene.hero?.y),
+  score: scene.registry.get('score'), lives: scene.registry.get('lives'),
+  rng: m.rng ? m.rng.state() : null      // RngForge 상태까지 포함하면 무작위 경로도 고정 검증
+};
+console.log(JSON.stringify(snap));        // 기준값과 비교(불일치 = 회귀)
+```
 
 ## QA 절차
 
