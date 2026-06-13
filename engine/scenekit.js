@@ -240,17 +240,54 @@
     }
   }
 
+  // 정식 wgf-scene@1 문서는 엔티티를 `scenes[]` 래퍼 안에 둔다(scenes[].entities).
+  // 활성 씬 선택: opts.sceneId 와 id 가 일치하는 씬 > scenes[0]. scenes 가 없으면 null.
+  function pickScene(sceneDoc, opts) {
+    var scenes = arr(sceneDoc.scenes);
+    if (!scenes.length) return null;
+    if (opts && opts.sceneId != null) {
+      for (var i = 0; i < scenes.length; i++) {
+        if (isObj(scenes[i]) && String(scenes[i].id) === String(opts.sceneId)) return scenes[i];
+      }
+    }
+    return isObj(scenes[0]) ? scenes[0] : null;
+  }
+
+  // 두 객체 얕은 병합(왼쪽 우선 보존, 오른쪽 키 추가). 깊은 복제값으로.
+  function mergeMeta(base, extra) {
+    var out = isObj(base) ? deepCloneValue(base) : {};
+    if (isObj(extra)) {
+      var keys = Object.keys(extra);
+      for (var i = 0; i < keys.length; i++) {
+        if (!has(out, keys[i])) out[keys[i]] = deepCloneValue(extra[keys[i]]);
+      }
+    }
+    return out;
+  }
+
   // ── load — sceneDoc → world ─────────────────────────────────────────────────
   // mode: 'edit'(기본) | 'play'. 둘 다 init 만 수행(step 안 함). t=0 단면을 만든다.
   //   - edit: 정적 t=0 표현(어댑터가 선택/기즈모를 얹음). 코어는 step 호출 안 됨.
   //   - play: 같은 t=0 에서 시작해 이후 SceneKit.step 으로 진행.
+  // 입력 포맷(둘 다 지원):
+  //   - 정식 wgf-scene@1: 엔티티가 `scenes[].entities`(활성 씬 = opts.sceneId|scenes[0]).
+  //     walls 우선순위 = 활성 scene.walls > 최상위 sceneDoc.walls. meta = sceneDoc.meta
+  //     (+ scene.systems 병합, scene.systems 는 meta 에 없는 키만 추가).
+  //   - raw 픽스처(하위호환): 최상위 `entities`/`walls`(scenes 미존재 시). 헤드리스 테스트용.
   // seed 우선순위: opts.seed > sceneDoc.meta.seed > 고정 기본.
   function load(sceneDoc, opts) {
     sceneDoc = isObj(sceneDoc) ? sceneDoc : {};
     opts = opts || {};
     var mode = (opts.mode === 'play') ? 'play' : 'edit';
 
-    var meta = isObj(sceneDoc.meta) ? deepCloneValue(sceneDoc.meta) : {};
+    // 활성 씬 해석. scenes[] 가 있으면 그쪽, 없으면 최상위(raw 픽스처).
+    var scene = pickScene(sceneDoc, opts);
+    var srcEntities = scene ? arr(scene.entities) : arr(sceneDoc.entities);
+    // walls: 활성 scene.walls 우선, 없으면 최상위 sceneDoc.walls.
+    var srcWalls = (scene && scene.walls != null) ? arr(scene.walls) : arr(sceneDoc.walls);
+    // meta: sceneDoc.meta + scene.systems 병합(systems 는 meta 에 없는 키만 추가).
+    var meta = mergeMeta(sceneDoc.meta, scene ? scene.systems : null);
+
     var seed = (opts.seed != null) ? opts.seed : (meta.seed != null ? meta.seed : 0x9E3779B9 | 0);
 
     // 난수기: 호출자 주입 > RngForge.create(seed) > 내장 폴백.
@@ -265,6 +302,7 @@
     var world = {
       schema: SCHEMA_ID,
       mode: mode,
+      sceneId: scene ? (scene.id != null ? String(scene.id) : null) : null,
       entities: [],
       walls: [],
       rng: rng,
@@ -274,16 +312,14 @@
     };
 
     // 정적 벽(AABB 배열). {x,y,w,h} 정규화 — x,y=좌상단, w,h=폭/높이.
-    var walls = arr(sceneDoc.walls);
-    for (var w = 0; w < walls.length; w++) {
-      var wl = isObj(walls[w]) ? walls[w] : {};
+    for (var w = 0; w < srcWalls.length; w++) {
+      var wl = isObj(srcWalls[w]) ? srcWalls[w] : {};
       world.walls.push({ x: num(wl.x, 0), y: num(wl.y, 0), w: Math.max(0, num(wl.w, 0)), h: Math.max(0, num(wl.h, 0)) });
     }
 
     // 엔티티.
-    var ents = arr(sceneDoc.entities);
-    for (var e = 0; e < ents.length; e++) {
-      world.entities.push(normalizeEntity(ents[e], world));
+    for (var e = 0; e < srcEntities.length; e++) {
+      world.entities.push(normalizeEntity(srcEntities[e], world));
     }
     bumpIdSeq(world);
 
