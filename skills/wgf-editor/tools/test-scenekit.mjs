@@ -479,6 +479,516 @@ function run120(world) {
   }
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// P0b 신규 컴포넌트 12종 헤드리스 단위 테스트 (G10~G21)
+// 각 컴포넌트: 인라인 raw 픽스처 load → step → 핵심 동작 단언(결정적).
+// ═════════════════════════════════════════════════════════════════════════════
+
+// 공용: raw 픽스처를 play 로드.
+function loadRaw(doc, seed) {
+  return SceneKit.load(doc, { mode: 'play', seed: seed == null ? 1 : seed });
+}
+function stepN(world, count, dt) {
+  for (let i = 0; i < count; i++) SceneKit.step(world, dt == null ? 1 / 60 : dt);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G10  AnimatedSprite — t=0=프레임0 고정 + dt 진행
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const doc = {
+    assets: { sprites: [{ id: 'spr_a', source: 'procedural', w: 16, h: 16 }] },
+    walls: [],
+    entities: [{
+      id: 'anim1', name: '애니',
+      transform: { x: 0, y: 0 },
+      components: [{ type: 'AnimatedSprite', sprite: 'spr_a',
+        anims: [{ key: 'walk', frames: [0, 1, 2, 3], fps: 10, loop: true }], play: 'walk' }]
+    }]
+  };
+  const w = loadRaw(doc);
+  const comp = SceneKit.getComponentOn(SceneKit.findEntity(w, 'anim1'), 'AnimatedSprite');
+  ok('G10-A AnimatedSprite t=0 = 프레임0', comp._frame === 0, `_frame=${comp._frame}`);
+
+  // fps=10 → 프레임당 0.1초. 0.25초(15프레임 @1/60) 진행 → 프레임 2(0.0~0.1=0, 0.1~0.2=1, 0.2~0.3=2).
+  stepN(w, 15);
+  ok('G10-B AnimatedSprite dt 진행 → 프레임 2', comp._frame === 2, `_frame=${comp._frame}`);
+
+  // loop: 충분히 진행하면 0~3 안에서 순환(프레임 인덱스가 frames.length 미만).
+  stepN(w, 60);
+  ok('G10-C AnimatedSprite loop 범위 유지(0..3)', comp._frame >= 0 && comp._frame <= 3, `_frame=${comp._frame}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G11  Health — hp<=0 사망 처리(flag / remove)
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const doc = {
+    walls: [],
+    entities: [
+      { id: 'h_flag', name: 'flag', transform: { x: 0, y: 0 },
+        components: [{ type: 'Health', max: 10, hp: 10, onDeath: 'flag' }] },
+      { id: 'h_remove', name: 'remove', transform: { x: 100, y: 0 },
+        components: [{ type: 'Health', max: 10, hp: 10, onDeath: 'remove' }] }
+    ]
+  };
+  const w = loadRaw(doc);
+  const flagEnt = SceneKit.findEntity(w, 'h_flag');
+  const flagH = SceneKit.getComponentOn(flagEnt, 'Health');
+  ok('G11-A Health 기본 hp=max', flagH.hp === 10, `hp=${flagH.hp}`);
+
+  // hp 를 0 이하로 직접 깎고 step → dead 플래그.
+  flagH.hp = -3;
+  ScenekitStep(w);
+  ok('G11-B Health hp<=0 → dead 플래그', flagH.dead === true && flagH.hp === 0, `dead=${flagH.dead} hp=${flagH.hp}`);
+
+  // remove 모드: hp<=0 step 후 엔티티 제거.
+  const remH = SceneKit.getComponentOn(SceneKit.findEntity(w, 'h_remove'), 'Health');
+  remH.hp = 0;
+  ScenekitStep(w);
+  ok('G11-C Health onDeath:remove → 엔티티 제거', SceneKit.findEntity(w, 'h_remove') === null,
+    `exists=${SceneKit.findEntity(w, 'h_remove') !== null}`);
+}
+function ScenekitStep(w) { SceneKit.step(w, 1 / 60); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G12  ContactDamage — 오버랩 시 hp 감소(쿨다운/무적 존중)
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const doc = {
+    walls: [],
+    entities: [
+      { id: 'dmg', name: '데미지원', transform: { x: 0, y: 0 },
+        components: [{ type: 'Body', shape: 'aabb', w: 20, h: 20, isStatic: true },
+                     { type: 'ContactDamage', damage: 3, cooldown: 0.5 }] },
+      { id: 'victim', name: '피해자', transform: { x: 5, y: 0 },
+        components: [{ type: 'Body', shape: 'aabb', w: 20, h: 20, isStatic: true },
+                     { type: 'Health', max: 10, hp: 10 }] }
+    ]
+  };
+  const w = loadRaw(doc);
+  const vicH = SceneKit.getComponentOn(SceneKit.findEntity(w, 'victim'), 'Health');
+
+  // 첫 step: 오버랩(중심거리 5 < 20) → 데미지 3.
+  ScenekitStep(w);
+  ok('G12-A ContactDamage 오버랩 시 hp 감소', vicH.hp === 7, `hp=${vicH.hp}`);
+
+  // 즉시 다음 step: 쿨다운(0.5초) 중이므로 추가 데미지 없음.
+  ScenekitStep(w);
+  ok('G12-B ContactDamage 쿨다운 중 추가 데미지 없음', vicH.hp === 7, `hp=${vicH.hp}`);
+
+  // 쿨다운 경과(0.5초 = 30프레임) 후 다시 데미지.
+  stepN(w, 31);
+  ok('G12-C ContactDamage 쿨다운 후 재타격', vicH.hp === 4, `hp=${vicH.hp}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G13  Projectile — lifetime 후 소멸 + 데미지 명중 소멸
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  // G13-A: lifetime 후 자기 소멸(데미지 없음, 빈 공간).
+  const docLife = {
+    walls: [],
+    entities: [{ id: 'proj1', name: '발사체', transform: { x: 0, y: 0 },
+      components: [{ type: 'Projectile', vx: 10, vy: 0, lifetime: 0.5 }] }]
+  };
+  const wL = loadRaw(docLife);
+  stepN(wL, 29);   // 0.483초 — 아직 생존
+  ok('G13-A Projectile lifetime 전 생존', SceneKit.findEntity(wL, 'proj1') !== null, 'still alive');
+  stepN(wL, 2);    // 0.516초 — 소멸
+  ok('G13-B Projectile lifetime 후 소멸', SceneKit.findEntity(wL, 'proj1') === null, 'removed');
+
+  // G13-C: 이동 적분 확인.
+  const docMove = {
+    walls: [],
+    entities: [{ id: 'proj2', name: '발사체', transform: { x: 0, y: 0 },
+      components: [{ type: 'Projectile', vx: 60, vy: 0, lifetime: 10 }] }]
+  };
+  const wM = loadRaw(docMove);
+  stepN(wM, 60);   // 1초 @60fps → x≈60
+  const px = SceneKit.findEntity(wM, 'proj2').transform.x;
+  ok('G13-C Projectile 이동 적분(x≈60)', Math.abs(px - 60) < 0.001, `x=${px.toFixed(4)}`);
+
+  // G13-D: Health 명중 시 데미지 + 소멸.
+  const docHit = {
+    walls: [],
+    entities: [
+      { id: 'proj3', name: '발사체', transform: { x: 0, y: 0 },
+        components: [{ type: 'Body', shape: 'aabb', w: 6, h: 6 },
+                     { type: 'Projectile', vx: 120, vy: 0, lifetime: 10, damage: 5 }] },
+      { id: 'enemy', name: '적', transform: { x: 30, y: 0 },
+        components: [{ type: 'Body', shape: 'aabb', w: 20, h: 20, isStatic: true },
+                     { type: 'Health', max: 10, hp: 10 }] }
+    ]
+  };
+  const wH = loadRaw(docHit);
+  const enH = SceneKit.getComponentOn(SceneKit.findEntity(wH, 'enemy'), 'Health');
+  stepN(wH, 30);   // 발사체가 적에 도달
+  ok('G13-D Projectile 명중 → Health 데미지', enH.hp === 5, `hp=${enH.hp}`);
+  ok('G13-E Projectile 명중 후 소멸', SceneKit.findEntity(wH, 'proj3') === null, 'removed');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G14  Shooter — 쿨다운 후 Projectile 생성 개수
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const doc = {
+    walls: [],
+    entities: [
+      { id: 'shooter', name: '슈터', transform: { x: 0, y: 0 },
+        components: [{ type: 'Shooter', cooldown: 0.5, speed: 100, auto: true, target: 'player', projectileLifetime: 10 }] },
+      { id: 'player', name: '플레이어', transform: { x: 100, y: 0 }, components: [] }
+    ]
+  };
+  const w = loadRaw(doc);
+  // 첫 step: _cd=0 이므로 즉시 1발. 이후 0.5초마다.
+  function countProjectiles() {
+    let c = 0;
+    const doc2 = SceneKit.serialize(w);
+    for (const e of doc2.entities) if (e.components.some(cc => cc.type === 'Projectile')) c++;
+    return c;
+  }
+  ScenekitStep(w);
+  ok('G14-A Shooter 첫 발사(1발)', countProjectiles() === 1, `count=${countProjectiles()}`);
+
+  // 31프레임(>0.5초) 더 → 쿨다운 만료 → 2발째(부동소수 여유로 31프레임).
+  stepN(w, 31);
+  ok('G14-B Shooter 쿨다운 후 2발째', countProjectiles() === 2, `count=${countProjectiles()}`);
+
+  // 발사 방향: player(+x) 쪽이므로 첫 발사체 vx > 0.
+  const projDoc = SceneKit.serialize(w);
+  const firstProj = projDoc.entities.find(e => e.components.some(cc => cc.type === 'Projectile'));
+  const pj = firstProj.components.find(cc => cc.type === 'Projectile');
+  ok('G14-C Shooter 발사체 방향(player 쪽 vx>0)', pj.vx > 0, `vx=${pj.vx}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G15  EnemyAI — chase 로 타깃 접근
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const doc = {
+    walls: [],
+    entities: [
+      { id: 'enemy', name: '적', transform: { x: 0, y: 0 },
+        components: [{ type: 'EnemyAI', mode: 'chase', target: 'player', speed: 60, range: 0 }] },
+      { id: 'player', name: '플레이어', transform: { x: 100, y: 0 }, components: [] }
+    ]
+  };
+  const w = loadRaw(doc);
+  const enemy = SceneKit.findEntity(w, 'enemy');
+  const before = enemy.transform.x;
+  stepN(w, 30);   // 0.5초 → x 약 +30
+  ok('G15-A EnemyAI chase 타깃 접근(x 증가)', enemy.transform.x > before + 20, `before=${before} after=${enemy.transform.x.toFixed(3)}`);
+
+  // flee: 반대 방향.
+  const docFlee = {
+    walls: [],
+    entities: [
+      { id: 'enemy2', name: '적', transform: { x: 50, y: 0 },
+        components: [{ type: 'EnemyAI', mode: 'flee', target: 'player', speed: 60, range: 0 }] },
+      { id: 'player', name: '플레이어', transform: { x: 100, y: 0 }, components: [] }
+    ]
+  };
+  const wF = loadRaw(docFlee);
+  const e2 = SceneKit.findEntity(wF, 'enemy2');
+  stepN(wF, 30);
+  ok('G15-B EnemyAI flee 타깃 회피(x 감소)', e2.transform.x < 50, `after=${e2.transform.x.toFixed(3)}`);
+
+  // patrol: origin 기준 진동(이동 발생).
+  const docPat = {
+    walls: [],
+    entities: [{ id: 'enemy3', name: '적', transform: { x: 0, y: 0 },
+      components: [{ type: 'EnemyAI', mode: 'patrol', speed: 40, patrolAxis: 'x', patrolRange: 16 }] }]
+  };
+  const wP = loadRaw(docPat);
+  const e3 = SceneKit.findEntity(wP, 'enemy3');
+  stepN(wP, 20);
+  ok('G15-C EnemyAI patrol 진동 이동', e3.transform.x !== 0 && Math.abs(e3.transform.x) <= 16.001,
+    `x=${e3.transform.x.toFixed(3)}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G16  Pickup — 오버랩 시 효과 + 소멸
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const doc = {
+    walls: [],
+    entities: [
+      { id: 'coin', name: '코인', transform: { x: 5, y: 0 },
+        components: [{ type: 'Body', shape: 'aabb', w: 16, h: 16 },
+                     { type: 'Pickup', kind: 'coin', amount: 10, collector: 'player' }] },
+      { id: 'heal', name: '회복', transform: { x: 5, y: 100 },
+        components: [{ type: 'Body', shape: 'aabb', w: 16, h: 16 },
+                     { type: 'Pickup', kind: 'heal', amount: 5, collector: 'player2' }] },
+      { id: 'player', name: '플레이어', transform: { x: 0, y: 0 },
+        components: [{ type: 'Body', shape: 'aabb', w: 16, h: 16 }] },
+      { id: 'player2', name: '회복대상', transform: { x: 0, y: 100 },
+        components: [{ type: 'Body', shape: 'aabb', w: 16, h: 16 }, { type: 'Health', max: 10, hp: 3 }] }
+    ]
+  };
+  const w = loadRaw(doc);
+  ScenekitStep(w);
+  ok('G16-A Pickup(coin) 오버랩 시 카운터 증가', (w.counters && w.counters.coin) === 10,
+    `coin=${w.counters && w.counters.coin}`);
+  ok('G16-B Pickup(coin) 수집 후 소멸', SceneKit.findEntity(w, 'coin') === null, 'removed');
+  const p2H = SceneKit.getComponentOn(SceneKit.findEntity(w, 'player2'), 'Health');
+  ok('G16-C Pickup(heal) Health hp 회복', p2H.hp === 8, `hp=${p2H.hp}`);
+  ok('G16-D Pickup(heal) 수집 후 소멸', SceneKit.findEntity(w, 'heal') === null, 'removed');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G17  Spawner — interval 후 생성
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const doc = {
+    walls: [],
+    entities: [{ id: 'spawner', name: '스포너', transform: { x: 50, y: 50 },
+      components: [{ type: 'Spawner', interval: 0.5, max: 2,
+        template: { name: '졸개', transform: {}, components: [{ type: 'Body', shape: 'aabb', w: 8, h: 8 }] } }] }]
+  };
+  const w = loadRaw(doc);
+  function entityCount() { return w.entities.length; }
+  // 첫 interval(0.5초=30프레임) 전: 생성 없음(스포너 1개만).
+  stepN(w, 29);
+  ok('G17-A Spawner interval 전 생성 없음', entityCount() === 1, `count=${entityCount()}`);
+  // interval 도달 → 1개 생성(총 2).
+  stepN(w, 2);
+  ok('G17-B Spawner interval 후 1개 생성', entityCount() === 2, `count=${entityCount()}`);
+  // 다음 interval → 2개째(총 3, max=2 도달).
+  stepN(w, 30);
+  ok('G17-C Spawner 2개째 생성(max=2)', entityCount() === 3, `count=${entityCount()}`);
+  // max 도달 후 추가 생성 없음.
+  stepN(w, 60);
+  ok('G17-D Spawner max 상한 존중', entityCount() === 3, `count=${entityCount()}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G18  CameraFollow — world.camera 갱신(t=0 스냅 + 추적)
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const doc = {
+    walls: [],
+    entities: [
+      { id: 'cam', name: '카메라', transform: { x: 0, y: 0 },
+        components: [{ type: 'CameraFollow', target: 'player', lerp: 1 }] },
+      { id: 'player', name: '플레이어', transform: { x: 40, y: 20 }, components: [] }
+    ]
+  };
+  const w = loadRaw(doc);
+  // t=0 스냅: 카메라 = 타깃 위치.
+  ok('G18-A CameraFollow t=0 스냅', w.camera && w.camera.x === 40 && w.camera.y === 20,
+    `camera=${JSON.stringify(w.camera)}`);
+  // 타깃 이동 후 step → lerp=1 즉시 추적.
+  SceneKit.findEntity(w, 'player').transform.x = 100;
+  ScenekitStep(w);
+  ok('G18-B CameraFollow lerp=1 즉시 추적', w.camera.x === 100, `camera.x=${w.camera.x}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G19  AbilityBinding — 쿨다운 틱(발동 주입 → 쿨다운 시작 → 회복)
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const doc = {
+    walls: [],
+    entities: [{ id: 'hero', name: '영웅', transform: { x: 0, y: 0 },
+      components: [{ type: 'AbilityBinding', abilities: [{ id: 'dash', cooldown: 1.0 }] }] }]
+  };
+  const w = loadRaw(doc);
+  // 발동 요청 주입: 첫 프레임에만 dash 요청.
+  // 주의: load 가 meta 를 deepClone 하며 함수를 제거하므로, world.meta 에 직접 주입한다.
+  let frame = 0;
+  w.meta.abilityInput = function (entity) {
+    if (entity.id === 'hero' && frame === 0) return ['dash'];
+    return [];
+  };
+  const comp = SceneKit.getComponentOn(SceneKit.findEntity(w, 'hero'), 'AbilityBinding');
+  ok('G19-A AbilityBinding 초기 쿨다운 0', comp._cooldowns.dash === 0, `cd=${comp._cooldowns.dash}`);
+
+  ScenekitStep(w); frame++;
+  ok('G19-B AbilityBinding 발동 → 쿨다운 시작', comp._cooldowns.dash > 0.9 && comp._cooldowns.dash <= 1.0,
+    `cd=${comp._cooldowns.dash.toFixed(4)}`);
+  ok('G19-C AbilityBinding 발동 이벤트 누적', Array.isArray(w.abilityEvents) && w.abilityEvents.length === 1,
+    `events=${JSON.stringify(w.abilityEvents)}`);
+
+  // 1초(60프레임) 더 진행 → 쿨다운 회복(재요청 없음).
+  stepN(w, 61);
+  ok('G19-D AbilityBinding 쿨다운 회복', comp._cooldowns.dash === 0, `cd=${comp._cooldowns.dash}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G20  AudioEmitter — 이벤트 누적(onStep 쿨다운)
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const doc = {
+    walls: [],
+    entities: [
+      { id: 'spawnSnd', name: '생성음', transform: { x: 0, y: 0 },
+        components: [{ type: 'AudioEmitter', sound: 'sfx_spawn', trigger: 'onSpawn' }] },
+      { id: 'stepSnd', name: '주기음', transform: { x: 0, y: 0 },
+        components: [{ type: 'AudioEmitter', sound: 'sfx_tick', trigger: 'onStep', cooldown: 0.5 }] }
+    ]
+  };
+  const w = loadRaw(doc);
+  // onSpawn: init 시 1회 누적.
+  ok('G20-A AudioEmitter onSpawn init 시 이벤트 누적',
+    Array.isArray(w.audioEvents) && w.audioEvents.filter(e => e.sound === 'sfx_spawn').length === 1,
+    `events=${JSON.stringify(w.audioEvents)}`);
+
+  // onStep: 첫 step 발화(cd=0) → cd=0.5. 31프레임 후 한 번 더(총 2).
+  ScenekitStep(w);
+  ok('G20-B AudioEmitter onStep 첫 발화',
+    w.audioEvents.filter(e => e.sound === 'sfx_tick').length === 1,
+    `tick=${w.audioEvents.filter(e => e.sound === 'sfx_tick').length}`);
+  stepN(w, 31);
+  ok('G20-C AudioEmitter onStep 쿨다운 후 재발화',
+    w.audioEvents.filter(e => e.sound === 'sfx_tick').length === 2,
+    `tick=${w.audioEvents.filter(e => e.sound === 'sfx_tick').length}`);
+  // 코어가 실제 사운드 재생을 호출하지 않았음을 간접 확인(데이터 이벤트만 존재).
+  ok('G20-D AudioEmitter 이벤트는 데이터만(재생 호출 없음)',
+    w.audioEvents.every(e => typeof e.sound === 'string' && typeof e.t === 'number'),
+    `events ok`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G21  HUDBinding — 값 산출(컴포넌트 경로 + world 경로)
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const doc = {
+    walls: [],
+    entities: [
+      { id: 'hpHud', name: 'HP표시', transform: { x: 0, y: 0 },
+        components: [{ type: 'Health', max: 100, hp: 75 },
+                     { type: 'HUDBinding', element: 'hpbar', source: 'Health.hp' }] }
+    ]
+  };
+  const w = loadRaw(doc);
+  const comp = SceneKit.getComponentOn(SceneKit.findEntity(w, 'hpHud'), 'HUDBinding');
+  // t=0 초기값 산출.
+  ok('G21-A HUDBinding t=0 컴포넌트 경로 값 산출', comp._value === 75, `_value=${comp._value}`);
+  ok('G21-B HUDBinding world.hud 미러', w.hud && w.hud.hpbar === 75, `hud=${JSON.stringify(w.hud)}`);
+
+  // hp 변경 후 step → 값 갱신.
+  SceneKit.getComponentOn(SceneKit.findEntity(w, 'hpHud'), 'Health').hp = 40;
+  ScenekitStep(w);
+  ok('G21-C HUDBinding step 후 값 갱신', comp._value === 40 && w.hud.hpbar === 40, `_value=${comp._value}`);
+
+  // world 경로 바인딩.
+  const docW = {
+    walls: [],
+    entities: [{ id: 'coinHud', name: '코인표시', transform: { x: 0, y: 0 },
+      components: [{ type: 'HUDBinding', element: 'coins', source: 'world.counters.coin' }] }]
+  };
+  const wW = loadRaw(docW);
+  wW.counters = { coin: 7 };
+  SceneKit.step(wW, 1 / 60);
+  const compW = SceneKit.getComponentOn(SceneKit.findEntity(wW, 'coinHud'), 'HUDBinding');
+  ok('G21-D HUDBinding world 경로 값 산출', compW._value === 7, `_value=${compW._value}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G22  화이트리스트 강제 회귀 — 16번째/미등록 컴포넌트 → lint-scene error + exit 1
+//      + 15종 전부 든 정상 씬 → exit 0
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const lintScene = resolve(root, 'skills/wgf-editor/tools/lint-scene.mjs');
+
+  // G22-A: 미등록(16번째) 컴포넌트 → error + exit 1.
+  const unknownDoc = {
+    format: 'wgf-scene@1', slug: 'unknown-comp-test',
+    meta: { title: '미등록 컴포넌트', genre: 'topdown', viewport: { w: 320, h: 240 } },
+    assets: { sprites: [] }, walls: [],
+    scenes: [{ id: 'main', entities: [
+      { id: 'e1', name: 'E', transform: { x: 10, y: 10 },
+        components: [{ type: 'SixteenthComponentXYZ' }] }
+    ] }],
+    dataLayers: {}
+  };
+  const tmpUnknown = resolve(root, 'games/_editor-samples/_unknown-comp-tmp.json');
+  writeFileSync(tmpUnknown, JSON.stringify(unknownDoc, null, 2), 'utf8');
+  const uRes = spawnSync(process.execPath, [lintScene, '--file', tmpUnknown], { encoding: 'utf8' });
+  let uJson = null;
+  const uLines = uRes.stdout.trim().split('\n');
+  for (let i = uLines.length - 1; i >= 0; i--) { try { uJson = JSON.parse(uLines[i]); break; } catch (_) {} }
+  ok('G22-A lint-scene 미등록 컴포넌트 exit 1', uRes.status === 1, `exit=${uRes.status}`);
+  ok('G22-A lint-scene 미등록 컴포넌트 error > 0', uJson && uJson.counts.error > 0, `error=${uJson && uJson.counts.error}`);
+  ok('G22-A lint-scene 미등록 컴포넌트 UNKNOWN_COMPONENT 코드',
+    uJson && uJson.findings.some(f => f.code === 'UNKNOWN_COMPONENT'),
+    `codes=${uJson && uJson.findings.map(f => f.code).join(',')}`);
+  try { unlinkSync(tmpUnknown); } catch (_) {}
+
+  // G22-B: 15종 전부 든 정상 씬 → exit 0(필수 필드 충족).
+  const allDoc = {
+    format: 'wgf-scene@1', slug: 'all-fifteen',
+    meta: { title: '15종 전부', genre: 'topdown', viewport: { w: 320, h: 240 } },
+    assets: { sprites: [{ id: 'spr_x', source: 'procedural', w: 16, h: 16 }] },
+    walls: [],
+    scenes: [{ id: 'main', entities: [
+      { id: 'e_all', name: '전부', transform: { x: 50, y: 50 }, components: [
+        { type: 'Sprite', sprite: 'spr_x' },
+        { type: 'Body', shape: 'aabb', w: 16, h: 16 },
+        { type: 'TopDownController', speed: 80, input: 'wasd' },
+        { type: 'AnimatedSprite', sprite: 'spr_x', anims: [{ key: 'idle', frames: [0], fps: 1 }], play: 'idle' },
+        { type: 'Shooter', cooldown: 0.5 },
+        { type: 'EnemyAI', mode: 'chase' },
+        { type: 'Health', max: 10 },
+        { type: 'ContactDamage', damage: 1 },
+        { type: 'Pickup', kind: 'coin', amount: 1 },
+        { type: 'Spawner', interval: 1, template: { components: [] } },
+        { type: 'CameraFollow', target: 'self', lerp: 1 },
+        { type: 'AbilityBinding', abilities: [{ id: 'dash', cooldown: 1 }] },
+        { type: 'AudioEmitter', sound: 'sfx', trigger: 'manual' },
+        { type: 'HUDBinding', element: 'hp', source: 'Health.hp' }
+      ] },
+      { id: 'e_proj', name: '발사체', transform: { x: 0, y: 0 }, components: [
+        { type: 'Projectile', vx: 10, vy: 0, lifetime: 1 }
+      ] }
+    ] }],
+    dataLayers: {}
+  };
+  const tmpAll = resolve(root, 'games/_editor-samples/_all-fifteen-tmp.json');
+  writeFileSync(tmpAll, JSON.stringify(allDoc, null, 2), 'utf8');
+  const aRes = spawnSync(process.execPath, [lintScene, '--file', tmpAll], { encoding: 'utf8' });
+  let aJson = null;
+  const aLines = aRes.stdout.trim().split('\n');
+  for (let i = aLines.length - 1; i >= 0; i--) { try { aJson = JSON.parse(aLines[i]); break; } catch (_) {} }
+  ok('G22-B lint-scene 15종 정상 씬 exit 0', aRes.status === 0,
+    `exit=${aRes.status} findings=${aJson && JSON.stringify(aJson.findings)}`);
+  ok('G22-B lint-scene 15종 정상 씬 error=0', aJson && aJson.counts.error === 0,
+    `error=${aJson && aJson.counts.error}`);
+  try { unlinkSync(tmpAll); } catch (_) {}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G23  신규 생성형 컴포넌트 결정성 회귀 — Shooter+Spawner 2회 실행 hashState 일치
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  function buildGenDoc() {
+    return {
+      walls: [],
+      entities: [
+        { id: 'shooter', name: '슈터', transform: { x: 0, y: 0 },
+          components: [{ type: 'Shooter', cooldown: 0.3, speed: 90, auto: true, target: 'player', projectileLifetime: 1 }] },
+        { id: 'player', name: '플레이어', transform: { x: 80, y: 40 }, components: [] },
+        { id: 'spawner', name: '스포너', transform: { x: 100, y: 100 },
+          components: [{ type: 'Spawner', interval: 0.25, max: 5, jitter: 8,
+            template: { name: '졸개', transform: {}, components: [{ type: 'Body', shape: 'aabb', w: 8, h: 8 }] } }] }
+      ]
+    };
+  }
+  const SEED = 1234;
+  const w1 = loadRaw(buildGenDoc(), SEED);
+  for (let i = 0; i < 120; i++) SceneKit.step(w1, 1 / 60);
+  const g1 = SceneKit.hashState(w1);
+
+  const w2 = loadRaw(buildGenDoc(), SEED);
+  for (let i = 0; i < 120; i++) SceneKit.step(w2, 1 / 60);
+  const g2 = SceneKit.hashState(w2);
+
+  ok('G23-A Shooter+Spawner 생성 컴포넌트 결정성(2회 hashState 일치)', g1 === g2, `g1=${g1} g2=${g2}`);
+  // 실제로 엔티티가 생성됐는지(trivial pass 방지).
+  ok('G23-B 생성형 컴포넌트가 엔티티를 실제 추가했는지', w1.entities.length > 3, `count=${w1.entities.length}`);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 결과 출력
 // ─────────────────────────────────────────────────────────────────────────────

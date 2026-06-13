@@ -19,30 +19,31 @@ import fs   from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// ── P0a 허용 컴포넌트 화이트리스트 ──────────────────────────────────────────
-// 구현 완료(P0a): 이 목록에 있고 IMPL_SET 에도 있어야 error 없이 통과.
-// 전체 15종 계획 목록: 미구현은 'not-yet' warn 을 낸다.
+// ── 허용 컴포넌트 화이트리스트 (정확히 15종 — 설계서 §4.3) ────────────────────
+// P0a 3종 + P0b 12종 = 15종. 전부 구현 완료(IMPL_SET == ALL_COMPONENTS).
+// 이 목록 밖(16번째/미등록) 컴포넌트 타입은 UNKNOWN_COMPONENT error + exit 1.
 const ALL_COMPONENTS = [
   // P0a 구현 완료
   'Sprite',
   'Body',
   'TopDownController',
-  // P1+ 예정 — 미구현
-  'Camera',
-  'Script',
-  'Tilemap',
-  'Light',
-  'ParticleEmitter',
-  'AudioSource',
-  'Animator',
-  'PathFollower',
-  'TriggerZone',
-  'SpawnPoint',
-  'UIText',
-  'UIImage'
+  // P0b 구현 완료
+  'AnimatedSprite',
+  'Shooter',
+  'Projectile',
+  'EnemyAI',
+  'Health',
+  'ContactDamage',
+  'Pickup',
+  'Spawner',
+  'CameraFollow',
+  'AbilityBinding',
+  'AudioEmitter',
+  'HUDBinding'
 ];
 
-const IMPL_SET = new Set(['Sprite', 'Body', 'TopDownController']);
+// 구현 완료 집합 = 전체 15종(모두 구현됨). COMPONENT_NOT_YET 분기는 더 이상 발화하지 않는다.
+const IMPL_SET = new Set(ALL_COMPONENTS);
 
 // ── 인자 파싱 ────────────────────────────────────────────────────────────────
 function parseArgs(argv) {
@@ -285,6 +286,123 @@ function lintScene(doc, report) {
             add('error', 'INVALID_CONTROLLER_INPUT',
               'entity "' + (entity.id || '?') + '" TopDownController.input 은 "wasd"|"stick"|"both" 이어야 합니다',
               cPath + '.input');
+          }
+        }
+
+        // ── P0b 컴포넌트 필드 검증 (필수 필드·enum 만, 과하지 않게) ──────────────
+        const eid = '"' + (entity.id || '?') + '" ';
+
+        if (comp.type === 'AnimatedSprite') {
+          if (!comp.sprite) {
+            add('error', 'MISSING_SPRITE_REF',
+              'entity ' + eid + 'AnimatedSprite.sprite 필드가 없습니다', cPath + '.sprite');
+          } else if (!spriteIds.has(comp.sprite)) {
+            add('error', 'DANGLING_SPRITE_REF',
+              'entity ' + eid + 'AnimatedSprite.sprite "' + comp.sprite +
+              '" 이 assets.sprites 에 선언되지 않았습니다', cPath + '.sprite');
+          }
+          if (comp.anims !== undefined && !Array.isArray(comp.anims)) {
+            add('error', 'INVALID_ANIMS',
+              'entity ' + eid + 'AnimatedSprite.anims 는 배열이어야 합니다', cPath + '.anims');
+          }
+        }
+
+        if (comp.type === 'Health') {
+          if (!(comp.max > 0)) {
+            add('error', 'INVALID_HEALTH_MAX',
+              'entity ' + eid + 'Health.max 는 양수여야 합니다', cPath + '.max');
+          }
+          if (comp.onDeath !== undefined && !['remove', 'flag'].includes(comp.onDeath)) {
+            add('error', 'INVALID_HEALTH_ONDEATH',
+              'entity ' + eid + 'Health.onDeath 는 "remove"|"flag" 이어야 합니다', cPath + '.onDeath');
+          }
+        }
+
+        if (comp.type === 'ContactDamage') {
+          if (typeof comp.damage !== 'number') {
+            add('error', 'MISSING_DAMAGE',
+              'entity ' + eid + 'ContactDamage.damage 는 number 여야 합니다', cPath + '.damage');
+          }
+        }
+
+        if (comp.type === 'Projectile') {
+          if (!(comp.lifetime > 0)) {
+            add('error', 'INVALID_PROJECTILE_LIFETIME',
+              'entity ' + eid + 'Projectile.lifetime 은 양수여야 합니다', cPath + '.lifetime');
+          }
+          const hasVel = (typeof comp.vx === 'number' || typeof comp.vy === 'number');
+          const hasPolar = (typeof comp.speed === 'number' && typeof comp.angle === 'number');
+          if (!hasVel && !hasPolar) {
+            add('warn', 'PROJECTILE_NO_VELOCITY',
+              'entity ' + eid + 'Projectile 에 vx/vy 또는 speed+angle 이 없습니다 — 정지 발사체', cPath);
+          }
+        }
+
+        if (comp.type === 'Shooter') {
+          if (!(comp.cooldown > 0)) {
+            add('error', 'INVALID_SHOOTER_COOLDOWN',
+              'entity ' + eid + 'Shooter.cooldown 은 양수여야 합니다', cPath + '.cooldown');
+          }
+        }
+
+        if (comp.type === 'EnemyAI') {
+          if (!['chase', 'flee', 'patrol', 'shoot'].includes(comp.mode)) {
+            add('error', 'INVALID_ENEMYAI_MODE',
+              'entity ' + eid + 'EnemyAI.mode 는 "chase"|"flee"|"patrol"|"shoot" 이어야 합니다', cPath + '.mode');
+          }
+        }
+
+        if (comp.type === 'Spawner') {
+          if (!comp.template || typeof comp.template !== 'object') {
+            add('error', 'MISSING_SPAWNER_TEMPLATE',
+              'entity ' + eid + 'Spawner.template 은 객체여야 합니다', cPath + '.template');
+          }
+          if (!(comp.interval > 0)) {
+            add('error', 'INVALID_SPAWNER_INTERVAL',
+              'entity ' + eid + 'Spawner.interval 은 양수여야 합니다', cPath + '.interval');
+          }
+        }
+
+        if (comp.type === 'CameraFollow') {
+          if (comp.lerp !== undefined && !(comp.lerp >= 0 && comp.lerp <= 1)) {
+            add('error', 'INVALID_CAMERAFOLLOW_LERP',
+              'entity ' + eid + 'CameraFollow.lerp 은 0..1 범위여야 합니다', cPath + '.lerp');
+          }
+        }
+
+        if (comp.type === 'Pickup') {
+          if (comp.amount !== undefined && typeof comp.amount !== 'number') {
+            add('error', 'INVALID_PICKUP_AMOUNT',
+              'entity ' + eid + 'Pickup.amount 는 number 여야 합니다', cPath + '.amount');
+          }
+        }
+
+        if (comp.type === 'AbilityBinding') {
+          if (comp.abilities !== undefined && !Array.isArray(comp.abilities)) {
+            add('error', 'INVALID_ABILITIES',
+              'entity ' + eid + 'AbilityBinding.abilities 는 배열이어야 합니다', cPath + '.abilities');
+          }
+        }
+
+        if (comp.type === 'AudioEmitter') {
+          if (!comp.sound) {
+            add('error', 'MISSING_AUDIO_SOUND',
+              'entity ' + eid + 'AudioEmitter.sound 필드가 없습니다', cPath + '.sound');
+          }
+          if (comp.trigger !== undefined && !['onSpawn', 'onStep', 'manual'].includes(comp.trigger)) {
+            add('error', 'INVALID_AUDIO_TRIGGER',
+              'entity ' + eid + 'AudioEmitter.trigger 는 "onSpawn"|"onStep"|"manual" 이어야 합니다', cPath + '.trigger');
+          }
+        }
+
+        if (comp.type === 'HUDBinding') {
+          if (!comp.element) {
+            add('error', 'MISSING_HUD_ELEMENT',
+              'entity ' + eid + 'HUDBinding.element 필드가 없습니다', cPath + '.element');
+          }
+          if (!comp.source) {
+            add('error', 'MISSING_HUD_SOURCE',
+              'entity ' + eid + 'HUDBinding.source 필드가 없습니다', cPath + '.source');
           }
         }
 
