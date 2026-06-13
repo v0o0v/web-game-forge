@@ -10,7 +10,8 @@
 //
 // 출력 계약: 사람용 라인들 먼저, 마지막 줄 단일 JSON:
 //   {"ok":bool,"pass":n,"fail":n,"updated":n,"cases":[...]}
-// 종료코드: 전부 일치(또는 --update) → 0, 하나라도 불일치 → 1.
+// 종료코드: 전부 일치 → 0, 하나라도 불일치(capture 실패 포함) → 1.
+//           --update 모드에서도 capture 실패가 있으면 exit 1.
 //
 // golden 픽스처 위치: skills/wgf-game-qa/tools/golden/<case-id>.json
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
 
 const GOLDEN_DIR = resolve(here, 'golden')
+// engineDir — 향후 pixelforge·vectorforge 등 다른 엔진 모듈 스냅샷 추가 시 공통 기준 경로
 const engineDir  = resolve(here, '../../../engine')
 
 const UPDATE_MODE = process.argv.includes('--update')
@@ -65,12 +67,18 @@ function diffValues(expected, actual) {
   const as = JSON.stringify(actual, null, 2)
   if (es === as) return null
 
-  // 줄 단위 diff 요약 (첫 8개 불일치만)
   const el = es.split('\n')
   const al = as.split('\n')
-  const maxLines = Math.max(el.length, al.length)
   const diffs = []
-  for (let i = 0; i < maxLines && diffs.length < 8; i++) {
+
+  // 배열 길이 변화 시 라인 시프트 노이즈를 줄이기 위해 항목 수 요약을 먼저 출력
+  if (Array.isArray(expected) && Array.isArray(actual) && expected.length !== actual.length) {
+    diffs.push(`  expected ${expected.length} items, got ${actual.length} items`)
+  }
+
+  // 줄 단위 diff 요약 (첫 8개 불일치만)
+  const maxLines = Math.max(el.length, al.length)
+  for (let i = 0; i < maxLines && diffs.length < 9; i++) {
     const e = el[i] ?? '<missing>'
     const a = al[i] ?? '<missing>'
     if (e !== a) diffs.push(`  line ${i + 1}: expected ${e.trim()} | got ${a.trim()}`)
@@ -216,8 +224,9 @@ for (const c of CASES) {
 
 if (UPDATE_MODE) {
   console.log(`— updated ${updated} golden file(s) in ${GOLDEN_DIR}`)
-  console.log(JSON.stringify({ ok: true, pass: 0, fail: 0, updated, cases: results }))
-  process.exit(0)
+  const updOk = (fail === 0)
+  console.log(JSON.stringify({ ok: updOk, pass: 0, fail, updated, cases: results }))
+  process.exit(updOk ? 0 : 1)
 } else {
   console.log(`— pass ${pass} · fail ${fail}`)
   console.log(JSON.stringify({ ok: fail === 0, pass, fail, updated: 0, cases: results }))
