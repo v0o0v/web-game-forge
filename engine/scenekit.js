@@ -322,9 +322,11 @@
   }
 
   // ── 충돌 — Body 컴포넌트(동적) ↔ 동적/정적 벽 ──────────────────────────────
-  // Body 규약(worker-2 Body 컴포넌트와 정합):
+  // Body 규약(worker-2 Body 컴포넌트·SCHEMA.md 와 정합):
   //   { type:'Body', shape:'aabb'|'circle', w?,h?(aabb), radius?(circle),
-  //     offsetX?,offsetY?(트랜스폼 기준 중심 오프셋), static?:bool(true=고정,분리 안 됨) }
+  //     offsetX?,offsetY?(트랜스폼 기준 중심 오프셋), isStatic?:bool(true=고정,분리 안 됨) }
+  // 정적 플래그 캐노니컬 = `isStatic`(엔진 관례 matterkit/Phaser Matter 정합). 구
+  // `static` 은 하위호환 폴백으로만 읽는다(둘 다 없으면 동적).
   // 분리는 트랜스폼(x,y)을 직접 민다. 최소 침투축(MTV)으로 밀어낸다. 결정적 순서.
   function bodyOf(entity) {
     var b = getComponentOn(entity, 'Body');
@@ -332,11 +334,12 @@
     var shape = (b.shape === 'circle') ? 'circle' : 'aabb';
     var cx = num(entity.transform.x, 0) + num(b.offsetX, 0);
     var cy = num(entity.transform.y, 0) + num(b.offsetY, 0);
+    var isStaticBody = (b.isStatic != null ? b.isStatic : b.static) === true;
     if (shape === 'circle') {
-      return { kind: 'circle', cx: cx, cy: cy, r: Math.max(0, num(b.radius, 0)), isStatic: !!b.static, ent: entity };
+      return { kind: 'circle', cx: cx, cy: cy, r: Math.max(0, num(b.radius, 0)), isStatic: isStaticBody, ent: entity };
     }
     var hw = Math.max(0, num(b.w, 0)) / 2, hh = Math.max(0, num(b.h, 0)) / 2;
-    return { kind: 'aabb', cx: cx, cy: cy, hw: hw, hh: hh, isStatic: !!b.static, ent: entity };
+    return { kind: 'aabb', cx: cx, cy: cy, hw: hw, hh: hh, isStatic: isStaticBody, ent: entity };
   }
 
   // 동적 바디 목록(static=false 인 Body 보유 엔티티), id 사전식 정렬(결정적 해석 순서).
