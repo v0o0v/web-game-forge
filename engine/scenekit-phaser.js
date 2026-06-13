@@ -39,10 +39,15 @@
  *   inst.setMode('edit'|'play')      // play 는 코어 step 시작, edit 는 정지
  *   inst.reload(sceneDoc)            // 새 씬으로 어댑터 재마운트(상태 초기화)
  *   inst.refresh()                   // 외부 커맨드 후 렌더 동기화
+ *   inst.bakeHash()                  // 현재 베이크된 자산 텍스처들의 결정적 픽셀 해시(계약 H′ 검증용)
  *   inst.destroy()                   // Phaser game 파괴
  *
  * opts: { width, height, gridSize, snap, snapSize, gizmoMode, mode,
- *         backgroundColor, onCommand(cmd,undoDelta), onSelectionChange(ids) }
+ *         backgroundColor, chrome, onCommand(cmd,undoDelta), onSelectionChange(ids) }
+ *
+ * chrome(가산적 옵션 — 기본 true): false 면 **에디터 크롬**(그리드·기즈모·선택
+ *   아웃라인·마키·입력 픽킹)을 그리지 않고 입력 핸들러도 달지 않는다. play/export
+ *   런타임처럼 "게임만" 보이게 할 때 쓴다. 미지정·true 면 기존 에디터 동작 불변.
  * ==========================================================================*/
 (function (global) {
   'use strict';
@@ -109,6 +114,9 @@
       snapSize: num(opts.snapSize, num(opts.gridSize, 16)),
       gridSize: num(opts.gridSize, 16),
       gizmoMode: validGizmo(opts.gizmoMode),
+      chrome: opts.chrome !== false,    // 가산적 — 기본 true(에디터 크롬 표시). false=게임만(play/export).
+      seed: (typeof opts.seed === 'number') ? opts.seed : undefined,   // QA 가능성: ?seed=N 전파
+      rng: (typeof opts.rng === 'function') ? opts.rng : null,         // 단일 rng — export game.js 가 주입한 RngForge 인스턴스
       onCommandCb: (typeof opts.onCommand === 'function') ? opts.onCommand : null,
       onReadyCb: (typeof opts.onReady === 'function') ? opts.onReady : null,
       selectionListeners: []
@@ -182,6 +190,12 @@
       refresh: function () {
         if (sceneRef.scene) sceneRef.scene.syncFromWorld();
       },
+      // 계약 H′ 검증: 현재 엔티티들이 쓰는 베이크 자산 텍스처의 픽셀 데이터를 결정적
+      // 해시로 접는다. 같은 자산 def·pixelArt 입력이면 edit·play·export 에서 동일 비트맵
+      // → 동일 해시. 리드가 edit vs export 해시 일치를 비교해 외형 동형(H′)을 회귀.
+      bakeHash: function () {
+        return sceneRef.scene ? sceneRef.scene.bakeHash() : null;
+      },
       destroy: function () {
         try { game.destroy(true); } catch (e) { /* 무시 */ }
         sceneRef.scene = null;
@@ -205,7 +219,7 @@
       applyCommand: err, applyUndo: err,
       setSnap: function () {}, setGizmoMode: function () {}, getGizmoMode: function () { return 'move'; },
       setMode: function () {}, getMode: function () { return 'edit'; },
-      reload: function () {}, refresh: function () {}, destroy: function () {}
+      reload: function () {}, refresh: function () {}, bakeHash: function () { return null; }, destroy: function () {}
     };
   }
 
@@ -253,21 +267,27 @@
       // 씬 입력 활성.
       scene.input.mouse && scene.input.mouse.disableContextMenu && scene.input.mouse.disableContextMenu();
 
-      gridGfx = scene.add.graphics().setDepth(-1000);
+      // 에디터 크롬 그래픽(그리드·마키·기즈모)은 chrome=true 일 때만 생성. wallGfx 는
+      // 정적 충돌 벽 시각화로 게임 런타임에서도 보이는 게 자연스러워 항상 생성.
+      if (state.chrome) {
+        gridGfx = scene.add.graphics().setDepth(-1000);
+        marqueeGfx = scene.add.graphics().setDepth(9000);
+        gizmoGfx = scene.add.graphics().setDepth(10000);
+      }
       wallGfx = scene.add.graphics().setDepth(-500);
-      marqueeGfx = scene.add.graphics().setDepth(9000);
-      gizmoGfx = scene.add.graphics().setDepth(10000);
 
       loadWorld(state.sceneDoc, state.mode);
-      drawGrid();
+      if (state.chrome) drawGrid();
       drawWalls();
       buildAllEntities();
       refreshGizmo();
 
-      // 빈 영역 클릭 = 마키 시작 / 선택 해제.
-      scene.input.on('pointerdown', onPointerDown);
-      scene.input.on('pointermove', onPointerMove);
-      scene.input.on('pointerup', onPointerUp);
+      // 빈 영역 클릭 = 마키 시작 / 선택 해제. chrome=false(게임/export)면 입력 픽킹 미장착.
+      if (state.chrome) {
+        scene.input.on('pointerdown', onPointerDown);
+        scene.input.on('pointermove', onPointerMove);
+        scene.input.on('pointerup', onPointerUp);
+      }
 
       // GAME_INPUT 키보드 브리지(play 프리뷰 대비). edit 에선 step 안 하므로 무영향.
       installInputBridge();
@@ -280,9 +300,15 @@
     };
 
     // ── world 로드 ──────────────────────────────────────────────────────────────
+    // seed/rng 를 SceneKit.load 에 전달 → ?seed=N QA 가능성 계약 완전 배선.
+    // applyModeChange(play 진입)도 이 함수를 거치므로 play world 도 동일 시드 사용.
+    // ※ bakedTextures 는 reloadScene 에서만 리셋(applyModeChange 는 의도적으로 유지).
     function loadWorld(doc, mode) {
       state.sceneDoc = doc;
-      state.world = SceneKit.load(doc, { mode: mode });
+      var loadOpts = { mode: mode };
+      if (state.seed !== undefined) loadOpts.seed = state.seed;
+      if (state.rng) loadOpts.rng = state.rng;
+      state.world = SceneKit.load(doc, loadOpts);
     }
 
     // ── 좌표 변환 — 코어 좌표(씬 px)는 그대로 화면 px 로 매핑(1:1, 원점 좌상단) ──
@@ -293,6 +319,7 @@
 
     // ── 그리드 배경 ─────────────────────────────────────────────────────────────
     function drawGrid() {
+      if (!gridGfx) return;                 // chrome=false(게임/export) — 그리드 없음
       gridGfx.clear();
       var g = Math.max(2, state.gridSize | 0);
       gridGfx.lineStyle(1, 0x2a3242, 0.6);
@@ -434,7 +461,8 @@
         go = makeMarker(ent);
       }
       go.setData('entityId', ent.id);
-      go.setInteractive({ useHandCursor: true });   // 드래그는 직접 포인터 이벤트로 처리.
+      // 입력 픽킹은 에디터 크롬 전용(드래그/선택). chrome=false(게임/export)면 생략.
+      if (state.chrome) go.setInteractive({ useHandCursor: true });
       spriteByEntity[ent.id] = go;
       syncEntityTransform(ent);
     }
@@ -541,6 +569,7 @@
     // 선택 중심에 기즈모 핸들 그림. move=십자 화살표, rotate=원, scale=각진 핸들.
     api.refreshGizmo = function () { refreshGizmo(); };
     function refreshGizmo() {
+      if (!gizmoGfx) return;                // chrome=false(게임/export) — 기즈모 없음
       gizmoGfx.clear();
       if (state.mode === 'play') return;
       if (state.selection.length === 0) return;
@@ -675,7 +704,7 @@
       }
       refreshOutlines();
       // 기즈모는 이동 중에는 중심 따라가게(move 만).
-      if (drag.kind === 'gizmo-move') {
+      if (drag.kind === 'gizmo-move' && gizmoGfx) {   // chrome=false 방어: gizmoGfx null 가드
         gizmoGfx.clear();
         var c = { x: toScreenX(drag.center.x + dx), y: toScreenY(drag.center.y + dy) };
         gizmoGfx.lineStyle(2, 0x4fd0ff, 0.6);
@@ -690,7 +719,7 @@
         // 드롭 좌표로 박스 끝점 갱신(pointermove 누락/단발 드래그 견고성).
         drag.x1 = pointer.x; drag.y1 = pointer.y;
         commitMarquee();
-        marqueeGfx.clear();
+        if (marqueeGfx) marqueeGfx.clear();            // chrome=false 방어: marqueeGfx null 가드
         drag = null;
         return;
       }
@@ -730,6 +759,7 @@
     }
 
     function drawMarquee() {
+      if (!marqueeGfx) return;                         // chrome=false 방어: marqueeGfx null 가드
       marqueeGfx.clear();
       var x = Math.min(drag.x0, drag.x1), y = Math.min(drag.y0, drag.y1);
       var w = Math.abs(drag.x1 - drag.x0), h = Math.abs(drag.y1 - drag.y0);
@@ -870,6 +900,53 @@
         GI.left = !!(map.left.isDown || map.leftArrow.isDown) && state.mode === 'play';
         GI.right = !!(map.right.isDown || map.rightArrow.isDown) && state.mode === 'play';
       });
+    }
+
+    // ── bakeHash — 베이크 자산 텍스처 픽셀 해시(계약 H′ 검증) ────────────────────
+    // 현재 엔티티들이 참조하는 자산 id 를 정렬 순으로 모아, 각 텍스처의 픽셀 데이터를
+    // Phaser textures.getPixel 로 결정적으로 읽어 FNV-1a 로 접는다. 같은 자산 def·
+    // pixelArt 입력이면 edit·play·export 모두 동일 비트맵 → 동일 해시(외형 동형 H′).
+    api.bakeHash = function () {
+      var ids = {};
+      var ents = (state.world && state.world.entities) || [];
+      for (var i = 0; i < ents.length; i++) {
+        var sc = SceneKit.getComponentOn(ents[i], 'Sprite') || SceneKit.getComponentOn(ents[i], 'AnimatedSprite');
+        if (sc && sc.sprite != null) ids[String(sc.sprite)] = true;
+      }
+      var sorted = Object.keys(ids).sort();
+      var h = 2166136261 >>> 0;
+      h = fnvStr(h, '|count:' + sorted.length);
+      for (var s = 0; s < sorted.length; s++) {
+        var texKey = bakedTextures[sorted[s]];
+        h = fnvStr(h, '|id:' + sorted[s] + ':tex:' + (texKey || '~'));
+        if (texKey && scene.textures.exists(texKey)) {
+          h = hashTexturePixels(texKey, h);
+        }
+      }
+      return ('00000000' + (h >>> 0).toString(16)).slice(-8);
+    };
+
+    // 텍스처 픽셀(RGBA) 을 좌→우·상→하 순으로 FNV-1a 누적. 소스 캔버스/이미지 크기 사용.
+    function hashTexturePixels(texKey, h) {
+      var tex = scene.textures.get(texKey);
+      var src = tex && tex.getSourceImage ? tex.getSourceImage() : null;
+      var w = (src && src.width) || 0, hh = (src && src.height) || 0;
+      h = fnvStr(h, ':wh:' + w + 'x' + hh);
+      for (var y = 0; y < hh; y++) {
+        for (var x = 0; x < w; x++) {
+          var c = null;
+          try { c = scene.textures.getPixel(x, y, texKey); } catch (e) { c = null; }
+          if (c) h = fnvStr(h, c.r + ',' + c.g + ',' + c.b + ',' + (c.a == null ? 255 : c.a) + ';');
+          else h = fnvStr(h, 'null;');
+        }
+      }
+      return h;
+    }
+
+    function fnvStr(h, s) {
+      s = String(s);
+      for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+      return h >>> 0;
     }
 
     return api;
