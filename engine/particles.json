@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "meta": {
+    "engine": "juicekit",
+    "originalityNote": "전 프리셋 절차 파티클 파라미터 오리지널 — 어떤 게임/IP의 이펙트 에셋도 인용하지 않음(burst opts 수치만). 100% CC0.",
+    "schemaNote": "각 프리셋은 JuiceKit.burst(x,y,opts) 의 opts 형태. color 는 '#rrggbb' hex 문자열 또는 0xRRGGBB 정수. speed/life/size 는 [min,max] 배열 또는 단일 수. angle(rad)·spread(rad) 선택."
+  },
+  "presets": {
+    "coin-spark": {
+      "desc": "코인 획득 파편 — 위로 톡 튀는 금빛 스파크",
+      "count": 14,
+      "speed": [60, 160],
+      "spread": 1.2,
+      "angle": -1.5707963267948966,
+      "life": [0.3, 0.55],
+      "color": "#ffe23f",
+      "gravity": 420,
+      "size": [2, 4]
+    },
+    "explosion": {
+      "desc": "폭발 — 전방위 강한 분출, 큰 입자, 빠른 소멸",
+      "count": 28,
+      "speed": [120, 320],
+      "spread": 6.283185307179586,
+      "life": [0.25, 0.6],
+      "color": "#ff7a2f",
+      "gravity": 120,
+      "size": [3, 7]
+    },
+    "dust": {
+      "desc": "착지/이동 먼지 — 낮게 옆으로 퍼지는 흙빛, 느린 소멸",
+      "count": 8,
+      "speed": [20, 70],
+      "spread": 2.0943951023931953,
+      "angle": -1.5707963267948966,
+      "life": [0.4, 0.8],
+      "color": "#b8966a",
+      "gravity": 60,
+      "size": [2, 5]
+    },
+    "sparkle": {
+      "desc": "반짝임 — 제자리에서 천천히 떠다니는 작은 별빛, 중력 거의 없음",
+      "count": 10,
+      "speed": [10, 50],
+      "spread": 6.283185307179586,
+      "life": [0.5, 1.1],
+      "color": "#a8e8ff",
+      "gravity": 0,
+      "size": [1, 3]
+    }
+  }
+}
