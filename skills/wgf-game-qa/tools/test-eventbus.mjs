@@ -12,6 +12,9 @@
 //   8) 미등록 이벤트 emit — no-op(0 반환, throw 없음)
 //   9) 에러 격리 — 한 핸들러 throw 가 나머지 디스패치를 막지 않음 / rethrow=true 면 재던짐
 //  10) 씬↔HUD 디커플 시나리오 — 씬은 HUD 참조 없이 emit, HUD 는 on 으로 상태 갱신
+//  [A] once + 동일fn on() 공존 — once 발화 후 영속 on() 핸들러 보존(once 가 on 을 지우지 않음)
+//  [C] emit 재진입 가드 — 핸들러 안에서 같은 이벤트 emit 시 큐 직렬화(영속 핸들러 1회만)
+//  [G] 프로토타입 이벤트명 — constructor/hasOwnProperty/__proto__ 를 이벤트명으로 on/emit 정상
 //
 // 사용: node skills/wgf-game-qa/tools/test-eventbus.mjs
 // 출력 계약: 사람용 라인 + 마지막 줄 단일 JSON {"ok":bool,"pass":n,"fail":n,"checks":[...]}
@@ -211,6 +214,106 @@ function ok(name, cond, detail) {
 
   // 디커플 증명: 씬 객체는 hud 를 키로도 참조하지 않는다.
   ok('scene holds NO reference to hud (decoupled)', !('hud' in scene) && Object.values(scene).every(v => v !== hud))
+}
+
+// ── [A] once + 동일fn on() 공존 — once 발화가 영속 on() 엔트리를 지우지 않음 ──
+{
+  // 버그 재현 케이스: 이전 구현은 once 발화 시 off(event, fn) 을 써서
+  // 동일 fn 의 *모든* 등록(once + 영속 on 포함)을 제거했다.
+  // 수정 후: _removeEntry(event, entry) 로 그 레코드 객체 1개만 제거하므로
+  // 영속 on() 엔트리는 살아남는다.
+  //
+  // 카운터 설계:
+  //   onceCount  — once 전용 fn 이 발화된 횟수
+  //   persistCount — on() 전용 fn 이 발화된 횟수
+  //   둘이 sharedFn 을 공유하면 두 엔트리가 모두 호출되므로 별도 fn 으로 분리.
+  const bus = new EventBus()
+  let onceCount = 0, persistCount = 0
+  const onceFn   = () => onceCount++     // once 전용
+  const persistFn = () => persistCount++ // on() 전용(동일 함수 객체가 아님)
+
+  // 동일 fn 이 아닌 별도 fn — 핵심은 "once 발화가 fn 식별이 아닌 엔트리 식별로 제거"
+  // 이 테스트는 fn 이 다르지만, 아래에서 sharedFn 을 쓰는 케이스도 추가한다.
+  bus.once('e', onceFn)
+  bus.on('e', persistFn)
+
+  // 첫 emit: once(onceFn) 발화 1회 + on(persistFn) 발화 1회
+  bus.emit('e')
+  ok('[A] once fn fires on first emit', onceCount === 1, `onceCount=${onceCount}`)
+  ok('[A] persistent fn fires on first emit', persistCount === 1, `persistCount=${persistCount}`)
+  ok('[A] once removed, persistent on() survives (listenerCount===1)', bus.listenerCount('e') === 1,
+    `listenerCount=${bus.listenerCount('e')}`)
+
+  // 두 번째 emit: 영속 on() 만 남아 있으므로 once fn 0회, persist fn +1
+  const onceCountBefore = onceCount
+  bus.emit('e')
+  ok('[A] once fn does NOT fire on second emit', onceCount === onceCountBefore,
+    `onceCount went ${onceCountBefore}→${onceCount}`)
+  ok('[A] persistent fn fires on second emit', persistCount === 2, `persistCount=${persistCount}`)
+
+  // 핵심 케이스: 동일 fn 을 once + on 으로 등록 — once 발화가 on() 엔트리를 건드리지 않음
+  const bus2 = new EventBus()
+  let sharedCalls = 0
+  const sharedFn = () => sharedCalls++
+  bus2.once('x', sharedFn)  // 엔트리 A (once)
+  bus2.on('x', sharedFn)    // 엔트리 B (on, 영속)
+
+  // 첫 emit: 엔트리 A(once) + 엔트리 B(on) 모두 발화 → 2회
+  bus2.emit('x')
+  ok('[A] shared fn: both once and on() fire on first emit', sharedCalls === 2,
+    `sharedCalls=${sharedCalls}`)
+  // once 엔트리(A)만 제거됐으므로 on() 엔트리(B)가 남아 있어야 함
+  ok('[A] shared fn: once entry removed, on() entry survives (listenerCount===1)',
+    bus2.listenerCount('x') === 1, `listenerCount=${bus2.listenerCount('x')}`)
+
+  // 두 번째 emit: 엔트리 B(on) 만 남아 +1
+  bus2.emit('x')
+  ok('[A] shared fn: on() entry fires on second emit', sharedCalls === 3,
+    `sharedCalls=${sharedCalls}`)
+}
+
+// ── [C] emit 재진입 가드 — 핸들러 안에서 같은 이벤트 emit → 큐 직렬화 ──
+{
+  // 핸들러가 같은 이벤트를 재-emit 해도 영속 핸들러가 1회씩만 발화하고
+  // 전체 순서가 결정적(큐 적재 → flush)임을 검증.
+  const bus = new EventBus()
+  const log = []
+
+  // h1: 첫 번째 핸들러. 안에서 'e' 를 재-emit — 가드 없으면 즉시 재진입해 h1·h2 가 중복 발화.
+  bus.on('e', (depth) => {
+    log.push('h1:' + depth)
+    if (depth === 0) bus.emit('e', 1)   // 재진입 emit — 큐에 적재돼야 함
+  })
+  bus.on('e', (depth) => {
+    log.push('h2:' + depth)
+  })
+
+  bus.emit('e', 0)
+  // 기대 순서(가드 적용): h1:0 → h2:0 (depth=0 루프 완료) → h1:1 → h2:1 (flush)
+  ok('[C] reentrant emit is queued (no interleaving)', log.join(',') === 'h1:0,h2:0,h1:1,h2:1',
+    `log=${log.join(',')}`)
+  ok('[C] each handler fires exactly once per emit call', log.filter(s => s.startsWith('h1')).length === 2)
+}
+
+// ── [G] 프로토타입 이벤트명 — constructor/hasOwnProperty/__proto__ 정상 동작 ──
+{
+  // Object.prototype 에 존재하는 키를 이벤트명으로 써도 크래시·비결정 없이 동작해야 한다.
+  // 이전 구현은 _handlers = {} 이므로 이런 키 접근 시 Object.prototype 프로퍼티와
+  // 충돌해 예기치 않은 동작(또는 크래시)이 발생할 수 있었다.
+  const protoKeys = ['constructor', 'hasOwnProperty', '__proto__', 'toString', 'valueOf', 'isPrototypeOf']
+  for (const key of protoKeys) {
+    const bus = new EventBus()
+    let fired = 0
+    let threw = false
+    try {
+      bus.on(key, () => fired++)
+      bus.emit(key)
+    } catch (e) {
+      threw = true
+    }
+    ok(`[G] prototype key "${key}" on/emit safe (no throw, fires once)`,
+      !threw && fired === 1, `threw=${threw} fired=${fired}`)
+  }
 }
 
 console.log(`— pass ${pass} · fail ${fail}`)
