@@ -5,13 +5,82 @@
  *  - scaleConfig(): Phaser.Scale.FIT + CENTER_BOTH 고정 16:9 디자인 해상도
  *  - installDomGuards(): iOS WKWebView 가 user-scalable=no 를 무시하는 것 대비
  *    (gesturestart / 멀티터치 / 더블탭 줌 / 러버밴드 스크롤 preventDefault)
+ *  - installSafeAreaVars(): env(safe-area-inset-*) 를 CSS 변수로 노출
+ *    viewport-fit=cover 가 있어야 실제 inset 값이 들어옴(index.html 에서 설정).
  *  - TouchControls: 멀티터치 가상 D-패드 + 점프 버튼 (별도 최상단 Scene)
+ *    safe-area-inset 을 반영해 노치·다이내믹아일랜드·가로모드 dead zone 회피.
  *  - 오디오 언락: 'Tap to start' 제스처에서 ChipAudio.unlock() 호출 (게임 코드에서 연결)
  * ==========================================================================*/
 (function (global) {
   'use strict';
 
+  // -------------------------------------------------------------------------
+  // 순수 계산 함수 — Phaser/DOM 없이 호출 가능(헤드리스 테스트 지원)
+  // -------------------------------------------------------------------------
+
+  /**
+   * computeSafeAreaLayout
+   * TouchControls 버튼 좌표를 safe-area-inset 만큼 오프셋해 반환한다.
+   *
+   * @param {Array<{id:string, x:number, y:number, r:number, label:string}>} buttons
+   *   원본 버튼 배열 (수정하지 않음)
+   * @param {{top:number, right:number, bottom:number, left:number}} inset
+   *   각 방향의 safe-area-inset (픽셀, 숫자)
+   * @param {number} designW  디자인 너비
+   * @param {number} designH  디자인 높이
+   * @returns {Array<{id:string, x:number, y:number, r:number, label:string}>}
+   *   오프셋이 적용된 새 버튼 배열
+   */
+  function computeSafeAreaLayout(buttons, inset, designW, designH) {
+    inset = inset || {};
+    var safeL = inset.left   || 0;
+    var safeR = inset.right  || 0;
+    var safeB = inset.bottom || 0;
+    var safeT = inset.top    || 0;
+
+    return buttons.map(function (b) {
+      var nx = b.x;
+      var ny = b.y;
+      // 좌측 버튼: x 가 중앙 절반 미만 → left-inset 만큼 우측으로
+      if (b.x < designW / 2) {
+        nx = b.x + safeL;
+      } else {
+        // 우측 버튼(jump 포함): right-inset 만큼 좌측으로
+        nx = b.x - safeR;
+      }
+      // 하단 버튼: y 가 중앙 절반 초과 → bottom-inset 만큼 위로
+      if (b.y > designH / 2) {
+        ny = b.y - safeB;
+      } else {
+        // 상단 요소: top-inset 만큼 아래로
+        ny = b.y + safeT;
+      }
+      return { id: b.id, x: nx, y: ny, r: b.r, label: b.label };
+    });
+  }
+
+  /**
+   * computeMutePosition
+   * 음소거 버튼(우상단 고정) 좌표를 safe-area-inset 만큼 오프셋해 반환한다.
+   *
+   * @param {number} baseX  원본 x (우상단 기준, origin(1,0) 사용)
+   * @param {number} baseY  원본 y
+   * @param {{top:number, right:number, bottom:number, left:number}} inset
+   * @returns {{x:number, y:number}}
+   */
+  function computeMutePosition(baseX, baseY, inset) {
+    inset = inset || {};
+    return {
+      x: baseX - (inset.right || 0),
+      y: baseY + (inset.top   || 0)
+    };
+  }
+
   var MobileHarness = {};
+
+  // 순수 계산 함수를 MobileHarness 네임스페이스에도 노출 (브라우저 환경 접근 편의)
+  MobileHarness.computeSafeAreaLayout = computeSafeAreaLayout;
+  MobileHarness.computeMutePosition   = computeMutePosition;
 
   // Phaser scale config (게임 config.scale 에 펼쳐 넣기)
   MobileHarness.scaleConfig = function (width, height) {
@@ -71,14 +140,97 @@
         if (global.GAME_AUDIO && global.GAME_AUDIO.suspend) global.GAME_AUDIO.suspend();
       });
     }
+    // safe-area CSS 변수 자동 주입 — installDomGuards() 를 호출하는 모든 게임이 자동으로 혜택.
+    // 멱등 가드가 있으므로 중복 호출 안전.
+    MobileHarness.installSafeAreaVars();
   };
   MobileHarness.onResume = function (fn) { MobileHarness._onResume = fn; };
-  MobileHarness.onHide = function (fn) { MobileHarness._onHide = fn; };
+  MobileHarness.onHide   = function (fn) { MobileHarness._onHide   = fn; };
+
+  // -------------------------------------------------------------------------
+  // safe-area-inset 지원
+  // -------------------------------------------------------------------------
+
+  /**
+   * installSafeAreaVars
+   * env(safe-area-inset-top/right/bottom/left) 를 CSS 변수(--sai-*) 로 :root 에 주입한다.
+   *
+   * ⚠ viewport-fit=cover 가 viewport meta 에 있어야 실제 inset 값이 노출된다.
+   *   index.html 에 아래 meta 가 포함돼 있는지 확인:
+   *   <meta name="viewport" content="..., viewport-fit=cover">
+   *   (games/super-runner/index.html 등 기존 파일에 이미 viewport-fit=cover 가 포함됨)
+   *
+   * 브라우저 미지원 시 0px 로 폴백(회귀 없음).
+   */
+  MobileHarness.installSafeAreaVars = function () {
+    var doc = global.document;
+    if (!doc || !doc.head) return;
+    // 이미 주입됐으면 중복 실행 방지
+    if (doc.getElementById('__mh-sai-style')) return;
+    var style = doc.createElement('style');
+    style.id = '__mh-sai-style';
+    style.textContent = [
+      ':root {',
+      '  --sai-top:    env(safe-area-inset-top,    0px);',
+      '  --sai-right:  env(safe-area-inset-right,  0px);',
+      '  --sai-bottom: env(safe-area-inset-bottom, 0px);',
+      '  --sai-left:   env(safe-area-inset-left,   0px);',
+      '}'
+    ].join('\n');
+    doc.head.appendChild(style);
+  };
+
+  /**
+   * readSafeAreaInset
+   * probe 요소(숨김 div) 에 env(safe-area-inset-*) 를 padding 으로 적용해
+   * getComputedStyle().paddingTop 등 *실제 프로퍼티* 값을 읽어 픽셀 숫자로 반환한다.
+   *
+   * 배경: CSS custom property 에 env() 를 선언해도 unregistered property 는
+   * computed value 가 미치환 리터럴 문자열로 남아 parseFloat=NaN→0 이 된다.
+   * 실제 적용 프로퍼티(padding*)는 env() 가 완전히 치환돼 px 수치가 나온다.
+   *
+   * ⚠ env() 실측값은 브라우저에서만 유효하며 헤드리스(Node/JSDOM)에서는 항상 0.
+   *   이 함수의 parseFloat 파싱 로직은 test-safe-area.mjs 에서 별도 검증.
+   *
+   * DOM 이 없는 환경(헤드리스)에서는 모두 0 인 객체를 반환한다.
+   *
+   * @returns {{top:number, right:number, bottom:number, left:number}}
+   */
+  MobileHarness.readSafeAreaInset = function () {
+    var zero = { top: 0, right: 0, bottom: 0, left: 0 };
+    var doc = global.document;
+    if (!doc || !doc.body) return zero;
+    // probe 요소 생성 — padding 에 env() 를 직접 적용해 computed px 읽기
+    var el = doc.createElement('div');
+    el.style.cssText = [
+      'position:fixed',
+      'visibility:hidden',
+      'pointer-events:none',
+      'padding-top:env(safe-area-inset-top,0px)',
+      'padding-right:env(safe-area-inset-right,0px)',
+      'padding-bottom:env(safe-area-inset-bottom,0px)',
+      'padding-left:env(safe-area-inset-left,0px)'
+    ].join(';');
+    doc.body.appendChild(el);
+    var cs = global.getComputedStyle ? global.getComputedStyle(el) : null;
+    var result = zero;
+    if (cs) {
+      result = {
+        top:    parseFloat(cs.paddingTop)    || 0,
+        right:  parseFloat(cs.paddingRight)  || 0,
+        bottom: parseFloat(cs.paddingBottom) || 0,
+        left:   parseFloat(cs.paddingLeft)   || 0
+      };
+    }
+    doc.body.removeChild(el);
+    return result;
+  };
 
   // ===========================================================================
   // TouchControls — 멀티터치 가상 컨트롤 (항상 최상단 Scene)
   //  - 매 프레임 활성 포인터 위치로 버튼 상태를 재계산(슬라이드/멀티터치에 견고).
   //  - 공유 입력 상태 객체(inputState)에 left/right/jump 를 기록한다.
+  //  - create() 시 safe-area-inset 을 읽어 버튼·음소거 좌표를 오프셋한다.
   // ===========================================================================
   function makeTouchScene(designW, designH, inputState) {
     return new Phaser.Class({
@@ -92,11 +244,17 @@
         var H = designH, W = designW;
         var pad = 18;
         var r = 34;
-        this.buttons = [
-          { id: 'left',  x: pad + r + 6,           y: H - pad - r,      r: r, label: '◀' },
-          { id: 'right', x: pad + r * 3 + 16,       y: H - pad - r,      r: r, label: '▶' },
-          { id: 'jump',  x: W - pad - r,            y: H - pad - r,      r: r + 6, label: 'A' }
+
+        // 원본 버튼 좌표 정의
+        var baseButtons = [
+          { id: 'left',  x: pad + r + 6,         y: H - pad - r,      r: r,     label: '◀' },
+          { id: 'right', x: pad + r * 3 + 16,     y: H - pad - r,      r: r,     label: '▶' },
+          { id: 'jump',  x: W - pad - r,          y: H - pad - r,      r: r + 6, label: 'A' }
         ];
+
+        // safe-area-inset 읽기 → 순수 함수로 오프셋 계산
+        var inset = MobileHarness.readSafeAreaInset();
+        this.buttons = computeSafeAreaLayout(baseButtons, inset, W, H);
 
         var g = this.add.graphics();
         g.setScrollFactor(0);
@@ -115,9 +273,10 @@
         this._show = show;
         if (!show) g.setAlpha(0);
 
-        // 음소거 토글 버튼 (우상단)
+        // 음소거 토글 버튼 (우상단) — safe-area-inset 적용
         if (global.GAME_AUDIO) {
-          var mute = this.add.text(W - 14, 12, '♪', {
+          var mutePos = computeMutePosition(W - 14, 12, inset);
+          var mute = this.add.text(mutePos.x, mutePos.y, '♪', {
             fontFamily: 'monospace', fontSize: '20px', color: '#ffffff'
           }).setOrigin(1, 0).setScrollFactor(0).setInteractive({ useHandCursor: true });
           mute.on('pointerdown', function () {

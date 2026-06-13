@@ -16,7 +16,7 @@
 | `audio.js` | **ChipAudio** — Web Audio API만으로 8비트 효과음 + 오리지널 BGM 합성. 파일 0. `unlock()`을 첫 제스처에서 호출(모바일 오디오 언락) |
 | `soundforge.js` | **SoundForge** (선택) — Tone.js 래퍼. ADSR·필터·슈퍼소우·FM·노이즈 퍼커션·절차 리버브·적응형 레이어드 BGM. ChipAudio와 동일 인터페이스(`unlock/startBgm/sfx`) → `sound-architect` |
 | `tone.js` | **vendored Tone.js v15** (MIT). SoundForge 합성 토대. 직접 수정 금지 |
-| `mobile.js` | **MobileHarness** — `scaleConfig()`(FIT+CENTER), `installDomGuards()`(iOS 줌/스크롤 차단), `TouchControls`(멀티터치 D-패드+점프 버튼 Scene) |
+| `mobile.js` | **MobileHarness** — `scaleConfig()`(FIT+CENTER), `installDomGuards()`(iOS 줌/스크롤 차단 + safe-area CSS 변수 자동 주입), `installSafeAreaVars()`(env(safe-area-inset-*) → `--sai-*` CSS 변수, viewport-fit=cover 필요), `TouchControls`(멀티터치 D-패드+점프 버튼 Scene, safe-area-inset 오프셋 적용) |
 | `tiled.js` | **TiledForge** — Tiled `.tmj` 로더/베이커. `bakeTileset()`이 절차 타일셋 아틀라스를 굽고, `loadTiledMap()`이 충돌·오브젝트 스포너·iso/hex·GPU 레이어·라이선스 게이트를 처리 |
 | `rngforge.js` | **RngForge** — 시드 결정론 난수 인프라. `create(seed)`가 mulberry32 난수기(callable, `Math.random()` 드롭인)를 만들고 `int/pick/shuffle/weighted`·멀티스트림(`stream(name)`)·직렬화(`state()/setState()`)를 제공. 게임 내 모든 무작위는 이걸로만 — 헤드리스 결정 검증의 "나머지 절반". Node require 가능. 검증: `wgf-game-qa/tools/lint-rng.mjs` → `game-qa` |
 | `eventbus.js` | **EventBus** — 씬↔HUD 디커플링용 결정론 이벤트 버스. `new EventBus()`가 `on/once/off/emit/clear` 발행-구독을 제공. 씬이 `emit('score', v)` 로 사실만 알리고 HUD(UIScene)가 `on('score', ...)` 로 구독 → 씬이 HUD 를 직접 참조하지 않는다. **등록순 동기 디스패치 + emit 스냅샷 격리**(디스패치 중 on/off 가 현재 루프 비오염)로 헤드리스 재현성 보장. 시각함수·무작위 0. Node require 가능. 검증: `wgf-game-qa/tools/test-eventbus.mjs` → `game-ui-hud` |
