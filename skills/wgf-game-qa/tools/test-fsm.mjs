@@ -181,21 +181,24 @@ const DT = 1 / 60 // 표준 프레임 델타(초)
   ok('startAbility ignored while busy', fsm3.startAbility() === false)
 }
 
-// ── 7) 0-지속 페이즈 스킵 ────────────────────────────────────────────────────
+// ── 7) 0-지속 페이즈 즉시통과 ────────────────────────────────────────────────
 {
-  // cast:0 → active 부터 시작(선딜 없는 즉발 발동)
+  // cast:0 → cast enter 발화 후 즉시 active 로 carry. startAbility() 반환 시 이미 active.
+  // reviewer [HIGH] #2: "지속 0도 '건너뜀'이 아니라 '즉시 통과' — enter 1회 발화"
   const seqA = []
   const noCast = FSM.forAbility({ cast: 0, active: 0.1, recovery: 0.1 }, { onPhase: p => seqA.push(p) })
   noCast.startAbility()
-  ok('cast:0 starts directly in active', noCast.phase() === 'active')
+  ok('cast:0 starts directly in active after startAbility', noCast.phase() === 'active')
   for (let i = 0; i < 30; i++) noCast.update(DT)
-  ok('cast:0 phase order skips cast', seqA.join('>') === 'idle>active>recovery>idle', `seq=${seqA.join('>')}`)
+  // cast enter 는 즉시통과로 발화됨 — seq 에 cast 포함
+  ok('cast:0 phase order: cast enter fires then immediately advances', seqA.join('>') === 'idle>cast>active>recovery>idle', `seq=${seqA.join('>')}`)
 
-  // 전부 0(완전 즉발) → 한두 프레임 안에 idle 복귀
-  const instant = FSM.forAbility({ cast: 0, active: 0, recovery: 0 })
+  // 전부 0(완전 즉발) → startAbility() 안에서 carry 가 모든 페이즈 enter 를 즉시 발화 + idle 복귀
+  const seqB = []
+  const instant = FSM.forAbility({ cast: 0, active: 0, recovery: 0 }, { onPhase: p => seqB.push(p) })
   instant.startAbility()
-  instant.update(DT)
-  ok('all-zero ability returns to idle quickly', instant.phase() === 'idle' && !instant.isBusy())
+  ok('all-zero ability: immediately back to idle after startAbility', instant.phase() === 'idle' && !instant.isBusy())
+  ok('all-zero: all phase enters fired (cast+active+recovery+idle)', seqB.join('>') === 'idle>cast>active>recovery>idle', `seq=${seqB.join('>')}`)
 }
 
 // ── 8) 캔슬 ──────────────────────────────────────────────────────────────────
@@ -242,6 +245,85 @@ const DT = 1 / 60 // 표준 프레임 델타(초)
   ph.startAbility()
   ph.update(NaN); ph.update(Infinity)
   ok('phase machine: NaN/Infinity does not advance phase', ph.phase() === 'cast', `phase=${ph.phase()}`)
+}
+
+// ── 10) 청킹 동치 — 동일 총시간·상이 청킹 → 동일 최종 phase 궤적 ──────────────
+// reviewer [CRITICAL] #1 + [MEDIUM] #5 핵심 검증:
+// 30×(1/60)≈0.5s 와 1×0.5s 가 같은 궤적을 만들어야 한다.
+{
+  const ability = { cast: 0.1, active: 0.12, recovery: 0.18 } // 합 0.40s
+
+  // 청킹 A: 60fps (30프레임 = 0.5s)
+  const seqA = []
+  const fsmA = FSM.forAbility(ability, { onPhase: p => seqA.push(p) })
+  fsmA.startAbility()
+  for (let i = 0; i < 30; i++) fsmA.update(1 / 60)
+
+  // 청킹 B: 큰 dt 한 방 (0.5s 한 번)
+  const seqB = []
+  const fsmB = FSM.forAbility(ability, { onPhase: p => seqB.push(p) })
+  fsmB.startAbility()
+  fsmB.update(0.5)
+
+  ok('chunking equivalence: 30×(1/60) phase seq === 1×0.5 phase seq',
+    seqA.join('>') === seqB.join('>'),
+    `A=${seqA.join('>')} B=${seqB.join('>')}`)
+  ok('chunking equivalence: final phase same (idle)', fsmA.phase() === 'idle' && fsmB.phase() === 'idle')
+  ok('chunking equivalence: full sequence cast→active→recovery→idle in both',
+    seqA.join('>') === 'idle>cast>active>recovery>idle', `A=${seqA.join('>')}`)
+
+  // 추가: 매우 작은 dt(600프레임분 = 10ms 단위) vs 1×1.0 큰 dt
+  const seqC = []
+  const fsmC = FSM.forAbility(ability, { onPhase: p => seqC.push(p) })
+  fsmC.startAbility()
+  for (let i = 0; i < 100; i++) fsmC.update(0.01)  // 100×0.01 = 1.0s
+
+  const seqD = []
+  const fsmD = FSM.forAbility(ability, { onPhase: p => seqD.push(p) })
+  fsmD.startAbility()
+  fsmD.update(1.0)
+
+  ok('chunking equivalence: 100×0.01 phase seq === 1×1.0 phase seq',
+    seqC.join('>') === seqD.join('>'),
+    `C=${seqC.join('>')} D=${seqD.join('>')}`)
+}
+
+// ── 11) 즉발 onCast/onActive/onRecovery 개별 1회 발화 ─────────────────────────
+// reviewer [HIGH] #2: 지속 0 도 "즉시 통과" — enter 1회 발화.
+// startAbility() 단 한 번 호출(update 없음)으로 모든 콜백이 발화돼야 한다.
+{
+  let castFired = 0, activeFired = 0, recoveryFired = 0, idleFired = 0
+  const inst = FSM.forAbility(
+    { cast: 0, active: 0, recovery: 0 },
+    {
+      onCast:     () => castFired++,
+      onActive:   () => activeFired++,
+      onRecovery: () => recoveryFired++,
+      onIdle:     () => idleFired++
+    }
+  )
+  // forAbility 생성 시 idle enter 가 1회 발화됨
+  ok('instant: onIdle fires on construction (idle enter)', idleFired === 1, `idleFired=${idleFired}`)
+  inst.startAbility()
+  ok('instant: onCast fires exactly once (dur=0, immediate pass)', castFired === 1, `castFired=${castFired}`)
+  ok('instant: onActive fires exactly once (dur=0)', activeFired === 1, `activeFired=${activeFired}`)
+  ok('instant: onRecovery fires exactly once (dur=0)', recoveryFired === 1, `recoveryFired=${recoveryFired}`)
+  ok('instant: onIdle fires again after full cycle', idleFired === 2, `idleFired=${idleFired}`)
+  ok('instant: phase is idle after startAbility', inst.phase() === 'idle')
+}
+
+// ── 12) 음수 지속 클램프 ─────────────────────────────────────────────────────
+// reviewer [HIGH] #3: ability.cast/active/recovery 가 음수여도 0 으로 클램프.
+{
+  const seqNeg = []
+  const neg = FSM.forAbility(
+    { cast: -0.5, active: -1, recovery: -99 },
+    { onPhase: p => seqNeg.push(p) }
+  )
+  ok('negative durations: durations clamped to 0', neg.durations.cast === 0 && neg.durations.active === 0 && neg.durations.recovery === 0)
+  neg.startAbility()
+  ok('negative durations: all phases pass instantly (idle after startAbility)', neg.phase() === 'idle')
+  ok('negative durations: all enters fired (no silent swallow)', seqNeg.join('>') === 'idle>cast>active>recovery>idle', `seq=${seqNeg.join('>')}`)
 }
 
 console.log(`— pass ${pass} · fail ${fail}`)

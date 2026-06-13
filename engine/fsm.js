@@ -108,6 +108,7 @@
 
   // when(from, to, cond) — from 상태 update 중 cond(ctx) 가 참이면 to 로 자동 전이.
   // from = '*' 이면 모든 상태에서 검사(전역 규칙). 같은 from 에 여러 규칙 가능(등록 순서대로 평가).
+  // 평가 순서: 상태별 규칙(from=현재상태)을 먼저, 전역 '*' 규칙을 그 다음에 평가한다.
   FSM.prototype.when = function (from, to, cond) {
     if (!this.rules[from]) this.rules[from] = [];
     this.rules[from].push({ to: to, cond: isFn(cond) ? cond : function () { return false; } });
@@ -115,6 +116,7 @@
   };
 
   // ── 조회 ──────────────────────────────────────────────────────────────────
+  // current() — 현재 상태명. 미시작(start() 전) 또는 reset() 후에는 null 을 반환한다.
   FSM.prototype.current = function () { return this._cur; };
   FSM.prototype.is = function (name) { return this._cur === name; };
   FSM.prototype.has = function (name) { return !!this.states[name]; };
@@ -199,7 +201,8 @@
   };
 
   // ── 리셋 ────────────────────────────────────────────────────────────────
-  // reset([ctx]) — 미시작 상태로(현재 상태 exit 없이 초기화). 시드 고정 재현·재시작용.
+  // reset() — 미시작 상태로(현재 상태 exit 없이 초기화). 시드 고정 재현·재시작용.
+  // reset() 후 current() 는 null 을 반환한다. 다음 update()/start() 호출 시 initial 상태로 재진입.
   FSM.prototype.reset = function () {
     this._cur = null;
     this._started = false;
@@ -213,9 +216,17 @@
    * ----------------------------------------------------------------------------
    * abilities.json 의 ability.{cast,active,recovery}(초) 를 읽어
    * cast → active → recovery → idle 을 dt 로 자동 진행하는 타임드 FSM 을 만든다.
-   *   - 지속시간 0(또는 미지정)인 페이즈는 건너뛴다(즉발 능력 = 전부 0 → cast 시동 즉시 idle).
+   *
+   * 프레임율 독립 carry 진행:
+   *   페이즈 진행은 forAbility 전용 carry 루프로 굴린다. 한 update(dt) 에서
+   *   초과분(overshoot)을 이월하며 해소 가능한 모든 페이즈 경계를 통과한다 —
+   *   30×(1/60) dt 나 1×0.5 dt 나 최종 궤적이 동일(프레임율 독립·결정론).
+   *   지속시간 0 인 페이즈도 "건너뜀"이 아니라 "즉시 통과(enter 1회 발화)"다.
+   *   결과적으로 cast:0 ability 는 startAbility() 즉시 active enter 가 발화하고,
+   *   전부 0(즉발)이면 cast→active→recovery→idle 의 enter 가 모두 발화된 뒤 idle 로.
+   *
    *   - 각 페이즈 경계에서 onCast/onActive/onRecovery/onIdle 콜백(ctx 전달).
-   *   - startAbility(ctx): 'idle'(또는 미시작)에서만 시동. 이미 진행 중이면 무시(중복 시동 방지).
+   *   - startAbility(ctx): 'idle'에서만 시동. 이미 진행 중이면 무시(중복 시동 방지).
    *   - cancel(ctx): cast 페이즈 중에만 즉시 'idle' 로 복귀(선딜 캔슬). active/recovery 는
    *     커밋된 것으로 보아 캔슬 불가(설계자 의도 — cancelable:true 면 recovery 도 캔슬 허용).
    *   - phase(): 현재 페이즈명('idle'|'cast'|'active'|'recovery').
@@ -231,10 +242,18 @@
   FSM.forAbility = function (ability, opts) {
     ability = ability || {};
     opts = opts || {};
-    var castDur = num(ability.cast, 0);
-    var activeDur = num(ability.active, 0);
-    var recoveryDur = num(ability.recovery, 0);
 
+    // [FIX-HIGH] 음수 지속시간 클램프(JuiceKit dt<0→0 선례) — num 은 음수를 통과시키므로 명시 클램프.
+    var castDur     = Math.max(0, num(ability.cast,     0));
+    var activeDur   = Math.max(0, num(ability.active,   0));
+    var recoveryDur = Math.max(0, num(ability.recovery, 0));
+
+    // 페이즈 순서 테이블 — carry 루프가 이 순서대로 소비한다.
+    var PHASES = ['cast', 'active', 'recovery'];
+    var DURS   = { cast: castDur, active: activeDur, recovery: recoveryDur };
+
+    // 범용 FSM 은 상태 정의·콜백 보관·cancel 용으로만 사용한다.
+    // 페이즈 시간 진행은 아래 _phaseUpdate 가 직접 carry 루프로 굴린다.
     var fsm = new FSM({ initial: 'idle', rng: opts.rng, onTransition: opts.onTransition });
     fsm.ability = ability;
     fsm.durations = { cast: castDur, active: activeDur, recovery: recoveryDur };
@@ -247,47 +266,101 @@
       if (isFn(opts[k])) opts[k](ctx);
     }
 
-    // idle — 대기. 능력 시동은 startAbility() 가 'cast'(또는 첫 비-0 페이즈)로 보낸다.
-    fsm.addState('idle', { enter: function (ctx) { fire('idle', ctx); } });
+    // 상태 정의(콜백 보관 — 시간 진행은 _phaseUpdate 가 담당)
+    fsm.addState('idle',     { enter: function (ctx) { fire('idle',     ctx); } });
+    fsm.addState('cast',     { enter: function (ctx) { fire('cast',     ctx); } });
+    fsm.addState('active',   { enter: function (ctx) { fire('active',   ctx); } });
+    fsm.addState('recovery', { enter: function (ctx) { fire('recovery', ctx); } });
 
-    // cast(선딜) — castDur 초 경과 후 active 로. 0 이면 즉시 active.
-    fsm.addState('cast', {
-      enter: function (ctx) { fire('cast', ctx); },
-      update: function (ctx, dt) { if (fsm._stateTime >= castDur) return _afterCast(); }
-    });
+    // ── carry 루프 — forAbility 전용 update ──────────────────────────────
+    // [FIX-CRITICAL] 한 update(dt) 에서 overshoot 를 이월하며 모든 페이즈 경계를 통과.
+    // 알고리즘:
+    //   remain = dt  (이번 update 에서 아직 소비하지 않은 시간)
+    //   현재 페이즈가 idle 이면 그냥 흡수(idle 은 무한 지속).
+    //   비-idle 페이즈에서:
+    //     페이즈에 남은 시간 = dur - _phaseTime  (dur = 0 이면 즉시 통과)
+    //     remain 이 충분하면(remain >= left): remain -= left → 다음 페이즈로 전이 → 반복.
+    //     remain 이 부족하면: _phaseTime += remain → 종료.
+    //   최대 순회 = PHASES.length + 1(idle 포함) → 무한루프 없음.
+    fsm._phaseTime = 0;   // 현재 페이즈 내 누적 시간(carry 루프 전용)
 
-    // active(발동) — activeDur 초 경과 후 recovery 로. 실제 효과는 보통 여기 enter 에서.
-    fsm.addState('active', {
-      enter: function (ctx) { fire('active', ctx); },
-      update: function (ctx, dt) { if (fsm._stateTime >= activeDur) return _afterActive(); }
-    });
+    function _phaseUpdate(dt, ctx) {
+      if (!Number.isFinite(dt) || dt < 0) dt = 0;  // NaN/Infinity/음수 가드
+      fsm._totalTime += dt;
 
-    // recovery(후딜) — recoveryDur 초 경과 후 idle 로.
-    fsm.addState('recovery', {
-      enter: function (ctx) { fire('recovery', ctx); },
-      update: function (ctx, dt) { if (fsm._stateTime >= recoveryDur) return 'idle'; }
-    });
+      if (fsm._cur === 'idle') return;  // idle 은 시간 소비 없음
 
-    // 0-지속 페이즈 스킵 헬퍼 — 다음 비-0 페이즈명을 반환(update 반환값으로 전이).
-    function _afterCast() { return activeDur > 0 ? 'active' : (recoveryDur > 0 ? 'recovery' : 'idle'); }
-    function _afterActive() { return recoveryDur > 0 ? 'recovery' : 'idle'; }
+      var remain = dt;
+      var safety = PHASES.length + 2;  // 무한루프 안전망
 
-    // startAbility(ctx) — 능력 시동. idle 에서만(중복 방지). 첫 비-0 페이즈로 진입.
-    //   AbilityKit.use() 가 ok 일 때 호출하는 것을 권장(use 는 쿨다운·자원, 이건 페이즈 시간).
+      while (remain >= 0 && fsm._cur !== 'idle' && safety-- > 0) {
+        var dur = DURS[fsm._cur];
+        if (dur === undefined) break;   // 알 수 없는 상태 — 안전 탈출
+
+        var left = dur - fsm._phaseTime;  // 현재 페이즈에 남은 시간(dur=0 이면 left=0)
+        if (remain >= left) {
+          // 이 페이즈 소비 완료 → 다음 페이즈로
+          remain -= left;
+          fsm._phaseTime = 0;
+          var idx = PHASES.indexOf(fsm._cur);
+          var next = idx + 1 < PHASES.length ? PHASES[idx + 1] : 'idle';
+          // _enter 직접 호출 — to() 는 exit 도 호출하지만 페이즈 머신엔 exit 콜백 없음(간단).
+          fsm._exit(ctx);
+          fsm._cur = next;
+          fsm._stateTime = 0;
+          if (fsm._onTransition) fsm._onTransition(PHASES[idx], next, ctx);
+          var st = fsm.states[next];
+          if (st && st.enter) st.enter(ctx);
+          // idle 에 도달하면 종료
+          if (next === 'idle') break;
+        } else {
+          // 이 프레임은 이 페이즈 안에서 끝남
+          fsm._phaseTime += remain;
+          fsm._stateTime += remain;
+          remain = 0;
+          break;
+        }
+      }
+    }
+
+    // startAbility(ctx) — 능력 시동. idle 에서만(중복 방지).
+    //   [FIX-CRITICAL] 즉발(전부 0)도 carry 루프가 처리하므로 첫 페이즈를 'cast' 로 고정해
+    //   항상 carry 루프를 통해 모든 페이즈 enter 가 발화되도록 한다.
+    //   AbilityKit.use() 가 ok 일 때 호출 권장(use=쿨다운·자원, 이건 페이즈 시간).
     fsm.startAbility = function (ctx) {
       if (!this._started) this.start(ctx);
       if (this._cur !== 'idle') return false;   // 진행 중이면 무시
-      var first = castDur > 0 ? 'cast' : (activeDur > 0 ? 'active' : (recoveryDur > 0 ? 'recovery' : 'idle'));
-      // 전부 0(즉발)이면 cast→active→recovery 를 한 프레임에 흘려 idle 재진입
-      if (first === 'idle') { this.to('cast', ctx); }  // cast enter→다음 update 에서 즉시 idle 로
-      else this.to(first, ctx);
+      // 'idle' exit + 'cast' enter
+      this._exit(ctx);
+      this._cur = 'cast';
+      this._stateTime = 0;
+      this._phaseTime = 0;
+      if (this._onTransition) this._onTransition('idle', 'cast', ctx);
+      var st = this.states['cast'];
+      if (st && st.enter) st.enter(ctx);
+      // 즉시 carry — dt=0 으로 carry 루프를 돌려 dur=0 페이즈들을 즉시 통과.
+      _phaseUpdate(0, ctx);
       return true;
+    };
+
+    // override update — 범용 FSM update 대신 carry 루프 전용 update 를 노출.
+    fsm.update = function (dt, ctx) {
+      if (!this._started) this.start(ctx);
+      _phaseUpdate(dt, ctx);
+      return this;
     };
 
     // cancel(ctx) — 선딜(cast) 중 중단 → idle. cancelable 면 recovery 도 허용.
     fsm.cancel = function (ctx) {
       if (this._cur === 'cast' || (this._cancelable && this._cur === 'recovery')) {
-        this.to('idle', ctx);
+        var from = this._cur;
+        this._exit(ctx);
+        this._cur = 'idle';
+        this._stateTime = 0;
+        this._phaseTime = 0;
+        if (this._onTransition) this._onTransition(from, 'idle', ctx);
+        var st = this.states['idle'];
+        if (st && st.enter) st.enter(ctx);
         return true;
       }
       return false;
