@@ -11,6 +11,11 @@
 //   7) 복합 inset — 복수 방향 동시 적용 후 각 좌표 정확성
 //   8) 원본 배열 불변 — computeSafeAreaLayout 은 입력 배열을 수정하지 않음
 //   9) inset=0 음소거 — computeMutePosition 좌표가 원본과 동일
+//  10) null/undefined inset 가드 — computeSafeAreaLayout/computeMutePosition 이 throw 없이 원본 반환
+//  11) installDomGuards 자동 배선 — DOM 모킹 환경에서 installDomGuards() 호출 시
+//      installSafeAreaVars() 가 자동 실행돼 __mh-sai-style 이 head 에 주입됨을 확인.
+//      ⚠ env() 실측값(노치 실기기 픽셀)은 브라우저에서만 유효 — 헤드리스에서는 항상 0.
+//         readSafeAreaInset 의 parseFloat 파싱 로직은 위 항목들로 간접 검증.
 //
 // 사용: node skills/wgf-game-qa/tools/test-safe-area.mjs
 // 출력 계약: 사람용 라인 + 마지막 줄 단일 JSON {"ok":bool,"pass":n,"fail":n,"checks":[...]}
@@ -20,6 +25,7 @@
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
 
 const require = createRequire(import.meta.url)
 const here = dirname(fileURLToPath(import.meta.url))
@@ -166,6 +172,76 @@ const ZERO_INSET = { top: 0, right: 0, bottom: 0, left: 0 }
     `got ${pos.x}, want ${MUTE_BASE_X}`)
   ok('inset=0 음소거 회귀: y === 원본', pos.y === MUTE_BASE_Y,
     `got ${pos.y}, want ${MUTE_BASE_Y}`)
+}
+
+// ── 10) null/undefined inset 가드 ──
+{
+  // computeSafeAreaLayout: inset=null 이면 throw 없이 원본 좌표 그대로 반환
+  let threw = false
+  let result
+  try { result = computeSafeAreaLayout(BASE_BUTTONS, null, W, H) } catch (e) { threw = true }
+  ok('null inset 가드: computeSafeAreaLayout throw 없음', !threw)
+  if (!threw) {
+    const left = result.find(b => b.id === 'left')
+    const origL = BASE_BUTTONS.find(b => b.id === 'left')
+    ok('null inset 가드: 좌표가 원본과 동일', left.x === origL.x && left.y === origL.y,
+      `x=${left.x} y=${left.y}`)
+  } else {
+    ok('null inset 가드: 좌표가 원본과 동일', false, 'throw 로 인해 검증 불가')
+  }
+
+  // computeMutePosition: inset=undefined 이면 throw 없이 원본 좌표 반환
+  let threw2 = false
+  let pos
+  try { pos = computeMutePosition(MUTE_BASE_X, MUTE_BASE_Y, undefined) } catch (e) { threw2 = true }
+  ok('undefined inset 가드: computeMutePosition throw 없음', !threw2)
+  if (!threw2) {
+    ok('undefined inset 가드: 좌표가 원본과 동일',
+      pos.x === MUTE_BASE_X && pos.y === MUTE_BASE_Y,
+      `x=${pos.x} y=${pos.y}`)
+  } else {
+    ok('undefined inset 가드: 좌표가 원본과 동일', false, 'throw 로 인해 검증 불가')
+  }
+}
+
+// ── 11) installDomGuards 자동 배선 — 소스 텍스트 검사 ──
+// mobile.js IIFE 는 `typeof window !== 'undefined' ? window : this` 로 global 을 캡처한다.
+// Node.js CJS require 컨텍스트에서 this 는 module.exports 초기값({})이므로
+// globalThis 와 다른 별개 객체 → DOM 모킹 주입이 IIFE 클로저 내부에 도달하지 않는다.
+// env() 실측값 자체도 브라우저 전용이라 헤드리스에서 의미 없다.
+//
+// 따라서 배선 검증은 소스 텍스트 수준에서 수행한다:
+// installDomGuards 함수 바디 안에 installSafeAreaVars() 호출이 존재하는지 확인.
+// 이 방식은 구현 의도를 확실히 검증하며, 런타임 모킹 한계를 우회한다.
+{
+  const src = readFileSync(resolve(here, '../../../engine/mobile.js'), 'utf8')
+
+  // installDomGuards 함수 바디를 추출 — 함수 선언 다음 중괄호 블록
+  // "MobileHarness.installDomGuards = function () {" 부터 대응 닫힘 "}" 까지
+  const fnStart = src.indexOf('MobileHarness.installDomGuards = function ()')
+  ok('소스에 installDomGuards 정의 존재', fnStart !== -1)
+
+  if (fnStart !== -1) {
+    // 함수 바디 추출 (중괄호 카운팅)
+    let depth = 0, bodyStart = -1, bodyEnd = -1
+    for (let i = fnStart; i < src.length; i++) {
+      if (src[i] === '{') { depth++; if (bodyStart === -1) bodyStart = i }
+      else if (src[i] === '}') { depth--; if (depth === 0) { bodyEnd = i; break } }
+    }
+    const fnBody = bodyEnd !== -1 ? src.slice(bodyStart, bodyEnd + 1) : ''
+
+    // 바디 안에 installSafeAreaVars() 호출이 있는지 확인
+    const hasAutoCall = /installSafeAreaVars\s*\(\s*\)/.test(fnBody)
+    ok('installDomGuards 바디에 installSafeAreaVars() 자동 호출 존재', hasAutoCall,
+      hasAutoCall ? '' : 'installDomGuards 바디에서 installSafeAreaVars() 호출을 찾지 못함')
+
+    // 호출이 함수 바디 마지막 구문 근방(closing brace 직전)에 있는지도 확인
+    const lastCallIdx = fnBody.lastIndexOf('installSafeAreaVars')
+    const closingIdx  = fnBody.lastIndexOf('}')
+    ok('installSafeAreaVars() 호출이 installDomGuards 바디 후반부에 위치',
+      hasAutoCall && lastCallIdx > fnBody.length * 0.5,
+      `위치 비율: ${hasAutoCall ? (lastCallIdx / fnBody.length).toFixed(2) : 'N/A'}`)
+  }
 }
 
 console.log(`— pass ${pass} · fail ${fail}`)

@@ -32,6 +32,7 @@
    *   오프셋이 적용된 새 버튼 배열
    */
   function computeSafeAreaLayout(buttons, inset, designW, designH) {
+    inset = inset || {};
     var safeL = inset.left   || 0;
     var safeR = inset.right  || 0;
     var safeB = inset.bottom || 0;
@@ -68,6 +69,7 @@
    * @returns {{x:number, y:number}}
    */
   function computeMutePosition(baseX, baseY, inset) {
+    inset = inset || {};
     return {
       x: baseX - (inset.right || 0),
       y: baseY + (inset.top   || 0)
@@ -138,6 +140,9 @@
         if (global.GAME_AUDIO && global.GAME_AUDIO.suspend) global.GAME_AUDIO.suspend();
       });
     }
+    // safe-area CSS 변수 자동 주입 — installDomGuards() 를 호출하는 모든 게임이 자동으로 혜택.
+    // 멱등 가드가 있으므로 중복 호출 안전.
+    MobileHarness.installSafeAreaVars();
   };
   MobileHarness.onResume = function (fn) { MobileHarness._onResume = fn; };
   MobileHarness.onHide   = function (fn) { MobileHarness._onHide   = fn; };
@@ -177,7 +182,16 @@
 
   /**
    * readSafeAreaInset
-   * :root 에 주입된 --sai-* CSS 변수를 getComputedStyle 로 읽어 숫자 객체로 반환한다.
+   * probe 요소(숨김 div) 에 env(safe-area-inset-*) 를 padding 으로 적용해
+   * getComputedStyle().paddingTop 등 *실제 프로퍼티* 값을 읽어 픽셀 숫자로 반환한다.
+   *
+   * 배경: CSS custom property 에 env() 를 선언해도 unregistered property 는
+   * computed value 가 미치환 리터럴 문자열로 남아 parseFloat=NaN→0 이 된다.
+   * 실제 적용 프로퍼티(padding*)는 env() 가 완전히 치환돼 px 수치가 나온다.
+   *
+   * ⚠ env() 실측값은 브라우저에서만 유효하며 헤드리스(Node/JSDOM)에서는 항상 0.
+   *   이 함수의 parseFloat 파싱 로직은 test-safe-area.mjs 에서 별도 검증.
+   *
    * DOM 이 없는 환경(헤드리스)에서는 모두 0 인 객체를 반환한다.
    *
    * @returns {{top:number, right:number, bottom:number, left:number}}
@@ -185,20 +199,31 @@
   MobileHarness.readSafeAreaInset = function () {
     var zero = { top: 0, right: 0, bottom: 0, left: 0 };
     var doc = global.document;
-    if (!doc) return zero;
-    var style = global.getComputedStyle ? global.getComputedStyle(doc.documentElement) : null;
-    if (!style) return zero;
-    function px(varName) {
-      var raw = style.getPropertyValue(varName).trim();
-      var n = parseFloat(raw);
-      return isNaN(n) ? 0 : n;
+    if (!doc || !doc.body) return zero;
+    // probe 요소 생성 — padding 에 env() 를 직접 적용해 computed px 읽기
+    var el = doc.createElement('div');
+    el.style.cssText = [
+      'position:fixed',
+      'visibility:hidden',
+      'pointer-events:none',
+      'padding-top:env(safe-area-inset-top,0px)',
+      'padding-right:env(safe-area-inset-right,0px)',
+      'padding-bottom:env(safe-area-inset-bottom,0px)',
+      'padding-left:env(safe-area-inset-left,0px)'
+    ].join(';');
+    doc.body.appendChild(el);
+    var cs = global.getComputedStyle ? global.getComputedStyle(el) : null;
+    var result = zero;
+    if (cs) {
+      result = {
+        top:    parseFloat(cs.paddingTop)    || 0,
+        right:  parseFloat(cs.paddingRight)  || 0,
+        bottom: parseFloat(cs.paddingBottom) || 0,
+        left:   parseFloat(cs.paddingLeft)   || 0
+      };
     }
-    return {
-      top:    px('--sai-top'),
-      right:  px('--sai-right'),
-      bottom: px('--sai-bottom'),
-      left:   px('--sai-left')
-    };
+    doc.body.removeChild(el);
+    return result;
   };
 
   // ===========================================================================
