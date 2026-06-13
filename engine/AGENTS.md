@@ -29,6 +29,8 @@
 | `pathkit.js` | **PathKit** (선택 킷) — Curves/Path/PathFollower 래퍼. 스플라인 패트롤·방사 탄막·타워디펜스 크립 경로 → `path-motion` |
 | `boardkit.js` | **BoardKit** (선택 킷) — 논리 보드 좌표계(cellToPixel/pixelToCell·범위 검사) + A* 그리드 길찾기. 장애물 회피·4/8방향·휴리스틱(manhattan/octile/euclidean/chebyshev)·셀 가중 비용·코너컷 방지. 결정론(open-set 동점은 f→h→삽입순 안정 타이브레이크, `Math.random()` 미사용) → 같은 입력 항상 같은 경로. 퍼즐·보드게임·타워디펜스용. Phaser 비의존 순수 로직(Node require·헤드리스 검증 가능). 검증: `wgf-game-qa/tools/test-boardkit.mjs`. **PathKit 과 구분**: PathKit=정해진 곡선 위를 따라가는 *연속 경로추종*(연출), BoardKit=막힌 칸을 피해 목적지까지 밟을 칸을 *계산*하는 논리 격자 길찾기 |
 | `joystickkit.js` | **JoystickKit** (선택 킷) — 가상 조이스틱(아날로그/트윈스틱) 터치 컨트롤. 멀티터치 포인터→360° 방향+세기 벡터. 디지털 D-패드(MobileHarness)와 공존 → `virtual-joystick` |
+| `behaviorkit.js` | **BehaviorKit** — 런타임 behavior 킷(매 프레임 dt 로 상태를 굴리는 결정론 부품) **공통 계약**을 성문화. 정적 명세 `CONTRACT.items`(5항목: 모듈 노출·결정론 시드 무작위·결정론 시각함수 0·`update(dt)` NaN/음수 가드·`reset()`) + 런타임 검증기 `assertContract(kit,opts)`(던지지 않고 `{ok,checks[],violations[]}` 리포트 반환). 능력 미제공 항목은 `n/a` 로 통과하는 **조건부 준수**. update 가드는 `update(NaN/Infinity/-1)` 행위 프로브로 검증. Node require 가능. 정적 짝꿍: `wgf-game-qa/tools/lint-kit-deps.mjs`(결정론 텍스트 검사) |
+| `manifest.json` | **킷 의존 매니페스트** — 각 킷의 의존을 한 곳에 선언: `kits[id]={ file,global,role,engine:[하드 킷 id],softEngine?:[graceful-optional 킷 id],external:[전역 라이브러리 키],softExternal?,contract:[계약 item id] }`. `externalGlobals` 가 라이브러리 키→전역 심볼(phaser→`Phaser`) 매핑. `engine` 그래프가 순환 검출 대상, `softEngine`(예 juicekit/fsm/audio→rngforge, joystickkit→mobile, stylekit→lightingkit/screenfx)은 없어도 폴백. 검증: `wgf-game-qa/tools/lint-kit-deps.mjs` |
 
 ## For AI Agents
 
@@ -43,6 +45,7 @@
 
 ### Testing Requirements
 - 게임에 로드해 부팅 콘솔 에러 0 확인 → `game-qa` 헤드리스 step 하니스로 결정적 검증.
+- **킷 추가·의존 변경 시 `manifest.json` 갱신 후 `node skills/wgf-game-qa/tools/lint-kit-deps.mjs` 통과 확인**(의존 누락·순환·미사용·결정론 위반 정적 대조). 새 런타임 behavior 킷은 `BehaviorKit.assertContract` 로 계약 준수도 확인(JuiceKit·FSM 가 대표 통과 사례). lint self-test: `--self-test`.
 - WebGL 킷은 WebGL 컨텍스트에서 검증(데모 `nocturne`이 4종 통합 검증 케이스).
 - Tiled 변경은 `super-runner ?tiled=1`(절차 경로와 동치)·`tiled-topdown`·`tiled-iso`·`tiled-pack`로 회귀 확인.
 
@@ -58,6 +61,9 @@ var res = TiledForge.loadTiledMap(this, 'map', { tilesetKey:'forge-tiles', spawn
 var dashPhase = FSM.forAbility(KIT.get('dash'), { onActive:function(c){ doDash(c.dir); } });
 if (KIT.use('dash', { dir: facing }).ok) dashPhase.startAbility({ dir: facing });  // 입력에서 시동
 // scene update: dashPhase.update(delta/1000, ctx);  피격 선딜 캔슬: dashPhase.cancel();
+// BehaviorKit 계약: 새 런타임 킷이 공통 규약을 지키는지 런타임 검증(부팅 자가검진·헤드리스 테스트)
+var rep = BehaviorKit.assertContract(new JuiceKit(RngForge.create(1)), { requireUpdate:true, requireReset:true });
+if (!rep.ok) console.warn('계약 위반', rep.violations);   // 던지지 않음 — 호출자가 판단
 ```
 
 ## Dependencies

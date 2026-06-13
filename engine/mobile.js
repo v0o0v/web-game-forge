@@ -41,7 +41,7 @@
     doc.addEventListener('dblclick', function (e) { e.preventDefault(); }, { passive: false });
     var lastTouch = 0;
     doc.addEventListener('touchend', function (e) {
-      var now = Date.now();
+      var now = Date.now(); // kitdep-ok: DOM touchend 핸들러(헤드리스 step 루프 밖) — 더블탭 줌 차단 전용, 결정성 무관
       if (now - lastTouch <= 300) e.preventDefault(); // 더블탭 줌
       lastTouch = now;
     }, { passive: false });

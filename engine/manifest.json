@@ -1,0 +1,173 @@
+{
+  "schemaNote": "WebGameForge 엔진 킷 의존 매니페스트. kits[id] = { file, global, role, engine:[하드 의존 킷 id], softEngine?:[graceful-optional 킷 id], external:[전역 라이브러리 키], softExternal?:[graceful-optional 라이브러리], contract:[BehaviorKit.CONTRACT item id] }. engine 은 하드 의존(없으면 동작 불가), softEngine 은 graceful-optional(있으면 쓰고 없으면 no-op/폴백). 두 배열은 서로소(disjoint). lint-kit-deps.mjs 가 (a)코드가 참조하는데 어디에도 선언 안 됨=누락 (b)engine 그래프 순환 (c)선언했으나 코드 미참조=미사용 을 정적 대조한다. external 은 vendored phaser/tone(matter 는 phaser 번들). externalGlobals 가 라이브러리 키→전역 심볼 매핑.",
+  "version": 1,
+  "contractRef": "engine/behaviorkit.js",
+  "lint": "skills/wgf-game-qa/tools/lint-kit-deps.mjs",
+  "externalGlobals": {
+    "phaser": "Phaser",
+    "matter": "Matter",
+    "tone": "Tone"
+  },
+  "kits": {
+    "behaviorkit": {
+      "file": "behaviorkit.js",
+      "global": "BehaviorKit",
+      "role": "런타임 behavior 킷 공통 계약 성문화(CONTRACT·assertContract). 엔진 킷 결정론·가드·노출 규약을 정적 명세와 런타임 검증기로 고정.",
+      "engine": [],
+      "external": [],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
+    "rngforge": {
+      "file": "rngforge.js",
+      "global": "RngForge",
+      "role": "시드 결정론 난수 인프라(엔진 결정론의 토대).",
+      "engine": [],
+      "external": [],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
+    "eventbus": {
+      "file": "eventbus.js",
+      "global": "EventBus",
+      "role": "씬↔HUD 디커플링용 결정론 이벤트 버스(발행-구독). 상태 초기화는 clear().",
+      "engine": [],
+      "external": [],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
+    "fsm": {
+      "file": "fsm.js",
+      "global": "FSM",
+      "role": "결정론 유한상태머신(+ AbilityKit 페이즈 머신 forAbility).",
+      "engine": [],
+      "softEngine": ["rngforge"],
+      "external": [],
+      "contract": ["module-exposure", "determinism-rng", "determinism-noclock", "update-guard", "reset"]
+    },
+    "juicekit": {
+      "file": "juicekit.js",
+      "global": "JuiceKit",
+      "role": "게임필 런타임(trauma 셰이크·파티클·히트스톱·트윈).",
+      "engine": [],
+      "softEngine": ["rngforge"],
+      "external": [],
+      "contract": ["module-exposure", "determinism-rng", "determinism-noclock", "update-guard", "reset"]
+    },
+    "boardkit": {
+      "file": "boardkit.js",
+      "global": "BoardKit",
+      "role": "논리 보드 좌표계 + A* 그리드 길찾기(순수 로직).",
+      "engine": [],
+      "external": [],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
+    "abilitykit": {
+      "file": "abilitykit.js",
+      "global": "AbilityKit",
+      "role": "데이터 구동 능력 런타임(쿨다운·자원·콤보·게이트). 코어는 엔진 무관, attach 만 Phaser.",
+      "engine": [],
+      "external": [],
+      "softExternal": ["phaser"],
+      "updateMethod": "tick",
+      "contract": ["module-exposure", "determinism-noclock", "update-guard"]
+    },
+    "audio": {
+      "file": "audio.js",
+      "global": "ChipAudio",
+      "role": "Web Audio API 8비트 효과음·BGM 합성(파일 0).",
+      "engine": [],
+      "softEngine": ["rngforge"],
+      "external": [],
+      "contract": ["module-exposure", "determinism-rng", "determinism-noclock"]
+    },
+    "soundforge": {
+      "file": "soundforge.js",
+      "global": "SoundForge",
+      "role": "Tone.js 래퍼(ADSR·필터·적응형 레이어드 BGM). ChipAudio 와 동일 인터페이스.",
+      "engine": [],
+      "external": ["tone"],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
+    "matterkit": {
+      "file": "matterkit.js",
+      "global": "MatterKit",
+      "role": "Matter.js 강체 물리 래퍼(바디 팩토리·상자 스택·슬링샷).",
+      "engine": [],
+      "external": ["phaser", "matter"],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
+    "screenfx": {
+      "file": "screenfx.js",
+      "global": "ScreenFX",
+      "role": "v4 Filter 포스트FX(블룸·비네트·CRT). WebGL 전용, Canvas 면 no-op.",
+      "engine": [],
+      "external": ["phaser"],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
+    "lightingkit": {
+      "file": "lightingkit.js",
+      "global": "LightingKit",
+      "role": "PointLight 발광·Simplex 안개·Gradient 밤하늘. WebGL 전용.",
+      "engine": [],
+      "external": ["phaser"],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
+    "pathkit": {
+      "file": "pathkit.js",
+      "global": "PathKit",
+      "role": "Curves/Path/PathFollower 래퍼(스플라인 패트롤·방사 탄막·크립 경로).",
+      "engine": [],
+      "external": ["phaser"],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
+    "joystickkit": {
+      "file": "joystickkit.js",
+      "global": "JoystickKit",
+      "role": "가상 조이스틱(아날로그/트윈스틱) 터치 컨트롤.",
+      "engine": [],
+      "softEngine": ["mobile"],
+      "external": ["phaser"],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
+    "mobile": {
+      "file": "mobile.js",
+      "global": "MobileHarness",
+      "role": "모바일 웹뷰 하니스(scaleConfig·DOM 가드·디지털 D-패드 TouchControls).",
+      "engine": [],
+      "external": ["phaser"],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
+    "pixelforge": {
+      "file": "pixelforge.js",
+      "global": "PixelForge",
+      "role": "절차적 NES풍 픽셀아트 텍스처 생성기.",
+      "engine": [],
+      "external": ["phaser"],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
+    "vectorforge": {
+      "file": "vectorforge.js",
+      "global": "VectorForge",
+      "role": "비-픽셀 절차 그래픽 생성기(그라데이션·글로우·곡선, supersample).",
+      "engine": [],
+      "external": ["phaser"],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
+    "tiled": {
+      "file": "tiled.js",
+      "global": "TiledForge",
+      "role": "Tiled .tmj 로더/베이커(절차 타일셋 아틀라스·충돌·iso/hex).",
+      "engine": [],
+      "softEngine": ["pixelforge", "vectorforge"],
+      "external": ["phaser"],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
+    "stylekit": {
+      "file": "stylekit.js",
+      "global": "StyleKit",
+      "role": "아트 디렉션 강제(master_palette·셰이딩·광원·무드). LightingKit/ScreenFX 상속 배선.",
+      "engine": [],
+      "softEngine": ["lightingkit", "screenfx"],
+      "external": ["phaser"],
+      "contract": ["module-exposure", "determinism-noclock"]
+    }
+  }
+}
