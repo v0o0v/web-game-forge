@@ -680,6 +680,8 @@
     function onPointerUp(pointer) {
       if (!drag) return;
       if (drag.kind === 'marquee') {
+        // 드롭 좌표로 박스 끝점 갱신(pointermove 누락/단발 드래그 견고성).
+        drag.x1 = pointer.x; drag.y1 = pointer.y;
         commitMarquee();
         marqueeGfx.clear();
         drag = null;

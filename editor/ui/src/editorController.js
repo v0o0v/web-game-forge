@@ -30,6 +30,10 @@ export function createController(opts) {
   // Undo/Redo 스택. undoStack: {cmd, undoDelta}[], redoStack: {cmd, undoDelta}[].
   const undoStack = [];
   const redoStack = [];
+  // 재진입 가드: undo/redo 중 어댑터 onCommand 콜백이 스택을 다시 조작하지 않게 한다.
+  // (redo 는 어댑터 applyCommand 로 재적용하므로 onCommand 가 발화되는데, 그 콜백이
+  //  redoStack 을 비우면 두 번째 redo 가 불가능해진다 — 이 플래그로 차단.)
+  let stackGuard = false;
 
   // 변경 알림 리스너(UI 가 구독 → 재렌더).
   const changeListeners = [];
@@ -50,7 +54,8 @@ export function createController(opts) {
     adapter = SceneKitPhaser.create(el, sceneDoc, Object.assign({
       // 어댑터 내부에서 발생한 커맨드(기즈모 드래그 등)를 Undo 스택에 적재.
       onCommand: (cmd, undoDelta) => {
-        if (undoDelta && undoDelta.type !== 'noop') {
+        // 재진입 가드: undo/redo 가 어댑터를 통해 재적용 중이면 스택을 조작하지 않는다.
+        if (!stackGuard && undoDelta && undoDelta.type !== 'noop') {
           pushUndo(cmd, undoDelta);
         }
         notifyChange();
@@ -61,7 +66,15 @@ export function createController(opts) {
   }
 
   function pushUndo(cmd, undoDelta) {
-    undoStack.push({ cmd: cmd, undoDelta: undoDelta });
+    // redo 안정성: addEntity 는 코어가 새 id 를 발급하므로, redo 재적용 시 같은 id 가
+    // 나오도록 발급된 id 를 커맨드 entity 에 박아 넣는다(undoDelta={removeEntity,id} 에서 회수).
+    // 그래야 undo→redo 후에도 hashState 가 정확히 일치한다.
+    let stored = cmd;
+    if (cmd.type === 'addEntity' && undoDelta && undoDelta.type === 'removeEntity' && undoDelta.id != null) {
+      const ent = Object.assign({}, cmd.entity, { id: undoDelta.id });
+      stored = Object.assign({}, cmd, { entity: ent });
+    }
+    undoStack.push({ cmd: stored, undoDelta: undoDelta });
     if (undoStack.length > UNDO_LIMIT) undoStack.shift();
     redoStack.length = 0;       // 새 동작 시 redo 무효화.
   }
@@ -87,7 +100,11 @@ export function createController(opts) {
     if (!adapter || redoStack.length === 0) return false;
     const entry = redoStack.pop();
     // 원래 커맨드 재적용 → 새 undoDelta 로 갱신(상태 복원 일관).
-    const newUndo = adapter.applyCommand(entry.cmd);
+    // 가드 ON: 어댑터 onCommand 콜백이 스택을 다시 조작/redo 비움 하지 않게 한다.
+    stackGuard = true;
+    let newUndo;
+    try { newUndo = adapter.applyCommand(entry.cmd); }
+    finally { stackGuard = false; }
     undoStack.push({ cmd: entry.cmd, undoDelta: newUndo });
     if (undoStack.length > UNDO_LIMIT) undoStack.shift();
     notifyChange();
@@ -225,6 +242,9 @@ export function createController(opts) {
     return SceneKit && SceneKit.getComponentDef ? SceneKit.getComponentDef(type) : null;
   }
 
+  // 어댑터 인스턴스 접근(e2e 에서 Phaser scene 입력 emit 으로 기즈모 검증용).
+  function getAdapter() { return adapter; }
+
   return {
     mount, applyCommand, undo, redo, undoDepth, redoDepth,
     select, getSelection, addEntity, setTransform,
@@ -232,7 +252,7 @@ export function createController(opts) {
     getWorld, serialize, hash, entityCount,
     save, reloadFromSaved, loadScene,
     setSnap, setGizmoMode, getGizmoMode, setMode, getMode,
-    onChange, onSelectionChange, getComponentDef,
+    onChange, onSelectionChange, getComponentDef, getAdapter,
     STORAGE_KEY
   };
 }
