@@ -754,8 +754,9 @@ function ScenekitStep(w) { SceneKit.step(w, 1 / 60); }
   // interval 도달 → 1개 생성(총 2).
   stepN(w, 2);
   ok('G17-B Spawner interval 후 1개 생성', entityCount() === 2, `count=${entityCount()}`);
-  // 다음 interval → 2개째(총 3, max=2 도달).
-  stepN(w, 30);
+  // 다음 interval(0.5초) → 2개째(총 3, max=2 도달).
+  // 부동소수점 경계: 30×(1/60)=0.4999... < 0.5 이므로 31프레임 필요.
+  stepN(w, 31);
   ok('G17-C Spawner 2개째 생성(max=2)', entityCount() === 3, `count=${entityCount()}`);
   // max 도달 후 추가 생성 없음.
   stepN(w, 60);
@@ -987,6 +988,98 @@ function ScenekitStep(w) { SceneKit.step(w, 1 / 60); }
   ok('G23-A Shooter+Spawner 생성 컴포넌트 결정성(2회 hashState 일치)', g1 === g2, `g1=${g1} g2=${g2}`);
   // 실제로 엔티티가 생성됐는지(trivial pass 방지).
   ok('G23-B 생성형 컴포넌트가 엔티티를 실제 추가했는지', w1.entities.length > 3, `count=${w1.entities.length}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G24  resolveTarget 엄격 id 매칭 — 부분문자열 오매칭 방지 회귀
+//      진짜 id:'player'(x=100)와 함정 id:'aaa_decoy'(name 에 'player' 포함)가
+//      공존할 때 EnemyAI chase 가 진짜 player(x>0 방향)로 이동해야 한다.
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const doc = {
+    walls: [],
+    entities: [
+      { id: 'enemy', name: '적', transform: { x: 0, y: 0 },
+        components: [{ type: 'EnemyAI', mode: 'chase', target: 'player', speed: 60 }] },
+      // 함정: id에 'player' 부분문자열 포함, x=-100 (왼쪽)
+      { id: 'aaa_decoy', name: 'player_fake', transform: { x: -100, y: 0 }, components: [] },
+      // 진짜 player: 정확한 id='player', x=100 (오른쪽)
+      { id: 'player', name: '플레이어', transform: { x: 100, y: 0 }, components: [] }
+    ]
+  };
+  const w = loadRaw(doc);
+  stepN(w, 30);  // 0.5초 추격
+  const enemy = w.entities.find(e => e.id === 'enemy');
+  // 진짜 player(x=100) 방향이므로 enemy.x > 0 이어야 한다.
+  ok('G24-A resolveTarget 엄격 id 매칭: 진짜 player 방향 추격(x>0)',
+    enemy && enemy.transform.x > 0,
+    `x=${enemy && enemy.transform.x}`);
+  // 함정 decoy(x=-100) 쪽으로 가지 않아야 한다.
+  ok('G24-B resolveTarget 함정 decoy 미선택(x≥0)',
+    enemy && enemy.transform.x >= 0,
+    `x=${enemy && enemy.transform.x}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G25  Spawner.template.components 화이트리스트 회귀
+//      미등록 컴포넌트가 template 안에 숨어 있으면 lint-scene error > 0 + exit 1
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const lintScene = resolve(root, 'skills/wgf-editor/tools/lint-scene.mjs');
+
+  const badTemplateDoc = {
+    format: 'wgf-scene@1', slug: 'spawner-template-test',
+    meta: { title: '템플릿 미등록', genre: 'topdown', viewport: { w: 320, h: 240 } },
+    assets: { sprites: [] }, walls: [],
+    scenes: [{ id: 'main', entities: [
+      { id: 'sp1', name: '스포너', transform: { x: 0, y: 0 }, components: [
+        { type: 'Spawner', interval: 1, template: {
+            components: [{ type: 'FakeComp' }]  // 미등록 컴포넌트
+          }
+        }
+      ] }
+    ] }],
+    dataLayers: {}
+  };
+
+  const tmpBad = resolve(root, 'games/_editor-samples/_spawner-template-tmp.json');
+  writeFileSync(tmpBad, JSON.stringify(badTemplateDoc, null, 2), 'utf8');
+  const bRes = spawnSync(process.execPath, [lintScene, '--file', tmpBad], { encoding: 'utf8' });
+  let bJson = null;
+  const bLines = bRes.stdout.trim().split('\n');
+  for (let i = bLines.length - 1; i >= 0; i--) { try { bJson = JSON.parse(bLines[i]); break; } catch (_) {} }
+  ok('G25-A Spawner.template 미등록 컴포넌트 → exit 1', bRes.status === 1, `exit=${bRes.status}`);
+  ok('G25-B Spawner.template 미등록 컴포넌트 → error > 0', bJson && bJson.counts.error > 0, `error=${bJson && bJson.counts.error}`);
+  ok('G25-C Spawner.template 미등록 컴포넌트 → UNKNOWN_COMPONENT 코드',
+    bJson && bJson.findings.some(f => f.code === 'UNKNOWN_COMPONENT'),
+    `codes=${bJson && bJson.findings.map(f => f.code).join(',')}`);
+  try { unlinkSync(tmpBad); } catch (_) {}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G26  Pickup heal 미수집 유지 — collector 에 Health 없으면 소멸 안 함
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const doc = {
+    walls: [],
+    entities: [
+      // collector: Health 컴포넌트 없음
+      { id: 'player', name: '플레이어', transform: { x: 10, y: 10 }, components: [] },
+      // heal pickup — 위치가 player 와 겹침
+      { id: 'pickup1', name: '힐팩', transform: { x: 10, y: 10 },
+        components: [{ type: 'Pickup', kind: 'heal', amount: 5, collector: 'player' }] }
+    ]
+  };
+  const w = loadRaw(doc);
+  stepN(w, 5);
+  const pickup = w.entities.find(e => e.id === 'pickup1');
+  // Health 없으므로 pickup 은 아직 world 에 남아 있어야 한다.
+  ok('G26-A Pickup heal: collector Health 없으면 소멸 안 함',
+    pickup !== undefined, `pickup존재=${pickup !== undefined}`);
+  const pcomp = pickup && SceneKit.getComponentOn(pickup, 'Pickup');
+  ok('G26-B Pickup heal: _collected=false 유지',
+    pcomp && pcomp._collected === false,
+    `_collected=${pcomp && pcomp._collected}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

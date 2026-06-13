@@ -179,6 +179,7 @@ function lintScene(doc, report) {
     }
 
     const entityIds = new Set();
+    let cameraFollowCount = 0;  // 씬 내 CameraFollow 보유 엔티티 수(다중 경고용)
 
     for (let ei = 0; ei < scene.entities.length; ei++) {
       const entity = scene.entities[ei];
@@ -361,6 +362,24 @@ function lintScene(doc, report) {
             add('error', 'INVALID_SPAWNER_INTERVAL',
               'entity ' + eid + 'Spawner.interval 은 양수여야 합니다', cPath + '.interval');
           }
+          // Spawner.template.components 에 숨겨진 미등록 컴포넌트 검증
+          if (comp.template && typeof comp.template === 'object' &&
+              Array.isArray(comp.template.components)) {
+            for (let tci = 0; tci < comp.template.components.length; tci++) {
+              const tc = comp.template.components[tci];
+              const tcPath = cPath + '.template.components[' + tci + ']';
+              if (!tc || typeof tc !== 'object') continue;
+              if (!tc.type) {
+                add('error', 'MISSING_COMPONENT_TYPE', tcPath + '.type 이 없습니다', tcPath + '.type');
+                continue;
+              }
+              if (!ALL_COMPONENTS.includes(tc.type)) {
+                add('error', 'UNKNOWN_COMPONENT',
+                  'entity ' + eid + 'Spawner.template 의 알 수 없는 컴포넌트 타입: "' + tc.type + '"',
+                  tcPath + '.type');
+              }
+            }
+          }
         }
 
         if (comp.type === 'CameraFollow') {
@@ -407,6 +426,7 @@ function lintScene(doc, report) {
         }
 
         compTypes.add(comp.type);
+        if (comp.type === 'CameraFollow') cameraFollowCount++;
       }
 
       // 8. 필수 컴포넌트 조합 검사: Body 없이 TopDownController → warn
@@ -417,6 +437,7 @@ function lintScene(doc, report) {
       }
 
       // 9. 도달 불가 스폰 검사: transform 좌표가 벽 AABB 안에 완전히 들어있으면 경고
+      // (향후 개선: 현재는 점-포함만 검사 — AABB 전체 포함 검사로 강화 가능)
       if (entity.transform && walls.length > 0) {
         const tx = entity.transform.x;
         const ty = entity.transform.y;
@@ -436,6 +457,13 @@ function lintScene(doc, report) {
           }
         }
       }
+    }
+
+    // 씬 레벨: CameraFollow 2개 이상 → warn(씬당 1개 권장, 여러 개면 마지막이 덮어씀)
+    if (cameraFollowCount > 1) {
+      add('warn', 'MULTIPLE_CAMERA_FOLLOW',
+        sPath + ' 에 CameraFollow 를 가진 엔티티가 ' + cameraFollowCount + '개입니다 — 씬당 1개 권장',
+        sPath);
     }
   }
 }

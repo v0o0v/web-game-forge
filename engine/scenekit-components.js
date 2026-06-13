@@ -352,21 +352,29 @@
 
   // id 또는 'player' 같은 의미 키로 타깃 엔티티 1개 해석(결정적).
   //   - 'self'        → 자기 자신
-  //   - 'player'      → name==='플레이어' 또는 id/name 에 'player' 포함하는 첫 엔티티(id 정렬)
-  //   - 그 외 문자열  → 정확한 id 매칭
+  //   - 그 외 문자열  → ① 정확한 id 매칭 → ② 정확한 name 매칭(id 사전식 중 첫)
+  //                     'player' 키일 때 ③ name==='플레이어' 까지만 폴백
+  //                     (부분문자열 폴백은 오매칭 위험으로 제거)
+  // 동점(name 동일) 시 id 사전식 최솟값을 반환 — 결정성 보장.
   function resolveTarget(world, selfEntity, key) {
     if (key == null || key === 'self') return selfEntity;
-    if (key === 'player') {
-      var cands = world.entities.slice().sort(function (x, y) { return x.id < y.id ? -1 : (x.id > y.id ? 1 : 0); });
-      for (var i = 0; i < cands.length; i++) {
-        var e = cands[i];
-        if (e.id === 'player' || e.name === '플레이어' ||
-            (typeof e.id === 'string' && e.id.indexOf('player') >= 0) ||
-            (typeof e.name === 'string' && e.name.toLowerCase().indexOf('player') >= 0)) return e;
-      }
-      return null;
+    var k = String(key);
+    var cands = world.entities.slice().sort(function (x, y) { return x.id < y.id ? -1 : (x.id > y.id ? 1 : 0); });
+    // ① 정확한 id 매칭(최우선)
+    for (var i = 0; i < cands.length; i++) {
+      if (cands[i].id === k) return cands[i];
     }
-    return SK.findEntity(world, String(key));
+    // ② 정확한 name 매칭
+    for (var j = 0; j < cands.length; j++) {
+      if (cands[j].name === k) return cands[j];
+    }
+    // ③ 'player' 전용: 한글 명칭 '플레이어' 폴백(부분문자열 없음)
+    if (k === 'player') {
+      for (var p = 0; p < cands.length; p++) {
+        if (cands[p].name === '플레이어') return cands[p];
+      }
+    }
+    return null;
   }
 
   /* ──────────────────────────────────────────────────────────────────────────
@@ -413,11 +421,10 @@
 
       comp._elapsed += dt;
       var frameDur = 1 / fps;
-      // 누적 시간으로 프레임 인덱스 결정(결정적). while 누수 방지 — frameDur>0 보장.
-      while (comp._elapsed >= frameDur) {
-        comp._elapsed -= frameDur;
-        comp._frame += 1;
-      }
+      // 누적 시간으로 프레임 인덱스 결정(결정적). O(1) — 폭주 상한 없음.
+      var advance = Math.floor(comp._elapsed / frameDur);
+      comp._elapsed = comp._elapsed % frameDur;
+      comp._frame += advance;
       if (comp._frame >= frames.length) {
         if (loop) {
           comp._frame = comp._frame % frames.length;
@@ -513,11 +520,19 @@
       var comp = ctx.getComponent('ContactDamage');
       if (!comp) return;
 
-      // 쿨다운 감소(결정적).
+      // 쿨다운 감소 + 소멸 엔티티 키 정리(결정적, O(누적) 방지).
       if (dt > 0) {
+        var liveIds = {};
+        for (var li = 0; li < ctx.world.entities.length; li++) liveIds[ctx.world.entities[li].id] = true;
         var keys = Object.keys(comp._cooldowns);
         for (var k = 0; k < keys.length; k++) {
-          comp._cooldowns[keys[k]] = Math.max(0, comp._cooldowns[keys[k]] - dt);
+          var remaining = Math.max(0, comp._cooldowns[keys[k]] - dt);
+          if (remaining === 0 && !liveIds[keys[k]]) {
+            delete comp._cooldowns[keys[k]];  // 소멸 엔티티 + 쿨다운 만료 → 제거
+            delete comp._hit[keys[k]];
+          } else {
+            comp._cooldowns[keys[k]] = remaining;
+          }
         }
       }
 
@@ -814,7 +829,9 @@
       // 효과 적용(결정적).
       if (comp.kind === 'heal') {
         var hcomp = SK.getComponentOn(collector, 'Health');
-        if (hcomp) hcomp.hp = Math.min(n(hcomp.max, hcomp.hp), n(hcomp.hp, 0) + comp.amount);
+        // collector 에 Health 가 없으면 heal 불가 → 소멸하지 않고 미수집 유지.
+        if (!hcomp) return;
+        hcomp.hp = Math.min(n(hcomp.max, hcomp.hp), n(hcomp.hp, 0) + comp.amount);
       } else {
         // 'coin' 등: world 카운터 누적(어댑터/HUD 가 읽음).
         if (!isObj(ctx.world.counters)) ctx.world.counters = {};
@@ -865,8 +882,9 @@
 
       comp._t -= dt;
       if (comp._t > 0) return;
-      // 인터벌 도달 — 누적 보정(여러 인터벌이 한 프레임에 들어오면 1개만 생성하고 1 인터벌 차감).
-      comp._t += comp.interval;
+      // 인터벌 도달 — 버스트 방지: 큰 dt 로 _t 가 크게 음수가 됐어도 1프레임 1개만 생성.
+      // 잔여 음수는 버리고 다음 인터벌부터 새로 카운트한다(의도적 단순화).
+      comp._t = comp.interval;
 
       if (comp.max > 0 && comp._count >= comp.max) return;
 

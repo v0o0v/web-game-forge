@@ -258,6 +258,8 @@ P0b 에서 추가된 12종. 런타임 내부 필드(`_frame`, `_cd`, `_cooldowns
 | `damage` | number | 선택 | 명중 데미지(>0 이면 충돌 판정) |
 | `pierce` | boolean | 선택 | 관통(명중해도 소멸 안 함, 기본 false) |
 
+> 참고: non-pierce 명중 대상은 거리순이 아니라 **결정적 id 사전식 순서**로 선택된다(결정론 보장 — 동일 입력에 항상 동일 대상).
+
 ```jsonc
 { "type": "Projectile", "speed": 120, "angle": 0, "lifetime": 2, "damage": 1 }
 ```
@@ -338,6 +340,8 @@ P0b 에서 추가된 12종. 런타임 내부 필드(`_frame`, `_cd`, `_cooldowns
 | `max` | number | 선택 | 최대 생성 수(0=무한) |
 | `jitter` | number | 선택 | `ctx.rng` 위치 오프셋 범위(±px) |
 
+> 참고: 한 프레임에 여러 인터벌이 누적돼도 **프레임당 1개만 생성**하고 잔여 `_t` 는 `interval` 로 클램프된다(버스트 방지 — 탭 비활성·프레임 드랍 후 연쇄 생성 없음). `template.components` 도 lint-scene 화이트리스트 검증 대상이다.
+
 ```jsonc
 { "type": "Spawner", "interval": 1.5, "max": 10, "jitter": 8,
   "template": { "name": "졸개", "components": [{ "type": "Body", "shape": "aabb", "w": 8, "h": 8 }] } }
@@ -352,6 +356,8 @@ P0b 에서 추가된 12종. 런타임 내부 필드(`_frame`, `_cd`, `_cooldowns
 | `type` | `"CameraFollow"` | 필수 | 컴포넌트 타입 |
 | `target` | string | 선택 | 추적 대상(기본 `"self"`) |
 | `lerp` | number | 선택 | 추적 보간(0..1, 1=즉시, 기본 1) |
+
+> 참고: `world.camera` 는 단일 값이므로 **한 씬에 CameraFollow 는 1개 권장**. 2개 이상이면 lint-scene 이 warn(엔티티 배열 마지막 것이 적용됨).
 
 ```jsonc
 { "type": "CameraFollow", "target": "player", "lerp": 0.2 }
