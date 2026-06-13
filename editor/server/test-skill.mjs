@@ -240,6 +240,14 @@ async function main() {
       // qa-score slug 에 '..' → 거부(softlock 경로 탈출).
       const r5 = JSON.parse((await api(info, 'POST', '/api/skill/run', { tool: 'qa-score', args: { target: '../../etc' } })).body);
       ok('G-ARG qa-score slug .. 거부', r5.ok === false, `error=${r5.error}`);
+
+      // [보안 §6] qa-score slug 절대경로 우회 차단 — '/etc' 는 정규식을 통과하지만 선행 / 로 거부.
+      const r6 = JSON.parse((await api(info, 'POST', '/api/skill/run', { tool: 'qa-score', args: { target: '/etc' } })).body);
+      ok('G-ARG qa-score slug 절대경로(/etc) 거부', r6.ok === false, `error=${r6.error}`);
+
+      // [보안 §6] lint-scene path 인자에 dotfile 세그먼트 → 거부(serveStatic 정합).
+      const r7 = JSON.parse((await api(info, 'POST', '/api/skill/run', { tool: 'lint-scene', args: { file: 'games/super-runner/.env' } })).body);
+      ok('G-ARG dotfile 세그먼트 경로 거부', r7.ok === false, `error=${r7.error}`);
     }
 
     // ── G-SHELL: 셸 보간 안전(execFile 배열 — 셸 미실행) ────────────────────────
@@ -333,6 +341,13 @@ async function main() {
       // url 없는 cc0 → 거부.
       const bad = parseToolResult(await mcp.rpc('tools/call', { name: 'asset_add_cc0', arguments: { id: 'spr_nourl', url: '' } }));
       ok('G-CC0 url 없는 cc0 거부', bad.isError === true || (bad.data && bad.data.ok === false), `isError=${bad.isError}`);
+
+      // [보안 §6] 위험 스킴(javascript:·data:·file:) cc0 url → 거부(저장형 XSS 방지).
+      const badJs = parseToolResult(await mcp.rpc('tools/call', { name: 'asset_add_cc0', arguments: { id: 'spr_xss1', url: 'javascript:alert(1)' } }));
+      ok('G-CC0 javascript: 스킴 cc0 url 거부', badJs.isError === true || (badJs.data && badJs.data.ok === false), `isError=${badJs.isError}`);
+
+      const badData = parseToolResult(await mcp.rpc('tools/call', { name: 'asset_add_cc0', arguments: { id: 'spr_xss2', url: 'data:text/html,<script>alert(1)</script>' } }));
+      ok('G-CC0 data: 스킴 cc0 url 거부', badData.isError === true || (badData.data && badData.data.ok === false), `isError=${badData.isError}`);
     }
 
   } catch (e) {

@@ -149,6 +149,10 @@ function resolveScopedPath(value, scope) {
   if (typeof value !== 'string' || value.length === 0 || value.length > 1024) return null;
   // NUL 등 제어문자 차단.
   if (/[\u0000-\u001f]/.test(value)) return null;
+  // dotfile 세그먼트 차단(.env·.git 등) — serveStatic 정합.
+  // 분리자(/ 또는 \)\uB85C 분할한 각 세그먼트가 '.' 으로 시작하면 거부('.' 자체는 ok).
+  const segs = value.split(/[\/\\]/);
+  if (segs.some((s) => s.startsWith('.') && s !== '.')) return null;
   const root = (scope === 'games') ? path.resolve(REPO_ROOT, 'games') : REPO_ROOT;
   // 상대경로는 REPO_ROOT 기준 해석(절대경로도 정규화 후 prefix 검사로 탈출 차단).
   const abs = path.resolve(REPO_ROOT, value);
@@ -188,8 +192,17 @@ function buildSkillCommand(tool, argsIn) {
       if (!abs) return { ok: false, code: 400, error: a.name + ' 경로 거부(범위 밖/traversal): ' + JSON.stringify(v) };
       pushArg(a, abs, positional, flags);
     } else if (a.type === 'slug') {
-      if (typeof v !== 'string' || !/^[A-Za-z0-9._\-\/]{1,128}$/.test(v) || v.includes('..')) {
-        return { ok: false, code: 400, error: a.name + ' slug 형식 위반(영숫자._-/ 만, .. 금지): ' + JSON.stringify(v) };
+      // slug: 영숫자._-/ 만, '..' 금지, 선행 /·\·드라이브문자(:) 금지(절대경로 우회 차단).
+      // games/<slug> 스코프로 이중검사 — path.resolve 결과가 gamesRoot+sep 안에 있어야 통과.
+      if (typeof v !== 'string' || !/^[A-Za-z0-9._\-\/]{1,128}$/.test(v) || v.includes('..') ||
+          v.startsWith('/') || v.startsWith('\\') || v.includes(':')) {
+        return { ok: false, code: 400, error: a.name + ' slug 형식 위반(영숫자._-/ 만, ..|절대경로 금지): ' + JSON.stringify(v) };
+      }
+      // games/ 스코프 정규화 이중검사.
+      const gamesRoot = path.resolve(REPO_ROOT, 'games');
+      const absSlug = path.resolve(gamesRoot, v);
+      if (absSlug !== gamesRoot && !absSlug.startsWith(gamesRoot + path.sep)) {
+        return { ok: false, code: 400, error: a.name + ' slug games/ 범위 밖 거부: ' + JSON.stringify(v) };
       }
       pushArg(a, v, positional, flags);
     } else if (a.type === 'enum') {
@@ -647,6 +660,15 @@ function addAsset(kind, raw) {
     if (typeof raw.url !== 'string' || raw.url.length === 0) {
       return { ok: false, code: 400, error: 'cc0 asset 은 url 필수' };
     }
+    // 위험 스탬(javascript:·data:·file:·vbscript:) 차단 — 저장형 XSS/로컬 참조 방지.
+    // http(s): 또는 상대경로만 허용.
+    {
+      const urlLower = raw.url.trimStart().toLowerCase();
+      const dangerSchemes = ['javascript:', 'data:', 'file:', 'vbscript:'];
+      if (dangerSchemes.some((s) => urlLower.startsWith(s))) {
+        return { ok: false, code: 400, error: 'cc0 url 위험 스탬 거부(http(s)·상대경로만 허용): ' + JSON.stringify(raw.url.slice(0, 64)) };
+      }
+    }
     asset = {
       id,
       source: 'cc0',
@@ -672,11 +694,15 @@ function addAsset(kind, raw) {
 
 // ── P4 결정형 스킬도구 실행(execFile, 배열 인자 — 셸 미경유) ───────────────────
 // 현재 씬을 임시 파일로 직렬화해 그 경로로 lint-scene 등을 실행할 수 있게 한다.
-// 임시 파일은 games/_editor-samples/ 아래 .wgf-tmp 로 써서 pathScope(repo) 안에 둔다.
+// 임시 파일은 games/_editor-samples/ 아래 _wgf-tmp 로 써서 pathScope(repo) 안에 둔다.
+// dotfile 이 아닌 이름 — resolveScopedPath 의 dotfile 세그먼트 거부(사용자 인자 보호용)가
+// 내부 임시 경로 자신을 막지 않도록 한다.
 function writeTempScene() {
-  const dir = path.resolve(REPO_ROOT, 'games', '_editor-samples', '.wgf-tmp');
+  const dir = path.resolve(REPO_ROOT, 'games', '_editor-samples', '_wgf-tmp');
   fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, 'current-scene.json');
+  // 호출별 고유 파일명(레이스 방지) — seq + 6바이트 hex 접미어.
+  const uniq = crypto.randomBytes(6).toString('hex');
+  const file = path.join(dir, `current-scene-${state.seq}-${uniq}.json`);
   const snap = sceneSnapshot();
   fs.writeFileSync(file, JSON.stringify(snap.scene, null, 2), 'utf8');
   return file;
@@ -688,9 +714,15 @@ function writeTempScene() {
 function runSkillTool(tool, argsIn, cb) {
   const args = (argsIn && typeof argsIn === 'object' && !Array.isArray(argsIn)) ? Object.assign({}, argsIn) : {};
   // 'current' 토큰 → 현재 씬 임시 직렬화 경로(에디터 결정형 트랙 편의).
+  // 호출별 고유 파일명이므로 콜백 후 삭제(미정리 누적 방지).
+  let tmpSceneFile = null;
   try {
     for (const key of ['file', 'target']) {
-      if (args[key] === 'current') args[key] = path.relative(REPO_ROOT, writeTempScene()).split(path.sep).join('/');
+      if (args[key] === 'current') {
+        const absFile = writeTempScene();
+        tmpSceneFile = absFile;
+        args[key] = path.relative(REPO_ROOT, absFile).split(path.sep).join('/');
+      }
     }
   } catch (e) {
     cb({ ok: false, code: 500, error: '현재 씬 임시 직렬화 실패: ' + String(e && e.message || e) });
@@ -712,6 +744,8 @@ function runSkillTool(tool, argsIn, cb) {
       try { json = JSON.parse(t); break; } catch (e) { /* 마지막 줄이 JSON 아니면 null */ break; }
     }
     const exit = err && typeof err.code === 'number' ? err.code : (err ? 1 : 0);
+    // 임시 씬 파일 정리(있을 때만 — 콜백 완료 후 비동기 삭제, 실패 무시).
+    if (tmpSceneFile) fs.rm(tmpSceneFile, { force: true }, () => {});
     cb({
       ok: true, tool, exit, json,
       stdout: out.slice(-4096),

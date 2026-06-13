@@ -18,7 +18,7 @@ node_modules/
 games/_export-smoke/
 
 # WGF Studio 브리지 결정형 스킬 트랙 임시 씬 직렬화 (skill_run_tool 가 현재 씬을 lint 실행용으로 씀)
-games/_editor-samples/.wgf-tmp/
+games/_editor-samples/_wgf-tmp/
 
 # sprite-picker 세션 산출물 (피커에 주입하는 후보 데이터 — 매 요청마다 새로 생성)
 skills/wgf-sprite-picker/picker/data.js
