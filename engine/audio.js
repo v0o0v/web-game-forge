@@ -14,7 +14,7 @@
  *   a.playParams([ , , 320, , , .16, 1, 1.8 ]);  // 점프음(콤팩트 배열)
  *   a.zzfx('coin');                              // 데이터 테이블의 이름으로 재생
  *
- * 파라미터 순서(ZzFX 호환 인덱스. 생략/undefined 는 기본값):
+ * 파라미터 순서(ZzFX 인덱스 배치와 호환. 생략/undefined 는 기본값):
  *   [0]  volume         음량(0..1, 기본 .5)
  *   [1]  randomness     주파수 무작위 흔들림(0..1, 기본 .05)
  *   [2]  frequency      기본 주파수 Hz(기본 220)
@@ -23,22 +23,27 @@
  *   [5]  release        릴리스(초, 기본 .1)
  *   [6]  shape          파형 0:sine 1:triangle 2:saw 3:tan 4:noise(기본 0)
  *   [7]  shapeCurve     파형 곡률(기본 1)
- *   [8]  slide          주파수 슬라이드(기본 0)
- *   [9]  deltaSlide     슬라이드 가속(기본 0)
+ *   [8]  slide          주파수 슬라이드(기본 0) ★본 엔진 고유 스케일(ZzFX 원본과 값 범위 다름)
+ *   [9]  deltaSlide     슬라이드 가속(기본 0)   ★본 엔진 고유 스케일
  *   [10] pitchJump      피치 점프 양 Hz(기본 0)
  *   [11] pitchJumpTime  피치 점프 시점(초, 기본 0)
  *   [12] repeatTime     반복 주기(초, 기본 0)
  *   [13] noise          파형에 섞을 노이즈량(기본 0)
- *   [14] modulation     FM 변조 주파수 Hz(기본 0)
+ *   [14] modulation     FM 변조 깊이(기본 0)    ★본 엔진 고유 스케일
  *   [15] bitCrush       비트크러시 양자화 계단(기본 0)
- *   [16] delay          시작 지연(초, 기본 0)
+ *   [16] delay          선행 무음 길이(초, 기본 0) — PCM 앞에 무음 샘플로 반영
  *   [17] sustainVolume  서스테인 구간 음량 배율(기본 1)
  *   [18] decay          디케이(초, 기본 0)
  *   [19] tremolo        트레몰로 깊이(0..1, 기본 0)
  *
+ * ★ 인덱스 배치는 ZzFX 와 호환이나 slide/deltaSlide/modulation 의 값 스케일은
+ *   본 엔진 고유다. ZzFX 원본 파라미터 값을 그대로 복사하면 의도와 다른 결과가 나올 수 있다.
+ *
  * randomness 결정화: opts.seed(숫자/문자열) 를 주면 RngForge 로 결정론적 흔들림을
  * 적용한다(같은 seed → 항상 같은 파형). seed 미지정 시 Math.random 대신 *무흔들림*(0)
  * 으로 합성해 헤드리스에서도 결정적이게 한다 → Math.random 미사용(엔진 규칙 준수).
+ * zzfx(name) 은 seed 미지정 시 SFX 이름에서 결정론적 기본 seed 를 자동 주입해 noise/
+ * randomness 를 지닌 SFX(explosion 등)도 가청으로 재생한다.
  * ==========================================================================*/
 (function (global) {
   'use strict';
@@ -171,9 +176,18 @@
 
   // 데이터 테이블의 이름으로 SFX 재생(ZzFX 합성 경로). 없는 이름이면 무시.
   // 기존 sfx() 와 독립 — 게임은 둘 중 원하는 경로를 선택한다(하위호환 유지).
+  // seed 미지정 시 이름에서 결정론적 기본 seed 를 자동 주입 → noise/randomness SFX(explosion 등)
+  // 도 항상 가청으로 재생된다. 명시된 opts.seed 가 있으면 그것을 우선한다.
   ChipAudio.prototype.zzfx = function (name, opts) {
     var p = ZZFX_SFX[name];
     if (!p) return;
+    opts = opts || {};
+    // seed 미지정이고 RngForge 사용 가능 → 이름에서 결정론적 기본 seed 주입.
+    // explosion 등 noise/randomness SFX 가 항상 가청이 되게 한다.
+    // 명시된 opts.seed 가 있으면 그것을 그대로 존중한다.
+    if (opts.seed === undefined && RngForge) {
+      opts = { seed: RngForge.hashSeed(name), vol: opts.vol, delay: opts.delay };
+    }
     this.playParams(p, opts);
   };
 
@@ -208,6 +222,16 @@
 
   function num(v, dflt) { return (typeof v === 'number' && isFinite(v)) ? v : dflt; }
 
+  // ── 합성 스케일 상수 (본 엔진 고유; ZzFX 원본과 값 범위가 다름) ─────────────
+  // slide 값을 사이클/샘플² 로 변환하는 배율. 작은 정수(예: 8)가 가청 슬라이드를 만든다.
+  var SLIDE_SCALE = 50;
+  // deltaSlide 누적분을 주파수에 더하는 배율. 미세 가속/감속 표현.
+  var DELTA_SLIDE_SCALE = 0.0001;
+  // modulation 값을 FM 변조 깊이(사이클/샘플)로 변환하는 배율.
+  var MOD_DEPTH_SCALE = 0.0002;
+  // 트레몰로 LFO 주파수(Hz). 9Hz = 표준 비브라토 대역의 빠른 떨림.
+  var TREMOLO_HZ = 9;
+
   // 순수 합성: 파라미터 → Float32Array PCM. 어디서도 Math.random 미사용.
   function synthZzfx(params, opts) {
     opts = opts || {};
@@ -230,32 +254,37 @@
     var noise       = num(P.noise, 0);
     var modulation  = num(P.modulation, 0);
     var bitCrush    = num(P.bitCrush, 0);
+    var delay       = num(P.delay, 0);
     var sustainVol  = num(P.sustainVolume, 1);
     var decay       = num(P.decay, 0);
     var tremolo     = num(P.tremolo, 0);
 
     // randomness 흔들림: seed 있으면 결정론(RngForge), 없으면 0(무흔들림 — Math.random 금지).
+    var hasSeed = opts.seed !== undefined && opts.seed !== null;
     var jitter = 0;
-    if (randomness && opts.seed !== undefined && opts.seed !== null && RngForge) {
+    if (randomness && hasSeed && RngForge) {
       var rng = RngForge.create(opts.seed);
       jitter = (rng() * 2 - 1) * randomness; // [-randomness, +randomness)
     }
     frequency *= 1 + jitter;
     // 노이즈/모듈레이션도 같은 스트림에서 결정론적으로 — 시드 있을 때만 활성, 없으면 0.
     var nrng = null;
-    if (opts.seed !== undefined && opts.seed !== null && RngForge) nrng = RngForge.create(opts.seed).stream('noise');
+    if (hasSeed && RngForge) nrng = RngForge.create(opts.seed).stream('noise');
 
     var two_pi = 2 * Math.PI;
     var startSlide = slide;
     var deltaSlideStep = deltaSlide / sr;
     var freq = frequency / sr;          // 사이클/샘플
-    var slidePerSample = (startSlide * 50) / (sr * sr);
+    var slidePerSample = (startSlide * SLIDE_SCALE) / (sr * sr);
+    // delay: 선행 무음 샘플 수. PCM 앞부분에 반영해 데이터 일관성 보장.
+    var delayS = Math.round(delay * sr);
     // 각 구간 샘플 수를 먼저 정수로 산출 → 합으로 총길이(float 합 ceil 의 ±1 지터 회피).
     var attackS  = Math.round(attack * sr);
     var decayS   = Math.round(decay * sr);
     var sustainS = Math.round(sustain * sr);
     var releaseS = Math.round(release * sr);
-    var totalSamples = Math.max(1, attackS + decayS + sustainS + releaseS);
+    var soundSamples = Math.max(1, attackS + decayS + sustainS + releaseS);
+    var totalSamples = delayS + soundSamples;
     var pitchJumpSample = pitchJumpT * sr;
     var repeatSamples = repeatTime ? Math.ceil(repeatTime * sr) : 0;
     var modPerSample = modulation ? (modulation / sr) : 0;
@@ -263,12 +292,13 @@
     var out = new Float32Array(totalSamples);
     var phase = 0, modPhase = 0, jumped = false, crushHold = 0, crushCount = 0;
 
-    for (var i = 0; i < totalSamples; i++) {
+    // delayS 샘플은 0(무음)으로 초기화된 채로 유지; soundSamples 구간만 합성한다.
+    for (var i = 0; i < soundSamples; i++) {
       var ri = repeatSamples ? (i % repeatSamples) : i; // 반복 구간 인덱스
 
       // 주파수 슬라이드 진행
       slide += deltaSlideStep;
-      var f = freq + slidePerSample * i + (slide - startSlide) * 0.0001;
+      var f = freq + slidePerSample * i + (slide - startSlide) * DELTA_SLIDE_SCALE;
       if (f < 0) f = 0;
 
       // 피치 점프(특정 시점 이후 주파수 가산)
@@ -276,7 +306,7 @@
       var fEff = f + (jumped ? (pitchJump / sr) : 0);
 
       // FM 변조
-      if (modPerSample) { modPhase += modPerSample; fEff += (modulation * 0.0002 / sr) * Math.sin(modPhase * two_pi); }
+      if (modPerSample) { modPhase += modPerSample; fEff += (modulation * MOD_DEPTH_SCALE / sr) * Math.sin(modPhase * two_pi); }
 
       phase += fEff;
       var t = phase % 1; // [0,1) 한 사이클 위상
@@ -285,7 +315,7 @@
         case 1: w = 1 - 4 * Math.abs(Math.round(t) - t); break;          // triangle
         case 2: w = 2 * t - 1; break;                                     // sawtooth
         case 3: w = Math.tan(Math.min(1.57, t * two_pi)) * 0.2; if (w > 1) w = 1; if (w < -1) w = -1; break; // tan-ish
-        case 4: w = nrng ? (nrng() * 2 - 1) : 0; break;                   // noise(시드 없으면 무음 노이즈=0)
+        case 4: w = nrng ? (nrng() * 2 - 1) : 0; break;                  // noise(시드 없으면 무음=0)
         default: w = Math.sin(t * two_pi);                                // sine
       }
       // shapeCurve: 비대칭/하모닉 (부호 보존 거듭제곱)
@@ -300,8 +330,8 @@
       else if (ri < attackS + decayS + sustainS) env = sustainVol;
       else { var rp = releaseS ? (ri - attackS - decayS - sustainS) / releaseS : 1; env = sustainVol * (1 - Math.min(1, Math.max(0, rp))); }
 
-      // 트레몰로(진폭 LFO)
-      if (tremolo) env *= 1 - tremolo * 0.5 * (1 - Math.cos(two_pi * 9 * i / sr));
+      // 트레몰로(진폭 LFO — TREMOLO_HZ 로 떨림 속도 결정)
+      if (tremolo) env *= 1 - tremolo * 0.5 * (1 - Math.cos(two_pi * TREMOLO_HZ * i / sr));
 
       var s = w * env * volume;
 
@@ -312,7 +342,7 @@
       }
 
       if (s > 1) s = 1; else if (s < -1) s = -1;
-      out[i] = s;
+      out[delayS + i] = s; // delay 오프셋 적용
     }
     return out;
   }
