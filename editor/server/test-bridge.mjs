@@ -418,6 +418,49 @@ async function main() {
       if (sseNoTok.close) sseNoTok.close();
     }
 
+    // ── G7 remote transport 라운드트립(addEntity newId 회수 + 미러 setTransform) ──
+    // window.WGFEditor.addEntity(remote) 경로가 브리지를 거쳐 동작함을 검증:
+    //  POST addEntity → 응답 newId 회수 → 그 id 로 setTransform → SSE 델타 + 스냅샷 반영.
+    {
+      const sse = await openSSE(info);
+      const add = await api(info, 'POST', '/api/command', {
+        command: { type: 'addEntity', entity: { name: 'g7-remote', transform: { x: 11, y: 22 }, components: [] } }
+      });
+      const addBody = JSON.parse(add.body);
+      ok('G7-1 addEntity POST → newId 회수', addBody.ok === true && addBody.newId != null,
+        `newId=${addBody.newId}`);
+
+      // 회수한 newId 로 setTransform — 미러가 같은 id 를 알아야 적용됨(브리지 단일 진실 일관).
+      const move = await api(info, 'POST', '/api/command', {
+        command: { type: 'setTransform', id: addBody.newId, transform: { x: 99, y: 88 } }
+      });
+      const moveBody = JSON.parse(move.body);
+      ok('G7-2 newId setTransform 적용(seq 증가)', moveBody.ok === true && moveBody.seq > addBody.seq,
+        `seq=${moveBody.seq}`);
+
+      // SSE 델타로 두 커맨드 모두 같은 id 로 수신(미러가 동일 결과 재현 가능).
+      const gotAdd = await waitFor(() => sse.events.some((e) =>
+        e.type === 'command' && e.command && e.command.type === 'addEntity' && e.command.entity && e.command.entity.id === addBody.newId), 2000);
+      ok('G7-3 SSE 델타 addEntity 에 확정 id 포함', gotAdd, `newId=${addBody.newId}`);
+
+      // 최종 스냅샷에 newId 엔티티가 (99,88) 로 반영.
+      const snap = JSON.parse((await api(info, 'GET', '/api/scene')).body);
+      const ent = snap.scene.scenes[0].entities.find((e) => e.id === addBody.newId);
+      ok('G7-4 스냅샷 반영(좌표 99,88)', ent && ent.transform.x === 99 && ent.transform.y === 88,
+        `ent=${JSON.stringify(ent && ent.transform)}`);
+
+      // undo → newId 엔티티의 transform 이 직전 값(11,22)로 복원(브리지 권위 undo).
+      const undoRes = await api(info, 'POST', '/api/undo');
+      ok('G7-5 브리지 undo 적용', JSON.parse(undoRes.body).applied === true, `body=${undoRes.body}`);
+      const snap2 = JSON.parse((await api(info, 'GET', '/api/scene')).body);
+      const ent2 = snap2.scene.scenes[0].entities.find((e) => e.id === addBody.newId);
+      ok('G7-6 undo 후 좌표 복원(11,22)', ent2 && ent2.transform.x === 11 && ent2.transform.y === 22,
+        `ent=${JSON.stringify(ent2 && ent2.transform)}`);
+
+      sse.close();
+      await sleep(50);
+    }
+
   } catch (e) {
     ok('테스트 실행 예외', false, String(e && e.stack || e));
   } finally {

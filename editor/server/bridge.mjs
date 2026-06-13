@@ -121,19 +121,23 @@ function applyAndBroadcast(kind, command, undoDelta) {
 }
 
 // edit 커맨드(GUI/Claude). Play 모드면 거부 호출자가 처리. undoDelta 를 Undo 스택에 적재.
+// 반환 {seq, newId} — addEntity 면 newId = 브리지가 발급한 확정 id(remote 클라가 즉시 회수).
 function pushCommand(command) {
   const undoDelta = SceneKit.applyCommand(state.world, command);
   // addEntity 의 새 id 를 커맨드에 박아 redo/미러 재적용 시 같은 id 가 나오게(§ editorController 패턴).
   let stored = command;
+  let newId = null;
   if (command.type === 'addEntity' && undoDelta && undoDelta.type === 'removeEntity' && undoDelta.id != null) {
-    const ent = Object.assign({}, command.entity, { id: undoDelta.id });
+    newId = undoDelta.id;
+    const ent = Object.assign({}, command.entity, { id: newId });
     stored = Object.assign({}, command, { entity: ent });
   }
   state.undoStack.push({ cmd: stored, undoDelta });
   if (state.undoStack.length > UNDO_LIMIT) state.undoStack.shift();
   state.redoStack.length = 0;
   // 미러 동기는 stored(확정 id 포함) 를 브로드캐스트해야 클라가 같은 id 로 applyCommand.
-  return applyAndBroadcast('command', stored, undoDelta);
+  const seq = applyAndBroadcast('command', stored, undoDelta);
+  return { seq, newId };
 }
 
 function doUndo() {
@@ -383,8 +387,8 @@ function handleApi(req, res, u, p) {
       const command = parsed && parsed.command;
       if (!command || typeof command !== 'object') { sendJSON(res, 400, { ok: false, error: 'command 누락' }); return; }
       if (state.mode === 'play') { sendJSON(res, 409, { ok: false, error: 'Play 모드 — 씬 read-only(§4.9)' }); return; }
-      const seq = pushCommand(command);
-      sendJSON(res, 200, { ok: true, seq });
+      const r = pushCommand(command);
+      sendJSON(res, 200, { ok: true, seq: r.seq, newId: r.newId });
     });
     return;
   }

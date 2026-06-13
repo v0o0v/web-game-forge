@@ -14,6 +14,7 @@
 import { render } from 'preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
 import { createController } from './editorController.js';
+import { createTransport, getBridgeConfig } from './bridgeTransport.js';
 import { Toolbar } from './Toolbar.jsx';
 import { Hierarchy } from './Hierarchy.jsx';
 import { Viewport } from './Viewport.jsx';
@@ -60,12 +61,21 @@ function App({ controller }) {
     return () => { offChange(); offSel(); };
   }, []);
 
-  // 초기 씬 로드(fetch topdown-min). 마운트는 Viewport 가 담당.
+  // 초기 씬 로드. 마운트는 Viewport 가 담당.
+  //  - remote(브리지): /api/scene 스냅샷으로 부트(브리지 = 단일 진실). Viewport 마운트 후
+  //    startRemote() 가 SSE 연결 + 재동기. setDocState 로 어댑터 초기 마운트 문서 제공.
+  //  - local: P1 처럼 topdown-min fetch.
   useEffect(() => {
-    fetch(DEFAULT_SCENE_URL)
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error('fetch ' + r.status)))
-      .then((doc) => { setDocState(doc); })
-      .catch(() => { setDocState(FALLBACK_SCENE); });
+    if (controller.isRemote) {
+      controller.startRemote()
+        .then((snap) => { setDocState((snap && snap.scene) ? snap.scene : FALLBACK_SCENE); })
+        .catch(() => { setDocState(FALLBACK_SCENE); });
+    } else {
+      fetch(DEFAULT_SCENE_URL)
+        .then((r) => r.ok ? r.json() : Promise.reject(new Error('fetch ' + r.status)))
+        .then((doc) => { setDocState(doc); })
+        .catch(() => { setDocState(FALLBACK_SCENE); });
+    }
   }, []);
 
   function onSnapChange(on, size) {
@@ -103,11 +113,17 @@ function boot() {
     return;
   }
 
-  const controller = createController();
+  // transport 선택: window.__WGF_BRIDGE__ 주입 시 remote(브리지 구독자), 없으면 local(P1).
+  const transport = createTransport();
+  const controller = createController({ transport });
 
   // window.WGFEditor — e2e 프로그래매틱 API(편집 인스턴스 래핑).
+  // local·remote 둘 다에서 동일 시그니처. remote 에선 명령이 브리지를 거쳐 Promise 반환.
   window.WGFEditor = {
     _controller: controller,
+    _transport: transport,
+    _bridge: getBridgeConfig(),
+    isRemote: controller.isRemote,
     loadScene: (doc) => controller.loadScene(doc),
     serialize: () => controller.serialize(),
     hash: () => controller.hash(),
