@@ -59,6 +59,15 @@ function run120(world) {
 {
   const SEED = 42;
 
+  // 1-0: load 개수 단언 — scenes[] 래퍼를 읽지 못하면 0개로 trivially 통과하는 걸 막는다.
+  const wProbe = SceneKit.load(SCENE_DOC, { mode: 'play', seed: SEED });
+  ok('G1-0 load entities 개수 = 2 (player, enemy_01)',
+    wProbe.entities.length === 2,
+    `actual=${wProbe.entities.length}`);
+  ok('G1-0 load walls 개수 = 4 (상하좌우)',
+    wProbe.walls.length === 4,
+    `actual=${wProbe.walls.length}`);
+
   // 1-A: 같은 seed 2회 → hashState 일치
   const w1 = SceneKit.load(SCENE_DOC, { mode: 'play', seed: SEED });
   run120(w1);
