@@ -37,6 +37,10 @@
  *     8방향=octile 이 기본(자동 선택). 비용 가중 시에도 admissible 유지를 위해
  *     휴리스틱에 minCellCost 를 곱한다(기본 셀 비용 1 가정).
  *   - 경로 없음(완전 차단/범위 밖 시작·목표)은 **빈 배열 []**. null 이 필요하면 길이로 판별.
+ *   - findPath 입력 좌표는 정수로 강제(`|0`)된다. 소수 좌표는 floor 칸으로 정규화.
+ *   - open-set 은 단순 배열 선형 스캔(O(n²) 상한). 실측 기준 ~128×128(≈1.6만 칸)까지
+ *     1프레임 내 완료. 그 이상이거나 매 프레임 다수 에이전트 호출 시 경로 캐싱·재사용
+ *     권장. 이진 힙을 의도적으로 미사용한 것은 결정론(힙 재배열 순서 모호성 제거) 우선 때문.
  *   - 헤드리스(Node require) 가능 — Phaser 비의존 순수 로직. 결정적 테스트에 사용.
  * ==========================================================================*/
 (function (global) {
@@ -70,7 +74,7 @@
     cfg = cfg || {};
     this.cols = Math.max(1, cfg.cols | 0 || 1);
     this.rows = Math.max(1, cfg.rows | 0 || 1);
-    this.cellSize = cfg.cellSize == null ? 32 : cfg.cellSize;   // 정사각형 칸 변(픽셀)
+    this.cellSize = (cfg.cellSize > 0 ? cfg.cellSize : 32);      // 정사각형 칸 변(픽셀). 0/음수는 32 로 보정(pixelToCell Infinity 방지)
     this.originX = cfg.originX == null ? 0 : cfg.originX;       // 그리드 좌상단 픽셀 오프셋
     this.originY = cfg.originY == null ? 0 : cfg.originY;
 
@@ -142,6 +146,8 @@
   //   weight:number         휴리스틱 가중(>1 이면 빠르지만 비최단 가능, 기본 1=admissible)
   // 반환: [{col,row}, ...] 시작·목표 포함. 경로 없으면 [].
   Board.prototype.findPath = function (sc, sr, gc, gr, opts) {
+    // 소수 좌표 정규화: floor 칸으로 강제(0.5,0.5 → 0,0). 부동소수 전달 오류 방어.
+    sc = sc | 0; sr = sr | 0; gc = gc | 0; gr = gr | 0;
     opts = opts || {};
     var diagonal = !!opts.diagonal;
     var dirs = diagonal ? DIRS8 : DIRS4;

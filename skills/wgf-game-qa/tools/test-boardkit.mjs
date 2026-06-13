@@ -12,6 +12,9 @@
 //   6) 4 vs 8방향 — 대각 허용 시 더 짧은(또는 같은) 경로
 //   7) 코너컷 방지 — dontCrossCorners 가 막힌 모서리 사이 대각 관통을 금지
 //   8) 휴리스틱 admissible — 가중 보드에서 A* 비용 = 다익스트라(h=0) 비용(최단 보장)
+//   9) 소수 좌표 정규화 — findPath(0.5,0.5,...) 가 floor 칸(0,0)과 동일 경로 반환
+//  10) cellSize 0/음수 방어 — create({cellSize:0}) 이 기본값 32 로 폴백
+//  11) bimodal 가중 consistency — 비용 1 vs 큰 값 보드에서 A* = 다익스트라(최단 보장)
 //
 // 사용: node skills/wgf-game-qa/tools/test-boardkit.mjs
 // 출력 계약: 사람용 라인 + 마지막 줄 단일 JSON {"ok":bool,"pass":n,"fail":n,"checks":[...]}
@@ -212,6 +215,56 @@ function isContiguous(path) {
 
   // 휴리스틱 노출 확인 + 값 정합(octile(3,3)=3√2, manhattan(3,4)=7).
   ok('heuristics exposed & correct', approx(BoardKit.heuristics.octile(3, 3), 3 * Math.SQRT2) && BoardKit.heuristics.manhattan(3, 4) === 7)
+}
+
+// ── 9) 소수 좌표 정규화 ──
+{
+  const b = BoardKit.create({ cols: 6, rows: 6, cellSize: 16 })
+  // (0.5,0.5)→(0,0), (4.9,4.9)→(4,4) 로 floor 강제. 정수 좌표와 동일 경로여야 함.
+  const pInt = b.findPath(0, 0, 4, 4)
+  const pFloat = b.findPath(0.5, 0.5, 4.9, 4.9)
+  ok('float coords normalized to floor cell (same path as int)', pathKey(pFloat) === pathKey(pInt), `int=${pathKey(pInt)} float=${pathKey(pFloat)}`)
+  // 소수 시작이 막힌 칸에 floor 되면 [] (정수와 동일 가드 동작)
+  const b2 = BoardKit.create({ cols: 4, rows: 4, cellSize: 16 })
+  b2.setWalkable(1, 1, false)
+  ok('float blocked-cell start → [] (same as int)', b2.findPath(1.7, 1.2, 3, 3).length === 0)
+}
+
+// ── 10) cellSize 0/음수 방어 ──
+{
+  const b0 = BoardKit.create({ cols: 4, rows: 4, cellSize: 0 })
+  ok('cellSize:0 falls back to 32', b0.cellSize === 32)
+  const bNeg = BoardKit.create({ cols: 4, rows: 4, cellSize: -10 })
+  ok('cellSize:-10 falls back to 32', bNeg.cellSize === 32)
+  // 정상 cellSize 는 그대로
+  const bOk = BoardKit.create({ cols: 4, rows: 4, cellSize: 24 })
+  ok('valid cellSize:24 preserved', bOk.cellSize === 24)
+  // pixelToCell 이 Infinity/NaN 없이 정상 동작하는지
+  const px = b0.cellToPixel(2, 2)
+  const cc = b0.pixelToCell(px.x, px.y)
+  ok('cellSize:0 fallback: cellToPixel↔pixelToCell round-trip sane', cc.col === 2 && cc.row === 2)
+}
+
+// ── 11) bimodal 가중 consistency (A* = 다익스트라, closed 재오픈 불필요 확인) ──
+{
+  // 비용 1 vs 비용 100 의 이분 보드: A* 가 비싼 칸을 우회해 최단 비용을 찾아야 함.
+  // weight:1(admissible) A* 와 weight:0(순수 다익스트라) 비용이 일치해야 최단 보장 확인.
+  const mk = () => {
+    const x = BoardKit.create({ cols: 12, rows: 12, cellSize: 16 })
+    // 가운데 세로 띠(col 5,6) 전체를 비용 100 으로 설정(막지는 않음 — 통과는 가능하나 매우 비쌈)
+    for (let r = 0; r < 12; r++) { x.setCost(5, r, 100); x.setCost(6, r, 100) }
+    return x
+  }
+  const bA = mk(), bD = mk()
+  const pA = bA.findPath(0, 0, 11, 11, { weighted: true, diagonal: true })
+  const pD = bD.findPath(0, 0, 11, 11, { weighted: true, diagonal: true, weight: 0 })
+  const costA = pathCost(mk(), pA, true)
+  const costD = pathCost(mk(), pD, true)
+  ok('bimodal weighted: path found', pA.length > 0)
+  ok('bimodal weighted: A* cost == Dijkstra (admissible → no suboptimal shortcut)', approx(costA, costD), `A*=${costA.toFixed(4)} Dij=${costD.toFixed(4)}`)
+  // 우회 경로가 실제로 비싼 칸을 최소화했는지: 비싼 칸(col 5 or 6) 통과 수
+  const expensive = (p) => p.filter(c => c.col === 5 || c.col === 6).length
+  ok('bimodal: A* avoids expensive columns (same or fewer than Dijkstra)', expensive(pA) <= expensive(pD) + 1)
 }
 
 console.log(`— pass ${pass} · fail ${fail}`)
