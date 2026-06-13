@@ -80,6 +80,27 @@ const snap = {
 console.log(JSON.stringify(snap));        // 기준값과 비교(불일치 = 회귀)
 ```
 
+## 7단계: 결정성 회귀 하니스 (replay-determinism)
+
+`game.step` 게임상태를 직렬화해 **비결정성 누수(Date.now/Math.random/순회순서)** 를 두 방식으로
+자동 검출한다. 좌표는 양자화(`round(x*1000)/1000`)로 부동소수 노이즈를 흡수하고, `score`/`lives`/
+엔티티수/`rng.state()` 를 함께 박는다.
+
+```bash
+node skills/wgf-game-qa/tools/replay-determinism.mjs --update  # golden 생성·갱신
+node skills/wgf-game-qa/tools/replay-determinism.mjs           # golden 비교 + 2회 재생 해시 검사
+# 전부 통과 0 / 하나라도 실패 1. 마지막 줄 단일 JSON {"ok",...}.
+```
+
+- (a) **상태 스냅샷 회귀**: 시드 고정 N프레임 후 직렬화 상태를 `golden/replay-*.json` 으로 박아 비교
+  (`snapshot.mjs` 와 동일한 golden 디렉터리/diff/`--update` 패턴).
+- (b) **2회 재생 해시**: 같은 시드 + 같은 입력 타임라인을 2회 독립 재생 → 상태 시퀀스 해시(djb2+FNV)
+  **불일치 시 비결정성 누수**로 판정. 음성 fixture(Date.now/Math.random 주입)는 도구가 불일치를
+  **검출하면 통과**하는 메타 테스트로 구성.
+- 한계: runeburst 등 실제 게임의 `resolveStep` 은 Phaser scene/tween/`time.delayedCall` 에 묶여 Node
+  헤드리스 step 이 불가하므로, 실제 `engine/rngforge.js` 를 유일 엔트로피원으로 쓰는 **합성 step**
+  (시드 RNG 가 스폰·이동·충돌·점수를 구동 — runeburst 의 "rng 하나가 진실" 모델과 동형)으로 실증한다.
+
 ## QA 절차
 
 ### 1단계: 로컬 서버 기동
