@@ -33,6 +33,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
@@ -76,6 +77,142 @@ const ENDPOINT_FILE = process.env.WGF_BRIDGE_ENDPOINT_FILE ||
 
 // ── 토큰(보안 §6) ─────────────────────────────────────────────────────────────
 const TOKEN = crypto.randomBytes(24).toString('hex');
+
+// ── P4 결정형 스킬도구 화이트리스트 + 인자 스키마 (보안 §6) ─────────────────────
+// `POST /api/skill/run` 은 아래 화이트리스트의 결정형 도구만 execFile(배열 인자)로
+// 실행한다. 셸을 거치지 않으므로 셸 보간(`;`·`&&`·`$()` 등)은 무력화된다 — 어떤
+// 인자도 "파일명/문자열"로만 취급된다(인자 메타문자 무해).
+//
+// 각 도구 정의:
+//  - path  : 리포 내 고정 절대경로(절대 사용자 입력으로 결정하지 않음 — traversal 차단).
+//  - args  : 허용 인자 스펙 배열. 각 스펙은 cli(고정 플래그 또는 위치 인자)를 어떻게
+//            구성하는지 + 값 검증 규칙을 정의한다.
+//      { name, kind:'flag'|'positional'|'boolflag', required?, type, enumVals?,
+//        pathScope? }
+//      - kind 'flag'      : 값을 받아 `--name <value>` 2토큰으로 push.
+//      - kind 'positional': 값을 받아 그대로 1토큰으로 push(선두 위치 인자).
+//      - kind 'boolflag'  : 값 true 면 `--name` 1토큰만 push(값 없음).
+//      - type 'path'      : 경로 — pathScope(REPO_ROOT 또는 games/) 내로 정규화,
+//                           벗어나면 거부(`../` traversal·절대경로 탈출 차단).
+//      - type 'enum'      : enumVals 중 하나여야 함.
+//      - type 'slug'      : [A-Za-z0-9._-] 만(경로 구분자·메타문자 불가).
+//      - type 'string'    : 길이 상한만(메타문자는 execFile 라 무해하나 과대 방지).
+// 화이트리스트에 없는 도구명, 스펙에 없는 인자, 타입 위반, traversal → 4xx 구조화 거부.
+const SKILL_TOOLS = {
+  // scene.json 정적 검증(현재 씬을 임시 직렬화해 그 경로로 실행).
+  'lint-scene': {
+    path: path.resolve(REPO_ROOT, 'skills/wgf-editor/tools/lint-scene.mjs'),
+    args: [
+      { name: 'file', kind: 'flag', required: true, type: 'path', pathScope: 'repo' },
+      { name: 'json', kind: 'boolflag', type: 'bool' }
+    ]
+  },
+  // game.js 결정론(RngForge·Math.random 금지) 정적 검증 — 위치 인자 파일.
+  'lint-rng': {
+    path: path.resolve(REPO_ROOT, 'skills/wgf-game-qa/tools/lint-rng.mjs'),
+    args: [
+      { name: 'file', kind: 'positional', required: true, type: 'path', pathScope: 'repo' },
+      { name: 'json', kind: 'boolflag', type: 'bool' },
+      { name: 'strict', kind: 'boolflag', type: 'bool' }
+    ]
+  },
+  // juice(game feel) 정적 린트 — 위치 인자 파일.
+  'lint-juice': {
+    path: path.resolve(REPO_ROOT, 'skills/wgf-game-qa/tools/lint-juice.mjs'),
+    args: [
+      { name: 'file', kind: 'positional', required: true, type: 'path', pathScope: 'repo' },
+      { name: 'json', kind: 'boolflag', type: 'bool' },
+      { name: 'strict', kind: 'boolflag', type: 'bool' }
+    ]
+  },
+  // 엔진 킷 의존성 그래프 검증(기본 engine/manifest.json — 인자 없이도 실행).
+  'lint-kit-deps': {
+    path: path.resolve(REPO_ROOT, 'skills/wgf-game-qa/tools/lint-kit-deps.mjs'),
+    args: [
+      { name: 'file', kind: 'positional', required: false, type: 'path', pathScope: 'repo' },
+      { name: 'json', kind: 'boolflag', type: 'bool' },
+      { name: 'strict', kind: 'boolflag', type: 'bool' }
+    ]
+  },
+  // 종합 QA 점수(BH/VU/IA) — 위치 인자 slug 또는 games/ 내 디렉터리.
+  'qa-score': {
+    path: path.resolve(REPO_ROOT, 'skills/wgf-game-qa/tools/qa-score.mjs'),
+    args: [
+      { name: 'target', kind: 'positional', required: true, type: 'slug' },
+      { name: 'json', kind: 'boolflag', type: 'bool' }
+    ]
+  }
+};
+
+// 경로 인자를 스코프(repo/games) 내로 정규화. 벗어나면 null(거부 신호).
+function resolveScopedPath(value, scope) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 1024) return null;
+  // NUL 등 제어문자 차단.
+  if (/[\u0000-\u001f]/.test(value)) return null;
+  const root = (scope === 'games') ? path.resolve(REPO_ROOT, 'games') : REPO_ROOT;
+  // 상대경로는 REPO_ROOT 기준 해석(절대경로도 정규화 후 prefix 검사로 탈출 차단).
+  const abs = path.resolve(REPO_ROOT, value);
+  if (abs !== root && !abs.startsWith(root + path.sep)) return null;
+  return abs;
+}
+
+// {tool, args} 검증 → execFile 인자 배열 생성. 위반 시 {error} 반환.
+// 반환 {ok:true, toolPath, argv} 또는 {ok:false, code, error}.
+function buildSkillCommand(tool, argsIn) {
+  if (typeof tool !== 'string' || !Object.prototype.hasOwnProperty.call(SKILL_TOOLS, tool)) {
+    return { ok: false, code: 403, error: '화이트리스트 외 도구 거부: ' + JSON.stringify(tool) };
+  }
+  const spec = SKILL_TOOLS[tool];
+  const args = (argsIn && typeof argsIn === 'object' && !Array.isArray(argsIn)) ? argsIn : {};
+  // 스펙에 없는 인자 키 거부(인자 스키마 위반).
+  const allowed = new Set(spec.args.map((a) => a.name));
+  for (const k of Object.keys(args)) {
+    if (!allowed.has(k)) return { ok: false, code: 400, error: '허용되지 않은 인자: ' + JSON.stringify(k) };
+  }
+  const positional = [];
+  const flags = [];
+  for (const a of spec.args) {
+    const v = args[a.name];
+    if (v === undefined || v === null) {
+      if (a.required) return { ok: false, code: 400, error: '필수 인자 누락: ' + a.name };
+      continue;
+    }
+    if (a.kind === 'boolflag') {
+      if (typeof v !== 'boolean') return { ok: false, code: 400, error: a.name + ' 는 boolean 이어야 함' };
+      if (v) flags.push('--' + a.name);
+      continue;
+    }
+    // 값 검증(타입별).
+    if (a.type === 'path') {
+      const abs = resolveScopedPath(v, a.pathScope);
+      if (!abs) return { ok: false, code: 400, error: a.name + ' 경로 거부(범위 밖/traversal): ' + JSON.stringify(v) };
+      pushArg(a, abs, positional, flags);
+    } else if (a.type === 'slug') {
+      if (typeof v !== 'string' || !/^[A-Za-z0-9._\-\/]{1,128}$/.test(v) || v.includes('..')) {
+        return { ok: false, code: 400, error: a.name + ' slug 형식 위반(영숫자._-/ 만, .. 금지): ' + JSON.stringify(v) };
+      }
+      pushArg(a, v, positional, flags);
+    } else if (a.type === 'enum') {
+      if (!Array.isArray(a.enumVals) || !a.enumVals.includes(v)) {
+        return { ok: false, code: 400, error: a.name + ' 허용값 위반' };
+      }
+      pushArg(a, v, positional, flags);
+    } else if (a.type === 'string') {
+      if (typeof v !== 'string' || v.length > 256) return { ok: false, code: 400, error: a.name + ' 문자열 위반' };
+      pushArg(a, v, positional, flags);
+    } else {
+      return { ok: false, code: 400, error: a.name + ' 알 수 없는 타입' };
+    }
+  }
+  // argv = [toolPath, ...positional(선두), ...flags]. positional 우선(qa-score/lint-rng 위치 인자).
+  const argv = [spec.path, ...positional, ...flags];
+  return { ok: true, toolPath: spec.path, argv };
+}
+
+function pushArg(spec, value, positional, flags) {
+  if (spec.kind === 'positional') positional.push(String(value));
+  else flags.push('--' + spec.name, String(value));   // kind 'flag'
+}
 
 // ── SceneKit 코어 로드(authoritative world) ──────────────────────────────────
 // 브라우저 외부(Node)에서도 동일 코어로 t=0 를 만든다 — §4.1 단일 코어 원칙.
@@ -354,6 +491,10 @@ function replayMissed(sub, lastId) {
       // [수정] mode 델타는 'mode' 타입으로 재전송 — 라이브 브로드캐스트(§4.9)와 동일.
       //  재연결 클라가 applyCommand({mode:'play'}) 대신 올바른 mode 이벤트로 처리하게.
       evt = { type: 'mode', seq: entry.seq, mode: entry.command.mode };
+    } else if (entry.kind === 'asset') {
+      // [P4] 에셋 델타는 'asset' 타입으로 재전송 — 라이브 브로드캐스트와 동일(씬 커맨드 아님).
+      const c = entry.command || {};
+      evt = { type: 'asset', seq: entry.seq, op: c.op, asset: c.asset };
     } else {
       evt = { type: 'command', seq: entry.seq, command: entry.command };
     }
@@ -464,6 +605,120 @@ function wrapForSnapshot(serialized) {
     }],
     dataLayers: base.dataLayers || {}
   };
+}
+
+// ── P4 에셋(assets.sprites) — 추가/조회 ───────────────────────────────────────
+// world.assets 는 SceneKit.load 가 노출하는 mutable 객체이며 serialize 가 보존한다.
+// 에셋 추가는 씬 트랜스폼/엔티티가 아니라 자산 def 슬롯이므로 applyCommand(엔티티 전용)
+// 대상이 아니다 → world.assets.sprites 를 직접 갱신하고 'asset' 델타로 브로드캐스트한다.
+// (결정론 불변식: 자산 추가는 엔티티 상태 해시에 영향이 없고, 엔티티가 그 id 를 ref 할 때
+//  비로소 Sprite 컴포넌트로 들어가며 그 경로는 applyCommand 를 거친다.)
+function listAssets() {
+  const a = (state.world && state.world.assets && typeof state.world.assets === 'object') ? state.world.assets : {};
+  return { sprites: Array.isArray(a.sprites) ? a.sprites : [] };
+}
+
+// 에셋 1건 추가. kind: 'procedural'|'cc0'. 검증 후 sprites 에 push.
+// 반환 {ok, asset} 또는 {ok:false, code, error}.
+function addAsset(kind, raw) {
+  if (!raw || typeof raw !== 'object') return { ok: false, code: 400, error: 'asset 객체 필요' };
+  const id = raw.id;
+  if (typeof id !== 'string' || !/^[A-Za-z0-9._\-]{1,64}$/.test(id)) {
+    return { ok: false, code: 400, error: 'asset.id 형식 위반(영숫자._- 1~64자): ' + JSON.stringify(id) };
+  }
+  if (!state.world.assets || typeof state.world.assets !== 'object') state.world.assets = {};
+  if (!Array.isArray(state.world.assets.sprites)) state.world.assets.sprites = [];
+  const sprites = state.world.assets.sprites;
+  if (sprites.some((s) => s && s.id === id)) {
+    return { ok: false, code: 409, error: '중복 asset id: ' + id };
+  }
+  let asset;
+  if (kind === 'procedural') {
+    asset = {
+      id,
+      source: 'procedural',
+      desc: typeof raw.desc === 'string' ? raw.desc.slice(0, 512) : '',
+      w: (typeof raw.w === 'number' && raw.w > 0) ? (raw.w | 0) : 16,
+      h: (typeof raw.h === 'number' && raw.h > 0) ? (raw.h | 0) : 16
+    };
+    // PixelForge/VectorForge def 슬롯(선택) — 있으면 보존(베이크는 어댑터/export 책임).
+    if (raw.def && typeof raw.def === 'object') asset.def = raw.def;
+  } else if (kind === 'cc0') {
+    if (typeof raw.url !== 'string' || raw.url.length === 0) {
+      return { ok: false, code: 400, error: 'cc0 asset 은 url 필수' };
+    }
+    asset = {
+      id,
+      source: 'cc0',
+      url: raw.url.slice(0, 2048),
+      license: typeof raw.license === 'string' ? raw.license.slice(0, 128) : 'CC0-1.0',
+      credit: typeof raw.credit === 'string' ? raw.credit.slice(0, 256) : '',
+      desc: typeof raw.desc === 'string' ? raw.desc.slice(0, 512) : ''
+    };
+    if (typeof raw.w === 'number' && raw.w > 0) asset.w = raw.w | 0;
+    if (typeof raw.h === 'number' && raw.h > 0) asset.h = raw.h | 0;
+  } else {
+    return { ok: false, code: 400, error: 'kind 는 procedural|cc0 만 허용' };
+  }
+  sprites.push(asset);
+  // 'asset' 델타 브로드캐스트(seq 부여 — 구독자 미러가 assets 동기).
+  state.seq += 1;
+  const entry = { seq: state.seq, kind: 'asset', command: { op: 'add', asset }, undoDelta: null };
+  state.log.push(entry);
+  if (state.log.length > UNDO_LIMIT) state.log.shift();
+  broadcast({ type: 'asset', seq: state.seq, op: 'add', asset });
+  return { ok: true, asset, seq: state.seq };
+}
+
+// ── P4 결정형 스킬도구 실행(execFile, 배열 인자 — 셸 미경유) ───────────────────
+// 현재 씬을 임시 파일로 직렬화해 그 경로로 lint-scene 등을 실행할 수 있게 한다.
+// 임시 파일은 games/_editor-samples/ 아래 .wgf-tmp 로 써서 pathScope(repo) 안에 둔다.
+function writeTempScene() {
+  const dir = path.resolve(REPO_ROOT, 'games', '_editor-samples', '.wgf-tmp');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, 'current-scene.json');
+  const snap = sceneSnapshot();
+  fs.writeFileSync(file, JSON.stringify(snap.scene, null, 2), 'utf8');
+  return file;
+}
+
+// {tool, args} → execFile 실행. 'current' 가 args.file/target 에 들어오면 현재 씬 임시
+// 직렬화 경로로 치환(에디터 직접 트랙 — 사용자가 경로를 손으로 넣지 않게).
+// 콜백(result) — result = {ok, exit, json, stdout, stderr} 또는 {ok:false, code, error}.
+function runSkillTool(tool, argsIn, cb) {
+  const args = (argsIn && typeof argsIn === 'object' && !Array.isArray(argsIn)) ? Object.assign({}, argsIn) : {};
+  // 'current' 토큰 → 현재 씬 임시 직렬화 경로(에디터 결정형 트랙 편의).
+  try {
+    for (const key of ['file', 'target']) {
+      if (args[key] === 'current') args[key] = path.relative(REPO_ROOT, writeTempScene()).split(path.sep).join('/');
+    }
+  } catch (e) {
+    cb({ ok: false, code: 500, error: '현재 씬 임시 직렬화 실패: ' + String(e && e.message || e) });
+    return;
+  }
+  const built = buildSkillCommand(tool, args);
+  if (!built.ok) { cb(built); return; }
+  // execFile — 셸 미경유. 배열 인자라 메타문자가 셸로 해석되지 않는다(인자=문자열).
+  execFile(process.execPath, built.argv, {
+    cwd: REPO_ROOT, timeout: 30000, maxBuffer: 4 * 1024 * 1024, windowsHide: true
+  }, (err, stdout, stderr) => {
+    const out = String(stdout || '');
+    // 마지막 비어있지 않은 줄을 JSON 으로 파싱(도구 계약: 마지막 줄 단일 JSON).
+    let json = null;
+    const lines = out.trim().split(/\r?\n/);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const t = lines[i].trim();
+      if (!t) continue;
+      try { json = JSON.parse(t); break; } catch (e) { /* 마지막 줄이 JSON 아니면 null */ break; }
+    }
+    const exit = err && typeof err.code === 'number' ? err.code : (err ? 1 : 0);
+    cb({
+      ok: true, tool, exit, json,
+      stdout: out.slice(-4096),
+      stderr: String(stderr || '').slice(-2048),
+      timedOut: !!(err && err.killed)
+    });
+  });
 }
 
 // ── HTTP 서버 ─────────────────────────────────────────────────────────────────
@@ -635,6 +890,45 @@ function handleApi(req, res, u, p) {
   if (req.method === 'POST' && p === '/api/heartbeat') {
     recordHeartbeat();
     sendJSON(res, 200, { ok: true, status: connectionStatus(), at: chat.lastHeartbeat });
+    return;
+  }
+
+  // ── P4 결정형 스킬도구 실행(보안 §6) ────────────────────────────────────────
+  // POST /api/skill/run {tool, args} — 화이트리스트 + 인자 스키마 검증 후 execFile
+  //  (배열 인자, 셸 미경유). 화이트리스트 외/인자 위반/traversal → 4xx 구조화 거부.
+  if (req.method === 'POST' && p === '/api/skill/run') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      const tool = parsed && parsed.tool;
+      const args = (parsed && parsed.args) || {};
+      runSkillTool(tool, args, (r) => {
+        if (!r.ok) { sendJSON(res, r.code || 400, { ok: false, error: r.error }); return; }
+        // 도구 실행 자체는 성공(프로토콜 200) — 도구 종료코드/findings 는 페이로드로.
+        sendJSON(res, 200, { ok: true, tool: r.tool, exit: r.exit, json: r.json, stdout: r.stdout, stderr: r.stderr, timedOut: r.timedOut });
+      });
+    });
+    return;
+  }
+
+  // ── P4 에셋 ──────────────────────────────────────────────────────────────────
+  // GET /api/asset/list — 현재 씬 assets.sprites 목록.
+  if (req.method === 'GET' && p === '/api/asset/list') {
+    sendJSON(res, 200, { ok: true, assets: listAssets(), seq: state.seq });
+    return;
+  }
+
+  // POST /api/asset/add {kind, asset} — procedural|cc0 자산을 assets.sprites 에 추가.
+  if (req.method === 'POST' && p === '/api/asset/add') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      const kind = parsed && parsed.kind;
+      const asset = parsed && parsed.asset;
+      const r = addAsset(kind, asset);
+      if (!r.ok) { sendJSON(res, r.code || 400, { ok: false, error: r.error }); return; }
+      sendJSON(res, 200, { ok: true, asset: r.asset, seq: r.seq });
+    });
     return;
   }
 
