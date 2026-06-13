@@ -380,10 +380,70 @@ const TOOLS = {
     async handler() {
       return toolError('project_export 는 P4 에서 브리지 트리거 통합 예정 — 현재는 CLI: node editor/server/export.mjs <scene.json|slug>', { stub: true });
     }
+  },
+
+  // ── P4 결정형 스킬도구 실행(브리지 프록시 — 화이트리스트·인자스키마·execFile 은 브리지가 강제) ──
+  skill_run_tool: {
+    description: '결정형 검증 도구를 실행한다(화이트리스트: lint-scene·lint-rng·lint-juice·lint-kit-deps·qa-score). 브리지가 인자 스키마 검증 + execFile(배열 인자, 셸 미경유)로 안전 실행. file/target 에 "current" 를 주면 현재 씬을 임시 직렬화해 실행. 반환에 도구 exit·마지막 줄 JSON 포함. 화이트리스트 외 도구·인자 위반·경로 traversal 은 브리지가 거부.',
+    inputSchema: OBJ({
+      tool: { type: 'string', description: '도구명(lint-scene·lint-rng·lint-juice·lint-kit-deps·qa-score)' },
+      args: { type: 'object', description: '도구별 인자(file·target·json·strict 등). file/target="current" → 현재 씬.' }
+    }, ['tool']),
+    async handler(args) {
+      if (!args || typeof args.tool !== 'string') return toolError('tool 필수');
+      const r = await bridgeRequest('POST', '/api/skill/run', { tool: args.tool, args: (args.args && typeof args.args === 'object') ? args.args : {} });
+      if (r.status !== 200 || !r.json || r.json.ok !== true) {
+        // 화이트리스트/인자 위반 등 4xx 거부 → 구조화 에러(도구 자체 실패와 구분).
+        return toolError((r.json && r.json.error) || ('스킬 실행 거부 status=' + r.status), { status: r.status });
+      }
+      return toolText({ ok: true, tool: r.json.tool, exit: r.json.exit, json: r.json.json, stdout: r.json.stdout, stderr: r.json.stderr, timedOut: r.json.timedOut });
+    }
+  },
+
+  // ── P4 에셋 ──────────────────────────────────────────────────────────────────
+  asset_list: {
+    description: '현재 씬의 assets.sprites(절차·CC0 스프라이트 def) 목록을 반환한다. 무상태 — 브리지 단일 진실에서 읽음.',
+    inputSchema: OBJ({}),
+    async handler() {
+      const r = await bridgeRequest('GET', '/api/asset/list');
+      if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError('에셋 조회 실패', { status: r.status });
+      return toolText({ ok: true, assets: r.json.assets, seq: r.json.seq });
+    }
+  },
+
+  asset_add_procedural: {
+    description: '절차 스프라이트(PixelForge/VectorForge def 슬롯)를 assets.sprites 에 추가한다. id 필수(영숫자._- 1~64자). desc·w·h·def 선택. 추가 후 엔티티의 Sprite 컴포넌트에서 이 id 를 ref 할 수 있다.',
+    inputSchema: OBJ({
+      id: { type: 'string' }, desc: { type: 'string' },
+      w: { type: 'number' }, h: { type: 'number' }, def: { type: 'object' }
+    }, ['id']),
+    async handler(args) {
+      if (!args || typeof args.id !== 'string') return toolError('id 필수');
+      const asset = { id: args.id, desc: args.desc, w: args.w, h: args.h };
+      if (args.def && typeof args.def === 'object') asset.def = args.def;
+      const r = await bridgeRequest('POST', '/api/asset/add', { kind: 'procedural', asset });
+      if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError((r.json && r.json.error) || '에셋 추가 실패', { status: r.status });
+      return toolText({ ok: true, asset: r.json.asset, seq: r.json.seq });
+    }
+  },
+
+  asset_add_cc0: {
+    description: 'CC0 라이브러리 스프라이트(url+license+credit)를 assets.sprites 에 추가한다. id·url 필수. license(기본 CC0-1.0)·credit·desc·w·h 선택. sprite-picker 가 고른 CC0 에셋을 여기로 주입한다.',
+    inputSchema: OBJ({
+      id: { type: 'string' }, url: { type: 'string' },
+      license: { type: 'string' }, credit: { type: 'string' }, desc: { type: 'string' },
+      w: { type: 'number' }, h: { type: 'number' }
+    }, ['id', 'url']),
+    async handler(args) {
+      if (!args || typeof args.id !== 'string') return toolError('id 필수');
+      if (typeof args.url !== 'string') return toolError('url 필수');
+      const asset = { id: args.id, url: args.url, license: args.license, credit: args.credit, desc: args.desc, w: args.w, h: args.h };
+      const r = await bridgeRequest('POST', '/api/asset/add', { kind: 'cc0', asset });
+      if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError((r.json && r.json.error) || '에셋 추가 실패', { status: r.status });
+      return toolText({ ok: true, asset: r.json.asset, seq: r.json.seq });
+    }
   }
 };
-
-// asset_*/skill_run_tool 은 P4 — 미구현. tools/list 에 노출하지 않음(스텁 불필요).
 
 // ── tools/list 스키마 배열 생성 ───────────────────────────────────────────────
 function listTools() {
