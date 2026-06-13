@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-06-08 | Updated: 2026-06-13 -->
+<!-- Generated: 2026-06-08 | Updated: 2026-06-13 (BoardKit) -->
 
 # engine/
 
@@ -25,6 +25,7 @@
 | `juicekit.js` | **JuiceKit** (선택 킷) — 게임필 런타임. trauma^2 스크린셰이크(Eiserloh)·파티클 버스트·히트스톱(freeze)·트윈/이징을 `update(dt)` 한 진입점으로 결정론적으로 굴린다. 모든 무작위는 RngForge 주입 → 헤드리스 검증 가능. 렌더링 안 함(`getShake()`/`forEachParticle()`로 값만 제공). ScreenFX(포스트FX)와 역할 분리 → `juice-fx` |
 | `lightingkit.js` | **LightingKit** (선택 킷) — PointLight 발광·Simplex 안개·Gradient 밤하늘·앰비언트 어둠. WebGL 전용 → `lighting-mood` |
 | `pathkit.js` | **PathKit** (선택 킷) — Curves/Path/PathFollower 래퍼. 스플라인 패트롤·방사 탄막·타워디펜스 크립 경로 → `path-motion` |
+| `boardkit.js` | **BoardKit** (선택 킷) — 논리 보드 좌표계(cellToPixel/pixelToCell·범위 검사) + A* 그리드 길찾기. 장애물 회피·4/8방향·휴리스틱(manhattan/octile/euclidean/chebyshev)·셀 가중 비용·코너컷 방지. 결정론(open-set 동점은 f→h→삽입순 안정 타이브레이크, `Math.random()` 미사용) → 같은 입력 항상 같은 경로. 퍼즐·보드게임·타워디펜스용. Phaser 비의존 순수 로직(Node require·헤드리스 검증 가능). 검증: `wgf-game-qa/tools/test-boardkit.mjs`. **PathKit 과 구분**: PathKit=정해진 곡선 위를 따라가는 *연속 경로추종*(연출), BoardKit=막힌 칸을 피해 목적지까지 밟을 칸을 *계산*하는 논리 격자 길찾기 |
 | `joystickkit.js` | **JoystickKit** (선택 킷) — 가상 조이스틱(아날로그/트윈스틱) 터치 컨트롤. 멀티터치 포인터→360° 방향+세기 벡터. 디지털 D-패드(MobileHarness)와 공존 → `virtual-joystick` |
 
 ## For AI Agents
@@ -32,7 +33,7 @@
 ### Working In This Directory
 - **`phaser.min.js`는 절대 수정하지 않는다.** 버전 업그레이드 시 통째 교체 + `phaser.LICENSE.txt`·README 배지·`docs/설계.md` 동기화.
 - 모든 엔진 모듈은 **빌드 없는 브라우저 전역 스크립트**다. ES 모듈/번들러/`import`를 도입하지 말 것 — 게임은 `<script src>`로 직접 로드한다.
-- **선택 킷(matterkit·screenfx·lightingkit·pathkit·joystickkit)은 선택적**이다. 미사용 게임에 부담 0 — 필요할 때만 `index.html`에 phaser 다음으로 추가한다.
+- **선택 킷(matterkit·screenfx·lightingkit·pathkit·boardkit·joystickkit)은 선택적**이다. 미사용 게임에 부담 0 — 필요할 때만 `index.html`에 phaser 다음으로 추가한다(boardkit 은 순수 로직이라 phaser 없이도 동작).
 - **입력 킷은 장르로 고른다.** 아날로그/트윈스틱은 `joystickkit.js`, 디지털 좌우+점프는 `mobile.js`의 `MobileHarness.TouchControls`. 둘은 독립이며 공존한다 — 플랫포머=D-패드, 탑다운/슈터/러너=조이스틱.
 - WebGL 전용 킷(ScreenFX·LightingKit)은 Canvas 폴백에서 **graceful no-op(null 반환)** 계약을 반드시 유지한다.
 - 새 절차 그래픽은 PixelForge(픽셀) 또는 VectorForge(스무스) 중 하나로. 외부 이미지 다운로드를 추가하지 않는다.
@@ -56,7 +57,7 @@ var res = TiledForge.loadTiledMap(this, 'map', { tilesetKey:'forge-tiles', spawn
 ## Dependencies
 
 ### Internal
-- 각 킷 파일은 대응 스킬과 1:1 — `engine/matterkit.js`↔`skills/wgf-matter-physics/`, `screenfx.js`↔`wgf-screen-fx/`, `lightingkit.js`↔`wgf-lighting-mood/`, `pathkit.js`↔`wgf-path-motion/`, `joystickkit.js`↔`wgf-virtual-joystick/`, `juicekit.js`↔`wgf-juice-fx/`.
+- 각 킷 파일은 대응 스킬과 1:1 — `engine/matterkit.js`↔`skills/wgf-matter-physics/`, `screenfx.js`↔`wgf-screen-fx/`, `lightingkit.js`↔`wgf-lighting-mood/`, `pathkit.js`↔`wgf-path-motion/`, `joystickkit.js`↔`wgf-virtual-joystick/`, `juicekit.js`↔`wgf-juice-fx/`. (`boardkit.js` 는 전용 스킬 없이 `wgf-puzzle-game`·보드게임 스캐폴드가 직접 소비한다.)
 - 상세 API 계약: `skills/wgf-web-game-builder/reference/engine-api.md`.
 - Tiled 저작 가이드: `skills/wgf-level-designer/reference/tiled/authoring.md`.
 
