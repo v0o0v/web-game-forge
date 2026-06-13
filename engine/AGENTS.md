@@ -20,6 +20,7 @@
 | `tiled.js` | **TiledForge** — Tiled `.tmj` 로더/베이커. `bakeTileset()`이 절차 타일셋 아틀라스를 굽고, `loadTiledMap()`이 충돌·오브젝트 스포너·iso/hex·GPU 레이어·라이선스 게이트를 처리 |
 | `rngforge.js` | **RngForge** — 시드 결정론 난수 인프라. `create(seed)`가 mulberry32 난수기(callable, `Math.random()` 드롭인)를 만들고 `int/pick/shuffle/weighted`·멀티스트림(`stream(name)`)·직렬화(`state()/setState()`)를 제공. 게임 내 모든 무작위는 이걸로만 — 헤드리스 결정 검증의 "나머지 절반". Node require 가능. 검증: `wgf-game-qa/tools/lint-rng.mjs` → `game-qa` |
 | `abilitykit.js` | **AbilityKit** (선택) — `abilities.json` 로드해 능력의 쿨다운·자원(마나/스태미나)·충전·콤보 윈도·능력 게이트·스킬트리 해금을 굴리는 데이터 구동 런타임. 효과 내용은 게임이 `onActivate`에서 실행(타이밍/자원만 킷이 관리). `AbilityKit.attach(scene,spec)`·`tick(dt)` 결정론(Node 헤드리스 검증 가능) → `ability-architect` |
+| `fsm.js` | **FSM** — 결정론 유한상태머신. `addState(name,{enter,update,exit})`·명시 전이 `to(name)`·규칙 전이 `when(from,to,cond)`(`*`=전역)·`current()`·`update(dt,ctx)` 단일 진입점. dt 구동·무작위는 RngForge 주입(Math.random 금지)·`update`에 NaN/Infinity 가드 → 같은 시드+같은 dt 시퀀스 = 동일 상태 궤적. **`FSM.forAbility(ability)`** 가 AbilityKit 의 `cast→active→recovery→idle`(초 단위) 페이즈를 dt 로 자동 소비(페이즈 콜백·`startAbility()`·`cancel()`). Node require 가능. 검증: `wgf-game-qa/tools/test-fsm.mjs`(41 checks) |
 | `matterkit.js` | **MatterKit** (선택 킷) — Matter.js 래퍼. config·바디 팩토리·상자 스택·슬링샷. Arcade로 못 하는 강체 물리 → `matter-physics` |
 | `screenfx.js` | **ScreenFX** (선택 킷) — v4 Filter 포스트FX(블룸·비네트·CRT·글로우·컬러그레이딩). WebGL 전용, Canvas면 no-op → `screen-fx` |
 | `juicekit.js` | **JuiceKit** (선택 킷) — 게임필 런타임. trauma^2 스크린셰이크(Eiserloh)·파티클 버스트·히트스톱(freeze)·트윈/이징을 `update(dt)` 한 진입점으로 결정론적으로 굴린다. 모든 무작위는 RngForge 주입 → 헤드리스 검증 가능. 렌더링 안 함(`getShake()`/`forEachParticle()`로 값만 제공). ScreenFX(포스트FX)와 역할 분리 → `juice-fx` |
@@ -52,6 +53,10 @@ audio.unlock();                              // 첫 제스처에서 모바일 �
 // Tiled: 절차 타일셋 → 맵 로드 → 충돌 연결
 TiledForge.bakeTileset(this, tileDefs, { key:'forge-tiles', tileSize:16, columns:3 });
 var res = TiledForge.loadTiledMap(this, 'map', { tilesetKey:'forge-tiles', spawners:{...} });
+// FSM × AbilityKit: use()는 쿨다운·자원(즉발), FSM.forAbility 가 cast→active→recovery 시간을 소비
+var dashPhase = FSM.forAbility(KIT.get('dash'), { onActive:function(c){ doDash(c.dir); } });
+if (KIT.use('dash', { dir: facing }).ok) dashPhase.startAbility({ dir: facing });  // 입력에서 시동
+// scene update: dashPhase.update(delta/1000, ctx);  피격 선딜 캔슬: dashPhase.cancel();
 ```
 
 ## Dependencies
