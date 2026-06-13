@@ -112,7 +112,22 @@ function checkNondeterminism(preset, field, v) {
   if (typeof v === 'string' && NONDET_RE.test(v)) add('PTL-NONDETERMINISM', 'error', preset, field, `결정론 위반 표현이 데이터에 포함됨: '${v}'.`)
 }
 
-const presets = data && (data.presets || (data.version === undefined ? data : null))
+// presets 추출: { presets: {...} } 래퍼 우선, 없으면 평면맵 시도.
+// 평면맵 판정: version/meta 같은 예약 최상위 키를 제외한 나머지 값이 객체면 프리셋으로 인정.
+// (version만 있고 presets 래퍼 없는 { version:1, coin:{...} } 형태를 오탐하지 않기 위함)
+const RESERVED_KEYS = new Set(['version', 'meta', 'schemaNote'])
+let presets
+if (data && data.presets && typeof data.presets === 'object') {
+  presets = data.presets
+} else if (data && typeof data === 'object') {
+  // 예약 키 제외 후 값이 일반 객체인 것만 추림 → 평면맵
+  const flat = {}
+  for (const k of Object.keys(data)) {
+    if (RESERVED_KEYS.has(k)) continue
+    if (data[k] && typeof data[k] === 'object' && !Array.isArray(data[k])) flat[k] = data[k]
+  }
+  presets = Object.keys(flat).length > 0 ? flat : null
+}
 if (!presets || typeof presets !== 'object' || Object.keys(presets).length === 0) {
   add('PTL-NO-PRESETS', 'error', null, null, 'presets 객체가 없거나 비어 있습니다.')
   emit()

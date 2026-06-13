@@ -218,14 +218,16 @@
   // burst() 는 그대로 — burstPreset 은 프리셋 opts 를 병합 후 동일 burst() 를 호출하므로,
   // 같은 시드·같은 opts 면 직접 burst() 호출과 **비트 동일**한 결과(결정론 보존).
 
-  // 내부: color 가 '#rrggbb' / 'rrggbb' 문자열이면 0xRRGGBB 정수로 정규화. 정수/미지정은 그대로.
+  // 내부: color 정규화 — '#rrggbb' / 'rrggbb' 6자리 hex 문자열이면 0xRRGGBB 정수로 변환.
+  // lint-particles.checkColor 와 동일한 강도: 정확히 6자리 hex여야 통과, 그 외는 0xffffff 폴백.
+  // 정수 입력은 & 0xffffff 마스킹(오버플로 방지). undefined/null 은 그대로(burst 기본값에 위임).
   function normalizeColor(c) {
     if (typeof c === 'string') {
       var h = c.charAt(0) === '#' ? c.slice(1) : c;
-      var n = parseInt(h, 16);
-      return isNaN(n) ? 0xffffff : n;
+      return /^[0-9a-fA-F]{6}$/.test(h) ? parseInt(h, 16) : 0xffffff;  // 6자리 정확 검증
     }
-    return c;
+    if (typeof c === 'number') return (c & 0xffffff) >>> 0;             // 오버플로 마스킹
+    return c;                                                             // undefined 등 → burst 기본값
   }
 
   // loadPresets(json): particles.json 형태({ presets: { name: opts } }) 또는 평면
@@ -250,14 +252,24 @@
     return this;
   };
 
-  // 프리셋 1개 조회(정규화된 opts 사본 반환, 없으면 null).
+  // 프리셋 1개 조회(정규화된 opts **얕은 사본** 반환, 없으면 null).
+  // 주석대로 사본을 반환해 호출자가 반환값을 변형해도 내부 presets 가 오염되지 않는다.
   JuiceKit.prototype.getPreset = function (name) {
-    return this.presets[name] || null;
+    var p = this.presets[name];
+    if (!p) return null;
+    var copy = {};
+    for (var k in p) if (Object.prototype.hasOwnProperty.call(p, k)) copy[k] = p[k];
+    return copy;
   };
+
+  // burst() 가 인식하는 opts 필드 화이트리스트. burstPreset overrides 필터링에 사용.
+  // desc 등 메타 필드 + 미지 키(오타)가 burst 로 새어드는 것을 막는다.
+  var BURST_KNOWN_KEYS = { count:1, speed:1, spread:1, angle:1, life:1, gravity:1, color:1, size:1, fade:1 };
 
   // burstPreset(name, x, y, overrides?): 적재된 프리셋을 좌표(x,y)에서 발사한다.
   // overrides 로 프리셋 필드를 부분 덮어쓰기(color 는 문자열도 정규화). 미등록 이름이면
   // 경고 없이 빈 배열 반환(graceful). 내부적으로 burst() 를 호출 → 동일 opts 면 결정론 동일.
+  // overrides 의 미지 키(desc, 오타 등)는 BURST_KNOWN_KEYS 화이트리스트로 걸러 burst 로 새지 않는다.
   JuiceKit.prototype.burstPreset = function (name, x, y, overrides) {
     var base = this.presets[name];
     if (!base) return [];
@@ -266,6 +278,7 @@
     if (overrides) {
       for (var o in overrides) {
         if (!Object.prototype.hasOwnProperty.call(overrides, o)) continue;
+        if (!BURST_KNOWN_KEYS[o]) continue;  // 미지 키 필터링(desc·오타 등 차단)
         opts[o] = (o === 'color') ? normalizeColor(overrides[o]) : overrides[o];
       }
     }

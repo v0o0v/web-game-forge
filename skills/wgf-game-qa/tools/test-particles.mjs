@@ -134,7 +134,57 @@ function particlesEqual(a, b) {
   ok('burstPreset positions particles at (x,y)', out.length > 0 && out.every(p => p.x === 123 && p.y === 456))
 }
 
-// ── 7) lint 통과 — 실제 particles.json 이 lint-particles 를 통과 ─────────────
+// ── 7) getPreset 사본 격리 — 반환값 변형이 내부 프리셋을 오염시키지 않아야 ─────
+{
+  const jk = new JuiceKit(RngForge.create(10)); jk.loadPresets(presetsJson)
+  const originalCount = jk.getPreset('explosion').count  // 28
+  const copy = jk.getPreset('explosion')
+  copy.count = 2  // 반환 사본을 변형
+  // 후속 burstPreset 은 변형 전 원본 count 를 사용해야 함
+  const out = jk.burstPreset('explosion', 0, 0)
+  ok('getPreset returns a shallow copy (mutation does not affect internal preset)',
+    out.length === originalCount,
+    `expected=${originalCount} actual=${out.length}`)
+  // getPreset 을 다시 불러도 count 가 원본 그대로
+  ok('getPreset still returns original count after copy mutation',
+    jk.getPreset('explosion').count === originalCount,
+    `count=${jk.getPreset('explosion').count}`)
+}
+
+// ── 8) normalizeColor 검증 강화 — 잘못된 hex 폴백 + 오버플로 마스킹 ───────────
+{
+  const jk = new JuiceKit(RngForge.create(11)); jk.loadPresets(presetsJson)
+  // 3자리 hex '#fff' → 폴백 0xffffff
+  const out3 = jk.burstPreset('coin-spark', 0, 0, { count: 1, color: '#fff' })
+  ok('normalizeColor: 3-digit hex falls back to 0xffffff', out3[0] && out3[0].color === 0xffffff,
+    `color=${out3[0] && out3[0].color}`)
+  // 8자리 hex '#ffffffff' → 폴백 0xffffff
+  const out8 = jk.burstPreset('coin-spark', 0, 0, { count: 1, color: '#ffffffff' })
+  ok('normalizeColor: 8-digit hex falls back to 0xffffff', out8[0] && out8[0].color === 0xffffff,
+    `color=${out8[0] && out8[0].color}`)
+  // 빈 문자열 → 폴백 0xffffff
+  const outE = jk.burstPreset('coin-spark', 0, 0, { count: 1, color: '' })
+  ok('normalizeColor: empty string falls back to 0xffffff', outE[0] && outE[0].color === 0xffffff,
+    `color=${outE[0] && outE[0].color}`)
+  // 정수 오버플로 마스킹: 0x1ffffff → & 0xffffff = 0xffffff
+  const outOvf = jk.burstPreset('coin-spark', 0, 0, { count: 1, color: 0x1ffffff })
+  ok('normalizeColor: integer overflow masked to & 0xffffff', outOvf[0] && outOvf[0].color === 0xffffff,
+    `color=${outOvf[0] && outOvf[0].color}`)
+}
+
+// ── 9) overrides 화이트리스트 — 미지 키(desc·오타)가 burst 로 새지 않아야 ──────
+{
+  const jk = new JuiceKit(RngForge.create(12)); jk.loadPresets(presetsJson)
+  // desc 를 overrides 로 전달해도 파티클에 desc 필드가 붙지 않아야
+  const out = jk.burstPreset('sparkle', 0, 0, { count: 2, desc: 'injected', colour: '#ff0000' })
+  ok('overrides whitelist: unknown key desc not passed to particles', out[0] && out[0].desc === undefined,
+    `desc=${out[0] && out[0].desc}`)
+  ok('overrides whitelist: typo key colour not passed to particles', out[0] && out[0].colour === undefined,
+    `colour=${out[0] && out[0].colour}`)
+  ok('overrides whitelist: known key count still applied', out.length === 2, `len=${out.length}`)
+}
+
+// ── 10) lint 통과 — 실제 particles.json 이 lint-particles 를 통과 ──────────────
 {
   let lintOk = false, lastLine = ''
   try {
