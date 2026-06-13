@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8766", "--bind", "127.0.0.1"],
       "port": 8766
+    },
+    {
+      "name": "wgf-editor",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["editor/serve.mjs", "5174"],
+      "port": 5174
     }
   ]
 }
