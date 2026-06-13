@@ -54,8 +54,10 @@ export function createController(opts) {
   let claudeStatus = isRemote ? 'disconnected' : 'local';   // local 은 브리지 없음
   const chatListeners = [];           // (chatLog) => void
   const statusListeners = [];         // (status) => void
+  const assetListeners = [];          // (assets) => void — P4 에셋 목록 변경
   function notifyChat() { for (const cb of chatListeners) { try { cb(chatLog); } catch (e) {} } }
   function notifyStatus() { for (const cb of statusListeners) { try { cb(claudeStatus); } catch (e) {} } }
+  function notifyAsset() { const a = getAssets(); for (const cb of assetListeners) { try { cb(a); } catch (e) {} } }
 
   function notifyChange() {
     for (const cb of changeListeners) { try { cb(); } catch (e) { /* 격리 */ } }
@@ -143,6 +145,18 @@ export function createController(opts) {
     // Claude 연결 상태(connected/waiting/disconnected) → 인디케이터.
     if (transport.onStatus) transport.onStatus((s) => {
       if (s !== claudeStatus) { claudeStatus = s; notifyStatus(); }
+    });
+    // 에셋 델타(P4) → 미러 world.assets.sprites 동기. 에셋은 SceneKit 커맨드가 아니라
+    // 자산 def 슬롯이므로 applyCommand 미러 경로와 분리(mirrorGuard 무관) — 직접 추가.
+    if (transport.onAsset) transport.onAsset((evt) => {
+      if (!evt || evt.op !== 'add' || !evt.asset) return;
+      const w = adapter && adapter.getWorld ? adapter.getWorld() : null;
+      if (w) {
+        if (!w.assets || typeof w.assets !== 'object') w.assets = {};
+        if (!Array.isArray(w.assets.sprites)) w.assets.sprites = [];
+        if (!w.assets.sprites.some((s) => s && s.id === evt.asset.id)) w.assets.sprites.push(evt.asset);
+      }
+      notifyAsset();
     });
   }
 
@@ -423,6 +437,69 @@ export function createController(opts) {
   function getChatLog() { return chatLog; }
   function getClaudeStatus() { return claudeStatus; }
 
+  // ── P4 결정형 스킬 트랙(에디터 직접 실행) ─────────────────────────────────────
+  // tool(화이트리스트) + args → 브리지가 execFile 안전 실행. 반환 {ok, exit, json, ...}.
+  // local 모드는 브리지 없음 → 안내 반환.
+  async function runSkill(tool, args) {
+    if (!isRemote || !transport || !transport.runSkill) {
+      return { ok: false, error: 'local 모드 — 결정형 스킬은 /wgf-editor 브리지에서만 동작' };
+    }
+    return await transport.runSkill(tool, args || {});
+  }
+
+  // ── P4 창작형 스킬 트랙(Claude 디스패치) ──────────────────────────────────────
+  // 현재 씬 문맥(엔티티 요약)을 포함한 창작 요청을 챗 큐로 enqueue → /loop 가 디큐해 편집.
+  // prompt = 사용자 의도(예 "스토리 입혀줘"). 씬 문맥을 자동 동봉해 Claude 가 맥락을 안다.
+  async function dispatchCreative(prompt) {
+    const p = String(prompt || '').trim();
+    if (!p) return { ok: false, error: '빈 요청' };
+    const ctx = sceneContextSummary();
+    const text = '[창작 요청] ' + p + '\n(현재 씬 문맥: ' + ctx + ')';
+    return await sendChat(text);
+  }
+
+  // 현재 씬 요약(엔티티 이름·컴포넌트 타입) — 창작 디스패치 문맥에 동봉.
+  function sceneContextSummary() {
+    const w = getWorld();
+    if (!w || !Array.isArray(w.entities)) return '엔티티 없음';
+    const parts = w.entities.slice(0, 20).map((e) => {
+      const comps = Array.isArray(e.components) ? e.components.map((c) => c.type).join('/') : '';
+      return (e.name || e.id) + (comps ? '[' + comps + ']' : '');
+    });
+    return parts.join(', ') + (w.entities.length > 20 ? ` 외 ${w.entities.length - 20}개` : '');
+  }
+
+  // ── P4 에셋(절차/CC0) ─────────────────────────────────────────────────────────
+  // 현재 world.assets.sprites 반환(미러). 브리지 모드는 onAsset 델타로 동기됨.
+  function getAssets() {
+    const w = getWorld();
+    const a = (w && w.assets && typeof w.assets === 'object') ? w.assets : {};
+    return { sprites: Array.isArray(a.sprites) ? a.sprites : [] };
+  }
+  // 절차 스프라이트 추가. partial = {id, desc?, w?, h?, def?}.
+  async function addProceduralAsset(partial) {
+    if (!isRemote || !transport || !transport.addAsset) {
+      return { ok: false, error: 'local 모드 — 에셋 추가는 브리지에서만 동작' };
+    }
+    return await transport.addAsset('procedural', partial || {});
+  }
+  // CC0 스프라이트 추가. partial = {id, url, license?, credit?, desc?, w?, h?}.
+  async function addCc0Asset(partial) {
+    if (!isRemote || !transport || !transport.addAsset) {
+      return { ok: false, error: 'local 모드 — 에셋 추가는 브리지에서만 동작' };
+    }
+    return await transport.addAsset('cc0', partial || {});
+  }
+  // 에셋을 엔티티에 드래그 배정 — 그 엔티티에 Sprite(sprite=자산 id) 컴포넌트 추가.
+  //  applyCommand(addComponent) 경유 → 결정론 불변식 준수 + scene.json 자산 ref 유효.
+  function assignAssetToEntity(entityId, spriteId) {
+    return applyCommand({ type: 'addComponent', id: entityId, component: { type: 'Sprite', sprite: spriteId } });
+  }
+  function onAssetChange(cb) {
+    assetListeners.push(cb);
+    return () => { const i = assetListeners.indexOf(cb); if (i >= 0) assetListeners.splice(i, 1); };
+  }
+
   // 컴포넌트 레지스트리에서 inspectorFields 조회(Inspector UI 구동).
   function getComponentDef(type) {
     return SceneKit && SceneKit.getComponentDef ? SceneKit.getComponentDef(type) : null;
@@ -441,6 +518,9 @@ export function createController(opts) {
     onChange, onSelectionChange, getComponentDef, getAdapter,
     startRemote, isRemote,
     sendChat, onChatChange, onStatusChange, getChatLog, getClaudeStatus,
+    // P4 — 스킬(2트랙) + 에셋
+    runSkill, dispatchCreative, sceneContextSummary,
+    getAssets, addProceduralAsset, addCc0Asset, assignAssetToEntity, onAssetChange,
     STORAGE_KEY
   };
 }

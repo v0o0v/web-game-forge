@@ -7,7 +7,7 @@
  * 클라이언트를 시뮬레이션).
  *
  * 게이트:
- *   G-MCP   MCP JSON-RPC: initialize → tools/list(18종) → tools/call 동작.
+ *   G-MCP   MCP JSON-RPC: initialize → tools/list(22종) → tools/call 동작.
  *           newline-delimited 프레이밍 파싱 검증.
  *   G-CHAT  챗 "적 3마리 추가" e2e(메커니즘): POST /api/chat → editor_next_message
  *           디큐 → scene_add_entity ×3(MCP→브리지) → 엔티티 +3 → editor_reply →
@@ -214,11 +214,13 @@ async function main() {
 
       const listRes = await mcp.rpc('tools/list', {});
       const tools = listRes.result && listRes.result.tools;
-      ok('G-MCP tools/list 도구 목록(18종)', Array.isArray(tools) && tools.length === 18,
+      ok('G-MCP tools/list 도구 목록(22종 — P4 에서 skill_run_tool·asset_* 4종 추가)',
+        Array.isArray(tools) && tools.length === 22,
         `count=${tools && tools.length}`);
-      // 핵심 도구 존재 단언.
+      // 핵심 도구 존재 단언(P4 추가 4종 포함).
       const names = (tools || []).map((t) => t.name);
-      const required = ['scene_get', 'scene_add_entity', 'scene_set_transform', 'editor_next_message', 'editor_reply', 'undo', 'redo', 'project_list'];
+      const required = ['scene_get', 'scene_add_entity', 'scene_set_transform', 'editor_next_message', 'editor_reply', 'undo', 'redo', 'project_list',
+        'skill_run_tool', 'asset_list', 'asset_add_procedural', 'asset_add_cc0'];
       const allPresent = required.every((n) => names.includes(n));
       ok('G-MCP 필수 도구 스키마 노출', allPresent, `missing=${required.filter((n) => !names.includes(n)).join(',') || 'none'}`);
       // 스키마 형태(각 도구 inputSchema.type === object).

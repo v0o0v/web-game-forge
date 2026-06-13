@@ -20,6 +20,8 @@ import { Hierarchy } from './Hierarchy.jsx';
 import { Viewport } from './Viewport.jsx';
 import { Inspector } from './Inspector.jsx';
 import { ChatPanel } from './ChatPanel.jsx';
+import { SkillMenu } from './SkillMenu.jsx';
+import { AssetBrowser } from './AssetBrowser.jsx';
 
 // 기본 자동 로드 씬 경로(dev 서버 루트 기준).
 const DEFAULT_SCENE_URL = '/games/_editor-samples/topdown-min/scene.json';
@@ -96,14 +98,26 @@ function App({ controller }) {
       <Toolbar controller={controller} gizmoMode={gizmoMode} snap={snap} snapSize={snapSize}
                mode={mode} undoDepth={undoDepth} redoDepth={redoDepth} onSnapChange={onSnapChange} />
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        <div style={{ width: '220px', flexShrink: 0 }}>
-          <Hierarchy controller={controller} world={world} selection={selection} />
+        {/* 좌측: Hierarchy + AssetBrowser 스택 */}
+        <div style={{ width: '230px', flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ flex: '1 1 50%', minHeight: 0 }}>
+            <Hierarchy controller={controller} world={world} selection={selection} />
+          </div>
+          <div style={{ flex: '1 1 50%', minHeight: 0 }}>
+            <AssetBrowser controller={controller} selection={selection} />
+          </div>
         </div>
         <Viewport controller={controller} sceneDoc={docState} />
-        <div style={{ width: '280px', flexShrink: 0 }}>
-          <Inspector controller={controller} world={world} selection={selection} />
+        {/* 우측: Inspector + SkillMenu 스택 */}
+        <div style={{ width: '290px', flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ flex: '1 1 60%', minHeight: 0 }}>
+            <Inspector controller={controller} world={world} selection={selection} />
+          </div>
+          <div style={{ flex: '1 1 40%', minHeight: 0 }}>
+            <SkillMenu controller={controller} />
+          </div>
         </div>
-        <div style={{ width: '260px', flexShrink: 0 }}>
+        <div style={{ width: '250px', flexShrink: 0 }}>
           <ChatPanel controller={controller} />
         </div>
       </div>
@@ -148,7 +162,14 @@ function boot() {
     // 보조(편의)
     getWorld: () => controller.getWorld(),
     setSnap: (on, size) => controller.setSnap(on, size),
-    setMode: (m) => controller.setMode(m)
+    setMode: (m) => controller.setMode(m),
+    // P4 — 스킬(2트랙) + 에셋(브라우저 검증용)
+    runSkill: (tool, args) => controller.runSkill(tool, args),
+    dispatchCreative: (prompt) => controller.dispatchCreative(prompt),
+    getAssets: () => controller.getAssets(),
+    addProceduralAsset: (p) => controller.addProceduralAsset(p),
+    addCc0Asset: (p) => controller.addCc0Asset(p),
+    assignAssetToEntity: (id, spriteId) => controller.assignAssetToEntity(id, spriteId)
   };
 
   render(<App controller={controller} />, document.getElementById('app'));

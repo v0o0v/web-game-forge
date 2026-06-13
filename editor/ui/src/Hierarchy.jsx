@@ -14,6 +14,21 @@ export function Hierarchy({ controller, world, selection }) {
     }
   }
 
+  // P4 — AssetBrowser 카드를 엔티티로 드래그 배정. 드롭 시 그 엔티티에 Sprite(sprite=id) 추가.
+  function onDragOver(ev) {
+    if (ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes('application/wgf-asset')) {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'copy';
+    }
+  }
+  function onDrop(id, ev) {
+    let spriteId = null;
+    try { spriteId = ev.dataTransfer.getData('application/wgf-asset'); } catch (e) {}
+    if (!spriteId) return;
+    ev.preventDefault();
+    if (controller.assignAssetToEntity) controller.assignAssetToEntity(id, spriteId);
+  }
+
   return (
     <div style={panel}>
       <div style={header}>계층 (Hierarchy)</div>
@@ -25,6 +40,8 @@ export function Hierarchy({ controller, world, selection }) {
           return (
             <div key={e.id}
                  onClick={(ev) => onClick(e.id, ev)}
+                 onDragOver={onDragOver}
+                 onDrop={(ev) => onDrop(e.id, ev)}
                  style={{
                    padding: '4px 10px', cursor: 'pointer',
                    background: sel ? '#2b4a63' : 'transparent',
