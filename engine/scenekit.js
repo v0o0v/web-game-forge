@@ -253,26 +253,14 @@
     return isObj(scenes[0]) ? scenes[0] : null;
   }
 
-  // 두 객체 얕은 병합(왼쪽 우선 보존, 오른쪽 키 추가). 깊은 복제값으로.
-  function mergeMeta(base, extra) {
-    var out = isObj(base) ? deepCloneValue(base) : {};
-    if (isObj(extra)) {
-      var keys = Object.keys(extra);
-      for (var i = 0; i < keys.length; i++) {
-        if (!has(out, keys[i])) out[keys[i]] = deepCloneValue(extra[keys[i]]);
-      }
-    }
-    return out;
-  }
-
   // ── load — sceneDoc → world ─────────────────────────────────────────────────
   // mode: 'edit'(기본) | 'play'. 둘 다 init 만 수행(step 안 함). t=0 단면을 만든다.
   //   - edit: 정적 t=0 표현(어댑터가 선택/기즈모를 얹음). 코어는 step 호출 안 됨.
   //   - play: 같은 t=0 에서 시작해 이후 SceneKit.step 으로 진행.
   // 입력 포맷(둘 다 지원):
   //   - 정식 wgf-scene@1: 엔티티가 `scenes[].entities`(활성 씬 = opts.sceneId|scenes[0]).
-  //     walls 우선순위 = 활성 scene.walls > 최상위 sceneDoc.walls. meta = sceneDoc.meta
-  //     (+ scene.systems 병합, scene.systems 는 meta 에 없는 키만 추가).
+  //     walls 우선순위 = 활성 scene.walls > 최상위 sceneDoc.walls.
+  //     meta = sceneDoc.meta(깊은 복제). 활성 scene.systems 가 있으면 meta.systems 에 보존.
   //   - raw 픽스처(하위호환): 최상위 `entities`/`walls`(scenes 미존재 시). 헤드리스 테스트용.
   // seed 우선순위: opts.seed > sceneDoc.meta.seed > 고정 기본.
   function load(sceneDoc, opts) {
@@ -285,8 +273,9 @@
     var srcEntities = scene ? arr(scene.entities) : arr(sceneDoc.entities);
     // walls: 활성 scene.walls 우선, 없으면 최상위 sceneDoc.walls.
     var srcWalls = (scene && scene.walls != null) ? arr(scene.walls) : arr(sceneDoc.walls);
-    // meta: sceneDoc.meta + scene.systems 병합(systems 는 meta 에 없는 키만 추가).
-    var meta = mergeMeta(sceneDoc.meta, scene ? scene.systems : null);
+    // meta: sceneDoc.meta(깊은 복제) + 활성 scene.systems 를 meta.systems 로 보존.
+    var meta = isObj(sceneDoc.meta) ? deepCloneValue(sceneDoc.meta) : {};
+    if (scene && isObj(scene.systems)) meta.systems = deepCloneValue(scene.systems);
 
     var seed = (opts.seed != null) ? opts.seed : (meta.seed != null ? meta.seed : 0x9E3779B9 | 0);
 
