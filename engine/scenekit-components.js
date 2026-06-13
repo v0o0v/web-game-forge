@@ -51,8 +51,10 @@
       if (!comp) return;
 
       // assets.sprites 에 해당 id 가 선언돼 있는지 검증(경고만, 실행 차단 안 함).
-      var sprites = ctx.world.meta && ctx.world.meta.assets &&
-                    ctx.world.meta.assets.sprites;
+      // world.assets (SceneKit.load 가 문서 최상위 assets 를 노출) 우선,
+      // 폴백으로 world.meta.assets (구형 경로) 도 수용한다.
+      var sprites = (ctx.world.assets && ctx.world.assets.sprites) ||
+                    (ctx.world.meta && ctx.world.meta.assets && ctx.world.meta.assets.sprites);
       if (sprites) {
         var found = false;
         for (var i = 0; i < sprites.length; i++) {

@@ -369,6 +369,23 @@ function main() {
     process.exit(1);
   }
 
+  // 루트 타입 가드: null · 배열 · 스칼라는 lintScene 진입 전에 즉시 차단.
+  if (doc === null || typeof doc !== 'object' || Array.isArray(doc)) {
+    const typeLabel = doc === null ? 'null' : Array.isArray(doc) ? 'array' : typeof doc;
+    const rootErr = {
+      ok: false,
+      counts: { error: 1, warn: 0, info: 0 },
+      findings: [{ level: 'error', code: 'INVALID_ROOT',
+        message: '씬 문서 루트가 객체여야 합니다. 실제 타입: ' + typeLabel }],
+      file: args.file
+    };
+    if (!args.jsonOnly) {
+      process.stdout.write('[ERROR] INVALID_ROOT 씬 문서 루트가 객체여야 합니다. 실제 타입: ' + typeLabel + '\n');
+    }
+    process.stdout.write(JSON.stringify(rootErr) + '\n');
+    process.exit(1);
+  }
+
   // 검증 실행
   const report = makeReport(args.file);
   lintScene(doc, report);
