@@ -23,6 +23,8 @@
 //   KITDEP-UNKNOWN-DEP   engine/softEngine/external 에 매니페스트 미정의 의존       [error]
 //   KITDEP-UNUSED-HARD   engine(하드)에 선언했으나 코드가 참조 안 함                [error]
 //   KITDEP-UNUSED-SOFT   softEngine 선언했으나 코드가 참조 안 함                    [warn]
+//   KITDEP-CONTRACT-DRIFT contract 배열 항목 vs 실제 메서드 존재 불일치             [error]
+//                        (update-guard → updateMethod 메서드, reset → reset 메서드)
 //
 // 참조 검출(comment-strip 후 텍스트):
 //   - 킷 참조: 다른 킷의 global 심볼이 코드(주석 제외)에 단어 경계로 등장하면 그 킷에
@@ -99,6 +101,8 @@ if (selfTest) {
 }
 
 // ── 주석/문자열 제거(컬럼 보존) — lint-rng/lint-juice 와 동일 알고리즘 ──────────
+// stripComments: 주석만 제거(문자열 내용 보존). 킷 참조 검출(다른 킷 global 심볼)에 사용.
+//   문자열 속 심볼 참조는 실제 런타임 호출이 아니므로 오탐이 아님(킷끼리는 global 로만 참조).
 function stripComments(text) {
   let out = ''
   let inBlock = false, inLine = false
@@ -108,6 +112,30 @@ function stripComments(text) {
     if (inLine) { if (c === '\n') { inLine = false; out += c } else out += ' '; continue }
     if (inBlock) { if (c === '*' && n === '/') { inBlock = false; out += '  '; i++ } else out += (c === '\n' ? '\n' : ' '); continue }
     if (inStr) { out += c; if (c === quote && prev !== '\\') inStr = false; continue }
+    if (c === '/' && n === '/') { inLine = true; out += ' '; continue }
+    if (c === '/' && n === '*') { inBlock = true; out += ' '; continue }
+    if (c === '"' || c === "'" || c === '`') { inStr = true; quote = c; out += c; continue }
+    out += c
+  }
+  return out
+}
+
+// stripCommentsAndStrings: 주석 + 문자열 리터럴 내용 모두 공백 치환.
+//   NONDET(Math.random/Date.now 등) 및 외부 전역 심볼 직접 참조 검출에 사용.
+//   CONTRACT 설명 문자열 속 'Math.random()' 같은 예시 텍스트가 오탐되지 않도록 막는다.
+function stripCommentsAndStrings(text) {
+  let out = ''
+  let inBlock = false, inLine = false
+  let inStr = false, quote = ''
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i + 1], prev = text[i - 1]
+    if (inLine) { if (c === '\n') { inLine = false; out += c } else out += ' '; continue }
+    if (inBlock) { if (c === '*' && n === '/') { inBlock = false; out += '  '; i++ } else out += (c === '\n' ? '\n' : ' '); continue }
+    if (inStr) {
+      // 문자열 내용은 공백으로 치환(따옴표 자체는 보존해 닫힘 추적)
+      if (c === quote && prev !== '\\') { inStr = false; out += c } else out += (c === '\n' ? '\n' : ' ')
+      continue
+    }
     if (c === '/' && n === '/') { inLine = true; out += ' '; continue }
     if (c === '/' && n === '*') { inBlock = true; out += ' '; continue }
     if (c === '"' || c === "'" || c === '`') { inStr = true; quote = c; out += c; continue }
@@ -135,7 +163,7 @@ const NONDET_RULES = [
 function runLint(manifestFile) {
   let manifest
   try {
-    manifest = JSON.parse(readFileSync(manifestFile, 'utf8'))
+    manifest = JSON.parse(readFileSync(manifestFile, 'utf8').replace(/^﻿/, ''))
   } catch (e) {
     add('KITDEP-SCHEMA', 'error', null, `매니페스트 읽기/파싱 실패: ${e.message}`)
     return
@@ -172,7 +200,9 @@ function runLint(manifestFile) {
     try { raw = readFileSync(resolve(engineDir, k.file), 'utf8') }
     catch (e) { add('KITDEP-SCHEMA', 'error', id, `킷 파일 읽기 실패(${k.file}): ${e.message}`); srcCache[id] = null; continue }
     const stripped = stripComments(raw)
-    srcCache[id] = { stripped, strippedLines: stripped.split('\n'), rawLines: raw.split('\n') }
+    // strippedForMatch: 주석 + 문자열 리터럴 내용 모두 제거(NONDET·외부 심볼 직접참조 오탐 방지).
+    const strippedForMatch = stripCommentsAndStrings(raw)
+    srcCache[id] = { stripped, strippedLines: strippedForMatch.split('\n'), rawLines: raw.split('\n') }
   }
 
   // 의존 배열 정규화 헬퍼.
@@ -184,7 +214,8 @@ function runLint(manifestFile) {
     if (!k || !k.file || !k.global) continue
     const cache = srcCache[id]
     if (cache == null) continue   // 파일 못 읽음(이미 SCHEMA error)
-    const src = cache.stripped
+    const src = cache.strippedLines.join('\n')  // 주석+문자열 모두 제거(킷 참조·NONDET·외부심볼 오탐 방지)
+    const srcMatch = src  // 동일 뷰 사용
 
     const hardEngine = asArr(k.engine)
     const softEngine = asArr(k.softEngine)
@@ -211,11 +242,12 @@ function runLint(manifestFile) {
     }
 
     // (2) 외부 전역 *직접* 참조 검출 — bare 심볼(Phaser/Matter/Tone)이 코드에 박혀 있는지.
+    //     문자열 리터럴 내용 제거 후 매칭(CONTRACT 설명 문자열 속 심볼명 오탐 방지).
     //     (접근자 경유 사용은 검출하지 않음 — 미사용 판정 안 하므로 오탐 문제 없음.)
     const directExt = new Set()
     for (const key of Object.keys(externalGlobals)) {
       const sym = externalGlobals[key]
-      if (sym && symbolRefRe(sym).test(src)) directExt.add(key)
+      if (sym && symbolRefRe(sym).test(srcMatch)) directExt.add(key)
     }
 
     // (3) MISSING: 코드가 쓰는데 engine∪softEngine 에 없음.
@@ -248,6 +280,7 @@ function runLint(manifestFile) {
     // (5) NONDET: 결정론 위반(Math.random/Date.now/performance.now). 라인 단위 + kitdep-ok 억제.
     //     억제 근거: mobile.js 의 더블탭 줌 차단(DOM touchend 핸들러)처럼 게임 step 루프
     //     바깥의 불가피한 시각 코드(헤드리스 결정성에 무관)는 라인 주석으로 면제(lint-rng 선례).
+    //     strippedLines 는 주석+문자열 모두 제거(CONTRACT 설명 속 'Math.random()' 오탐 방지).
     const sLines = cache.strippedLines
     const rLines = cache.rawLines
     for (let li = 0; li < sLines.length; li++) {
@@ -260,9 +293,36 @@ function runLint(manifestFile) {
         }
       }
     }
+
+    // (6) KITDEP-CONTRACT-DRIFT: contract 배열 선언 항목 vs 실제 메서드 존재 교차검증.
+    //     contract 에 'update-guard' 가 있으면 updateMethod(기본 'update') 메서드가 소스에 있어야 함.
+    //     contract 에 'reset' 이 있으면 'reset' 메서드가 소스에 있어야 함.
+    //     목적: manifest 가 코드와 달라지는 것을 영구 방지(abilitykit 선례: update/reset 없음인데 선언).
+    const contractItems = Array.isArray(k.contract) ? k.contract : []
+    const updateMethodName = (k.updateMethod && typeof k.updateMethod === 'string') ? k.updateMethod : 'update'
+    if (contractItems.includes('update-guard')) {
+      // 메서드 이름이 소스 코드에 함수/메서드로 정의돼 있는지 확인.
+      // prototype.METHOD = function 또는 METHOD: function 또는 METHOD(dt 형태.
+      const methodRe = new RegExp(
+        '\\b' + updateMethodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+        '\\s*[=:(]|prototype\\.' +
+        updateMethodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*='
+      )
+      if (!methodRe.test(src)) {
+        add('KITDEP-CONTRACT-DRIFT', 'error', id,
+          `contract 에 'update-guard' 선언했으나 ${k.file} 에 '${updateMethodName}' 메서드가 없습니다(updateMethod:"${updateMethodName}"). contract 배열에서 제거하거나 메서드를 추가하세요.`)
+      }
+    }
+    if (contractItems.includes('reset')) {
+      const resetRe = /\breset\s*[=:(]|prototype\.reset\s*=/
+      if (!resetRe.test(src)) {
+        add('KITDEP-CONTRACT-DRIFT', 'error', id,
+          `contract 에 'reset' 선언했으나 ${k.file} 에 'reset' 메서드가 없습니다. contract 배열에서 제거하거나 메서드를 추가하세요.`)
+      }
+    }
   }
 
-  // ── (6) CYCLE: 하드 engine 그래프 순환 검출(DFS 3색). softEngine 은 제외. ──
+  // ── (7) CYCLE: 하드 engine 그래프 순환 검출(DFS 3색). softEngine 은 제외. ──
   detectCycles(kits)
 }
 
@@ -369,6 +429,52 @@ function runSelfTest() {
   // ── 픽스처 3: 미사용 soft(warn) — exit 0, --strict 시 exit 1 ────────────────
   writeKit('s', `(function(g){'use strict'; g.S = {}; if (typeof module!=='undefined') module.exports = g.S; })(this);`)
   writeKit('t', `(function(g){'use strict'; g.T = {}; if (typeof module!=='undefined') module.exports = g.T; })(this);`)
+
+  // ── 픽스처 4: CONTRACT-DRIFT — contract 선언은 있으나 메서드 부재 → exit 1 ──
+  // drift_a: contract=['update-guard','reset'] 이지만 실제 update/reset 메서드 없음.
+  writeKit('drift_a', `(function(g){'use strict';
+    g.DriftA = {};
+    if (typeof module!=='undefined') module.exports = g.DriftA;
+  })(this);`)
+  // drift_b: contract=['update-guard'] 이고 updateMethod='tick', tick 메서드 없음.
+  writeKit('drift_b', `(function(g){'use strict';
+    g.DriftB = {};
+    if (typeof module!=='undefined') module.exports = g.DriftB;
+  })(this);`)
+  // drift_ok: contract=['update-guard','reset'] 이고 메서드 둘 다 있음 → 통과.
+  writeKit('drift_ok', `(function(g){'use strict';
+    function DriftOk() {}
+    DriftOk.prototype.update = function(dt) { if (!Number.isFinite(dt)||dt<0) dt=0; };
+    DriftOk.prototype.reset = function() {};
+    g.DriftOk = DriftOk;
+    if (typeof module!=='undefined') module.exports = g.DriftOk;
+  })(this);`)
+  const driftManifest = join(dir, 'drift.json')
+  writeFileSync(driftManifest, JSON.stringify({
+    externalGlobals: {},
+    kits: {
+      drift_a: { file: 'drift_a.js', global: 'DriftA', engine: [], external: [], contract: ['update-guard', 'reset'] },
+      drift_b: { file: 'drift_b.js', global: 'DriftB', engine: [], external: [], updateMethod: 'tick', contract: ['update-guard'] },
+      drift_ok: { file: 'drift_ok.js', global: 'DriftOk', engine: [], external: [], contract: ['update-guard', 'reset'] }
+    }
+  }), 'utf8')
+
+  // ── 픽스처 5: 문자열 리터럴 NONDET 오탐 없음 ──────────────────────────────────
+  // nofalse_a: 문자열 리터럴 속 'Math.random()' / 'Date.now()' 만 있음(실제 호출 아님).
+  //            → NONDET 미검출, exit 0 이어야 함.
+  writeKit('nofalse_a', `(function(g){'use strict';
+    // CONTRACT 설명: 'Math.random() 금지, Date.now() 금지'
+    var rule = 'Math.random() 는 결정론 위반 금지 함수입니다. Date.now() 도 금지.';
+    g.NofA = {};
+    if (typeof module!=='undefined') module.exports = g.NofA;
+  })(this);`)
+  const nofaManifest = join(dir, 'nofa.json')
+  writeFileSync(nofaManifest, JSON.stringify({
+    externalGlobals: {},
+    kits: {
+      nofalse_a: { file: 'nofalse_a.js', global: 'NofA', engine: [], external: [], contract: [] }
+    }
+  }), 'utf8')
   const softManifest = join(dir, 'soft.json')
   writeFileSync(softManifest, JSON.stringify({
     externalGlobals: {},
@@ -426,7 +532,29 @@ function runSelfTest() {
   // 4) 매니페스트 부재 → SCHEMA error, exit 1
   run('부재-매니페스트', `${JSON.stringify(join(dir, 'nope.json'))} --json`, 1)
 
-  // 5) 실제 엔진 매니페스트 → exit 0(현재 엔진이 계약 통과해야 함)
+  // 5) CONTRACT-DRIFT 픽스처 → exit 1, KITDEP-CONTRACT-DRIFT 검출
+  {
+    const parsed = run('contract-drift-fixture', `${JSON.stringify(driftManifest)} --json`, 1)
+    const rules = (parsed?.findings || []).map(f => f.rule)
+    const driftCount = rules.filter(r => r === 'KITDEP-CONTRACT-DRIFT').length
+    // drift_a: update-guard + reset 미검출 → 2건, drift_b: tick 미검출 → 1건, drift_ok: 통과.
+    const hasDrift = driftCount >= 3
+    if (!hasDrift) pass = false
+    console.log(`${hasDrift ? '✓' : '✗'} [self-test]   contract-drift 가 KITDEP-CONTRACT-DRIFT >= 3 건 검출(실제 ${driftCount}건)`)
+    results.push({ label: 'contract-drift-검출', ok: hasDrift })
+  }
+
+  // 6) 문자열 리터럴 NONDET 오탐 없음 → exit 0
+  {
+    const parsed = run('문자열-NONDET-오탐없음', `${JSON.stringify(nofaManifest)} --json`, 0)
+    const nondetCount = (parsed?.findings || []).filter(f => f.rule === 'KITDEP-NONDET').length
+    const noFalsePos = nondetCount === 0
+    if (!noFalsePos) pass = false
+    console.log(`${noFalsePos ? '✓' : '✗'} [self-test]   문자열 리터럴 속 Math.random/Date.now 오탐 0(실제 ${nondetCount}건)`)
+    results.push({ label: '문자열-NONDET-오탐없음', ok: noFalsePos })
+  }
+
+  // 7) 실제 엔진 매니페스트 → exit 0(현재 엔진이 계약 통과해야 함)
   run('실제-엔진-매니페스트', `${JSON.stringify(DEFAULT_MANIFEST)} --json`, 0)
 
   const passed = results.filter(r => r.ok).length

@@ -9,6 +9,14 @@
     "tone": "Tone"
   },
   "kits": {
+    "behaviorkit": {
+      "file": "behaviorkit.js",
+      "global": "BehaviorKit",
+      "role": "런타임 behavior 킷 공통 계약 성문화(CONTRACT·assertContract). 엔진 킷 결정론·가드·노출 규약을 정적 명세와 런타임 검증기로 고정.",
+      "engine": [],
+      "external": [],
+      "contract": ["module-exposure", "determinism-noclock"]
+    },
     "rngforge": {
       "file": "rngforge.js",
       "global": "RngForge",
@@ -58,7 +66,8 @@
       "engine": [],
       "external": [],
       "softExternal": ["phaser"],
-      "contract": ["module-exposure", "determinism-noclock", "update-guard", "reset"]
+      "updateMethod": "tick",
+      "contract": ["module-exposure", "determinism-noclock", "update-guard"]
     },
     "audio": {
       "file": "audio.js",

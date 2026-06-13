@@ -44,10 +44,14 @@
  * 주의:
  *   - assertContract 는 *던지지 않는다* — { ok, name, checks[], violations[] } 리포트를
  *     반환한다(호출자가 throw 여부 결정). 헤드리스 테스트·부팅 자가검진 양쪽에 적합.
- *   - update 가드 검사는 *행위적* 이다: kit.update(NaN)/update(-1) 호출 후 상태가
- *     오염되지 않았는지(파괴적 throw 없이 통과 + 상태 수치 유한) 확인한다. 깊은
+ *   - update 가드 검사는 *행위적* 이다: kit[updateMethod](NaN)/[updateMethod](-1) 호출 후
+ *     상태가 오염되지 않았는지(파괴적 throw 없이 통과 + 상태 수치 유한) 확인한다. 깊은
  *     상태 동치까지는 보지 않는다(킷마다 상태 모양이 다름). 부작용이 우려되면
  *     opts.skipUpdateProbe:true 로 행위 프로브를 끄고 메서드 존재만 검사.
+ *     tick 기반 킷(예: abilitykit)은 opts.updateMethod:'tick' 으로 검사 진입점을 바꾼다.
+ *   - reset 검사는 기본이 *비파괴*(메서드 존재 확인만, 호출 없음). opts.nonDestructive:false
+ *     를 명시해야만 실제 kit.reset() 을 호출한다. skipUpdateProbe 는 update 프로브만
+ *     끈다; reset 행위 검증은 nonDestructive 로 제어한다.
  *   - 헤드리스(Node require) 가능 — 외부 상태(DOM/시각) 의존 0.
  * ==========================================================================*/
 (function (global) {
@@ -101,10 +105,12 @@
   //   opts : {
   //     name           : string   // 리포트용 이름(없으면 ctor.name 추정)
   //     ctor           : Function  // 생성자(module.exports 가 생성자면 노출 검사에 사용)
-  //     requireUpdate  : bool      // true 면 update 부재를 위반으로(기본 false — 조건부)
+  //     requireUpdate  : bool      // true 면 update(또는 updateMethod) 부재를 위반으로(기본 false — 조건부)
   //     requireReset   : bool      // true 면 reset 부재를 위반으로(기본 false — 조건부)
-  //     skipUpdateProbe: bool      // true 면 update 가드 *행위* 프로브를 끄고 존재만 검사
-  //     updateArgs     : Array     // update 정상 호출 인자(dt 외 ctx 등). 기본 [].
+  //     skipUpdateProbe: bool      // true 면 update 가드 *행위* 프로브를 끄고 존재만 검사(reset 은 별도 nonDestructive 로 제어)
+  //     updateMethod   : string    // update 가드 검사 진입 메서드명(기본 'update'). tick 기반 킷은 'tick' 지정.
+  //     updateArgs     : Array     // update/updateMethod 정상 호출 인자(dt 외 ctx 등). 기본 [].
+  //     nonDestructive : bool      // true(기본)=reset 은 존재 확인만(호출 없음). false=kit.reset() 실제 호출 후 throw 여부 검사.
   //   }
   // 각 check: { id, ok, status:'pass'|'fail'|'n/a', detail }.
   // status 'n/a' 는 ok=true 로 집계(해당 능력을 제공하지 않는 킷).
@@ -146,16 +152,19 @@
     //    여기서는 항상 'n/a'(lint-kit-deps 의 결정론 룰이 본 항목을 강제).
     record('determinism-noclock', true, 'n/a', '시각함수 정적 검출은 lint-kit-deps(결정론 룰) 소관.');
 
-    // 4) update-guard — update(dt) 가 있으면 NaN/음수 가드를 *행위적* 으로 검증.
+    // 4) update-guard — update(dt)(또는 opts.updateMethod 로 지정한 진입점)가 있으면
+    //    NaN/음수 가드를 *행위적* 으로 검증. tick 기반 킷은 opts.updateMethod:'tick' 지정.
     (function () {
-      if (!isFn(kit && kit.update)) {
+      var method = (opts.updateMethod && typeof opts.updateMethod === 'string')
+        ? opts.updateMethod : 'update';
+      if (!isFn(kit && kit[method])) {
         var miss = !!opts.requireUpdate;
         record('update-guard', !miss, miss ? 'fail' : 'n/a',
-          miss ? 'requireUpdate=true 인데 update(dt) 미제공.' : 'update(dt) 미제공 — dt 구동 킷 아님.');
+          miss ? 'requireUpdate=true 인데 ' + method + '(dt) 미제공.' : method + '(dt) 미제공 — dt 구동 킷 아님.');
         return;
       }
       if (opts.skipUpdateProbe) {
-        record('update-guard', true, 'pass', 'update(dt) 존재(행위 프로브 생략).');
+        record('update-guard', true, 'pass', method + '(dt) 존재(행위 프로브 생략).');
         return;
       }
       // 행위 프로브: 정상 dt 1회 → NaN → Infinity → 음수 순으로 호출해 throw 없이 통과하는지.
@@ -163,12 +172,12 @@
       var extra = Array.isArray(opts.updateArgs) ? opts.updateArgs : [];
       var bad = null;
       try {
-        kit.update.apply(kit, [1 / 60].concat(extra));
-        kit.update.apply(kit, [NaN].concat(extra));
-        kit.update.apply(kit, [Infinity].concat(extra));
-        kit.update.apply(kit, [-1].concat(extra));
+        kit[method].apply(kit, [1 / 60].concat(extra));
+        kit[method].apply(kit, [NaN].concat(extra));
+        kit[method].apply(kit, [Infinity].concat(extra));
+        kit[method].apply(kit, [-1].concat(extra));
       } catch (e) {
-        bad = 'update(dt) 가 비정상 dt 에서 throw: ' + (e && e.message);
+        bad = method + '(dt) 가 비정상 dt 에서 throw: ' + (e && e.message);
       }
       if (!bad) {
         // 대표 수치 상태 필드(있을 때만) 유한성 점검 — 킷마다 다르므로 존재하는 것만.
@@ -182,15 +191,23 @@
         }
       }
       record('update-guard', !bad, bad ? 'fail' : 'pass',
-        bad || 'update(NaN/Infinity/-1) 가 throw·오염 없이 0 으로 가드됨.');
+        bad || method + '(NaN/Infinity/-1) 가 throw·오염 없이 0 으로 가드됨.');
     })();
 
-    // 5) reset — reset() 제공 여부. 호출 가능하면 1회 호출해 throw 없는지 확인.
+    // 5) reset — reset() 제공 여부. 기본(nonDestructive:true)은 존재만 확인(호출 없음).
+    //    opts.nonDestructive:false 를 명시해야만 실제 kit.reset() 을 호출한다.
+    //    이는 전달된 인스턴스를 파괴적으로 변이(JuiceKit trauma 등 리셋)하는 것을 막기 위함.
     (function () {
       if (!isFn(kit && kit.reset)) {
         var miss = !!opts.requireReset;
         record('reset', !miss, miss ? 'fail' : 'n/a',
           miss ? 'requireReset=true 인데 reset() 미제공.' : 'reset() 미제공.');
+        return;
+      }
+      // nonDestructive 기본값 true(명시적으로 false 여야만 호출).
+      var nonDestructive = opts.nonDestructive !== false;
+      if (nonDestructive) {
+        record('reset', true, 'pass', 'reset() 존재 확인(비파괴 — 실제 호출 없음. 호출 검증은 nonDestructive:false 로 옵트인).');
         return;
       }
       var bad = null;
