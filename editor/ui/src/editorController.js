@@ -23,9 +23,16 @@ export function createController(opts) {
   const SceneKit = (typeof window !== 'undefined') ? window.SceneKit : null;
   const SceneKitPhaser = (typeof window !== 'undefined') ? window.SceneKitPhaser : null;
 
+  // transport: remote(브리지 구독자) | local(P1 인메모리). 미주입 시 local.
+  const transport = opts.transport || null;
+  const isRemote = !!(transport && transport.isRemote);
+
   let adapter = null;             // scenekit-phaser 인스턴스
   let parentEl = null;
   let currentDoc = null;          // 마지막으로 로드한 sceneDoc(reload 기준)
+  let remoteMode = 'edit';        // remote 권위 모드 미러(브리지 델타로 갱신)
+  let sseStarted = false;         // remote: SSE 델타 흐름 시작 여부(어댑터 마운트 후 1회)
+  let remoteBootSnap = null;      // remote: 초기 부트 스냅샷 보관
 
   // Undo/Redo 스택. undoStack: {cmd, undoDelta}[], redoStack: {cmd, undoDelta}[].
   const undoStack = [];
@@ -34,6 +41,9 @@ export function createController(opts) {
   // (redo 는 어댑터 applyCommand 로 재적용하므로 onCommand 가 발화되는데, 그 콜백이
   //  redoStack 을 비우면 두 번째 redo 가 불가능해진다 — 이 플래그로 차단.)
   let stackGuard = false;
+  // remote 미러 가드: 브리지 델타를 어댑터에 재적용하는 동안 onCommand 가 다시 브리지로
+  // 되돌려 보내지 않게 한다(에코 루프 차단).
+  let mirrorGuard = false;
 
   // 변경 알림 리스너(UI 가 구독 → 재렌더).
   const changeListeners = [];
@@ -52,17 +62,87 @@ export function createController(opts) {
     currentDoc = sceneDoc;
     if (adapter && adapter.destroy) adapter.destroy();
     adapter = SceneKitPhaser.create(el, sceneDoc, Object.assign({
-      // 어댑터 내부에서 발생한 커맨드(기즈모 드래그 등)를 Undo 스택에 적재.
+      // 어댑터 내부에서 발생한 커맨드(기즈모 드래그 등) 처리.
+      //  - local: Undo 스택에 직접 적재(P1).
+      //  - remote: 어댑터가 직접 변경하면 안 됨(브리지 권위). 기즈모 드래그는 onCommand 대신
+      //    별도 경로로 브리지에 POST 하도록 어댑터가 알려주지만, 미러 동기 applyCommand(델타
+      //    재적용)도 이 콜백을 발화한다 — mirrorGuard 로 그때는 무시(브리지가 이미 권위 반영).
       onCommand: (cmd, undoDelta) => {
-        // 재진입 가드: undo/redo 가 어댑터를 통해 재적용 중이면 스택을 조작하지 않는다.
+        if (isRemote) {
+          // remote: 미러 동기 적용(mirrorGuard ON) 중이면 무시. 사용자 입력(기즈모)으로 인한
+          //  커맨드면 브리지로 전달(adapter 미러는 델타가 되돌아올 때 동기).
+          if (!mirrorGuard) forwardToRemote(cmd, undoDelta);
+          notifyChange();
+          return;
+        }
+        // local: 재진입 가드 — undo/redo 재적용 중이면 스택 조작 안 함.
         if (!stackGuard && undoDelta && undoDelta.type !== 'noop') {
           pushUndo(cmd, undoDelta);
         }
         notifyChange();
       },
-      onSelectionChange: (ids) => { notifySelection(ids); notifyChange(); }
+      onSelectionChange: (ids) => { notifySelection(ids); notifyChange(); },
+      // Phaser 비동기 부트(world 로드) 완료 시 셸 UI 동기화 — remote/local 초기 Hierarchy 채움.
+      onReady: () => { notifyChange(); notifySelection(getSelection()); }
     }, mountOpts || {}));
+    wireRemote();
+    // remote: 어댑터(미러)가 준비됐으니 이제 SSE 델타 흐름을 켠다(첫 델타 무손실 적용 보장).
+    if (isRemote && transport && transport.connectStream && !sseStarted) {
+      sseStarted = true;
+      transport.connectStream();
+    }
     return adapter;
+  }
+
+  // ── remote transport 배선 ───────────────────────────────────────────────────
+  // 브리지 델타를 미러(어댑터 world)에 적용. 결정적이라 브리지와 동일 결과(§ 단일 코어).
+  //  - command 델타 → adapter.applyCommand(delta.command)  (확정 id 포함)
+  //  - undo 델타    → adapter.applyUndo(delta.undoDelta)
+  //  - mode 델타    → remoteMode 갱신 + 어댑터 setMode
+  function wireRemote() {
+    if (!isRemote || !transport) return;
+    transport.onDelta((delta) => {
+      if (!adapter || !delta) return;
+      mirrorGuard = true;            // 미러 재적용 중 — onCommand 가 브리지로 에코 안 하게.
+      try {
+        if (delta.type === 'undo') {
+          if (delta.undoDelta) adapter.applyUndo(delta.undoDelta);
+        } else if (delta.type === 'command') {
+          if (delta.command) adapter.applyCommand(delta.command);
+        }
+      } catch (e) { /* 미러 적용 격리 */ }
+      finally { mirrorGuard = false; }
+      notifyChange();
+    });
+    transport.onResync((snap) => {
+      // 백프레셔/초기 — 브리지 스냅샷으로 미러 재구성.
+      if (snap && snap.scene) {
+        currentDoc = snap.scene;
+        if (typeof snap.mode === 'string') applyRemoteMode(snap.mode);
+        if (adapter) adapter.reload(snap.scene);
+        else if (parentEl) mount(parentEl, snap.scene);
+        notifyChange();
+        notifySelection(getSelection());
+      }
+    });
+    transport.onMode((m) => { applyRemoteMode(m); notifyChange(); });
+  }
+
+  function applyRemoteMode(m) {
+    remoteMode = (m === 'play') ? 'play' : 'edit';
+    if (adapter && adapter.setMode) adapter.setMode(remoteMode);
+  }
+
+  // remote: 어댑터 내부에서 사용자 입력(기즈모 드래그 등)으로 발생한 커맨드를 브리지에 전달.
+  // 어댑터는 이미 로컬 미러에 적용했지만, 브리지가 권위이므로 같은 커맨드를 POST 한다.
+  // setTransform 은 절대값 멱등이라 델타 재적용이 안전(같은 결과). 브리지가 Play 면 거부되고
+  // 다음 resync/델타로 미러가 권위 상태로 되돌아온다.
+  function forwardToRemote(cmd, undoDelta) {
+    if (!transport) return;
+    // addEntity 는 로컬 미러가 임시 id 로 추가했을 수 있다(어댑터 직접). 브리지가 확정 id 를
+    // 발급하므로, P2 에서 구조 변경은 API(addEntity) 경로로만 발생하게 하고(기즈모는 transform
+    // 만), 여기서는 그대로 전달한다. 충돌 시 resync 가 정정.
+    Promise.resolve(transport.sendCommand(cmd)).catch(() => {});
   }
 
   function pushUndo(cmd, undoDelta) {
@@ -80,14 +160,26 @@ export function createController(opts) {
   }
 
   // ── 커맨드 적용(UI/API 진입점) ──────────────────────────────────────────────
-  // 어댑터를 거쳐 적용 → onCommand 콜백이 Undo 스택에 적재(중복 적재 방지).
+  //  - local: 어댑터를 거쳐 적용 → onCommand 콜백이 Undo 스택에 적재(P1).
+  //  - remote: 브리지에 POST → SSE 델타로 미러 동기. 직접 어댑터 변경 안 함.
+  //    반환은 Promise({seq,newId,rejected}) — addEntity 의 newId 회수에 사용.
   function applyCommand(cmd) {
+    if (isRemote) {
+      if (!transport) return Promise.resolve({ rejected: true });
+      return Promise.resolve(transport.sendCommand(cmd));
+    }
     if (!adapter) return { type: 'noop' };
     return adapter.applyCommand(cmd);
   }
 
   // ── Undo / Redo ─────────────────────────────────────────────────────────────
+  //  - local: 셸이 관리하는 undoStack/redoStack(P1).
+  //  - remote: 브리지 권위 — POST /api/undo|redo. 델타로 미러 동기.
   function undo() {
+    if (isRemote) {
+      if (!transport) return Promise.resolve(false);
+      return Promise.resolve(transport.sendUndo()).then((r) => !!(r && r.applied));
+    }
     if (!adapter || undoStack.length === 0) return false;
     const entry = undoStack.pop();
     adapter.applyUndo(entry.undoDelta);
@@ -97,6 +189,10 @@ export function createController(opts) {
     return true;
   }
   function redo() {
+    if (isRemote) {
+      if (!transport) return Promise.resolve(false);
+      return Promise.resolve(transport.sendRedo()).then((r) => !!(r && r.applied));
+    }
     if (!adapter || redoStack.length === 0) return false;
     const entry = redoStack.pop();
     // 원래 커맨드 재적용 → 새 undoDelta 로 갱신(상태 복원 일관).
@@ -110,8 +206,10 @@ export function createController(opts) {
     notifyChange();
     return true;
   }
-  function undoDepth() { return undoStack.length; }
-  function redoDepth() { return redoStack.length; }
+  // remote 는 Undo 깊이를 셸이 모름(브리지 권위) — UI 버튼 활성화는 보수적으로 항상 허용(0 반환
+  // 대신 큰 값) 하면 오히려 혼란이므로, remote 에선 깊이 미상=−1 로 두고 UI 가 버튼을 항상 노출.
+  function undoDepth() { return isRemote ? -1 : undoStack.length; }
+  function redoDepth() { return isRemote ? -1 : redoStack.length; }
 
   // ── 선택 ────────────────────────────────────────────────────────────────────
   function select(ids) { if (adapter) adapter.select(ids); }
@@ -120,13 +218,21 @@ export function createController(opts) {
   // ── 엔티티 추가 헬퍼 ────────────────────────────────────────────────────────
   // partial: { name?, transform?, components? }. applyCommand(addEntity) → 새 id 반환.
   function addEntity(partial) {
-    if (!adapter) return null;
     partial = partial || {};
     const entity = {
       name: partial.name || 'entity',
       transform: partial.transform || { x: 160, y: 120 },
       components: partial.components || []
     };
+    if (isRemote) {
+      // remote: 브리지가 id 발급 → POST 응답 newId 회수 후 select. Promise<newId> 반환.
+      return Promise.resolve(applyCommand({ type: 'addEntity', entity: entity })).then((r) => {
+        const newId = r && r.newId != null ? r.newId : null;
+        if (newId != null) select([newId]);
+        return newId;
+      });
+    }
+    if (!adapter) return null;
     // addEntity 의 undoDelta = {type:'removeEntity', id} → 거기서 새 id 를 정확히 회수.
     const undoDelta = applyCommand({ type: 'addEntity', entity: entity });
     const newId = (undoDelta && undoDelta.type === 'removeEntity') ? undoDelta.id : null;
@@ -209,6 +315,18 @@ export function createController(opts) {
     return true;
   }
 
+  // remote 부트(2단계 — 어댑터 마운트 순서 보장):
+  //  1) startRemote(): 브리지 스냅샷만 가져온다(SSE 미연결). main.jsx 가 이 문서로 Viewport
+  //     를 마운트 → 어댑터 생성. 그때 mount() 가 connectStream() 을 호출해 SSE 흐름을 켠다.
+  //  이렇게 해야 첫 델타가 도착할 때 어댑터 미러가 이미 준비돼 무손실 적용된다.
+  function startRemote() {
+    if (!isRemote || !transport) return Promise.resolve(null);
+    return Promise.resolve(transport.fetchInitial()).then((snap) => {
+      remoteBootSnap = snap;
+      return snap;
+    });
+  }
+
   // ── 씬 로드(새 문서로 재마운트) ─────────────────────────────────────────────
   function loadScene(doc) {
     currentDoc = doc;
@@ -224,8 +342,34 @@ export function createController(opts) {
   function setSnap(on, size) { if (adapter) adapter.setSnap(on, size); }
   function setGizmoMode(m) { if (adapter) adapter.setGizmoMode(m); notifyChange(); }
   function getGizmoMode() { return adapter ? adapter.getGizmoMode() : 'move'; }
-  function setMode(m) { if (adapter) adapter.setMode(m); notifyChange(); }
-  function getMode() { return adapter ? adapter.getMode() : 'edit'; }
+  // setMode:
+  //  - local: 어댑터가 곧 권위(P1) — 직접 전환.
+  //  - remote: 브리지가 권위(§4.9). POST /api/mode → mode 델타가 미러 갱신. Play 진입 시
+  //    브라우저 코어가 step+렌더(휘발), Stop 시 edit 복귀 + 브리지 스냅샷 재로드(resync 경로).
+  function setMode(m) {
+    if (isRemote) {
+      const want = (m === 'play') ? 'play' : 'edit';
+      // 어댑터는 즉시 전환(브라우저 Play 렌더 시작). 권위 통지는 브리지 POST.
+      if (adapter && adapter.setMode) adapter.setMode(want);
+      remoteMode = want;
+      notifyChange();
+      const p = transport ? Promise.resolve(transport.setMode(want)) : Promise.resolve();
+      return p.then(() => {
+        // Stop(edit 복귀) 시 휘발 Play 상태 폐기 후 브리지 권위 스냅샷 재로드.
+        if (want === 'edit' && transport) {
+          return Promise.resolve(transport.snapshot()).then((snap) => {
+            if (snap && snap.scene && adapter) { currentDoc = snap.scene; adapter.reload(snap.scene); notifyChange(); }
+          });
+        }
+      });
+    }
+    if (adapter) adapter.setMode(m);
+    notifyChange();
+  }
+  function getMode() {
+    if (isRemote) return remoteMode;
+    return adapter ? adapter.getMode() : 'edit';
+  }
 
   // ── 구독 ────────────────────────────────────────────────────────────────────
   function onChange(cb) {
@@ -253,6 +397,7 @@ export function createController(opts) {
     save, reloadFromSaved, loadScene,
     setSnap, setGizmoMode, getGizmoMode, setMode, getMode,
     onChange, onSelectionChange, getComponentDef, getAdapter,
+    startRemote, isRemote,
     STORAGE_KEY
   };
 }

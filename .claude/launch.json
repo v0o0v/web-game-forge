@@ -12,6 +12,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["editor/serve.mjs", "5174"],
       "port": 5174
+    },
+    {
+      "name": "wgf-bridge",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["editor/server/bridge.mjs", "5180"],
+      "port": 5180
     }
   ]
 }
