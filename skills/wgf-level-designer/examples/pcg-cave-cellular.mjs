@@ -10,7 +10,7 @@
  *   node skills/wgf-level-designer/examples/pcg-cave-cellular.mjs --test
  *
  * 출력 계약 (--test 플래그):
- *   stdout 마지막 줄: {"ok":bool,"seed":number,"wallCount":number,"floorCount":number}
+ *   stdout 마지막 줄: {"ok":bool,"seed":number,"wallCount":number,"floorCount":number,"identical":bool}
  *   exit 0 (ok=true) / exit 1 (ok=false)
  *
  * 참고: reference/pcg/algorithms.md §1

@@ -70,7 +70,7 @@ for (var y = 0; y < H; y++) {
 
 ### 교차 스킬
 - `wgf-level-designer`: 생성된 grid → `LEVEL.features` 피처리스트로 변환 후 `buildLevel` 투입
-- `wgf-tiled`(level-designer Tiled 연동): `ascii-to-tmj.mjs`에 ASCII 격자로 변환해 `.tmj` 베이킹
+- `wgf-level-designer` Tiled 연동: `tools/ascii-to-tmj.mjs`에 ASCII 격자로 변환해 `.tmj` 베이킹
 
 ---
 
@@ -123,7 +123,7 @@ function observeMinEntropy(cells, rng) {
 
 ### 교차 스킬
 - `wgf-level-designer` Tiled 연동: `tools/ascii-to-tmj.mjs`로 WFC 출력 격자 → `.tmj` 변환
-- `wgf-tiled-topdown`: 탑다운 던전 타일 생성에 직접 적용
+- `wgf-topdown-shooter`: 탑다운 던전 타일 생성에 직접 적용
 
 ---
 
@@ -193,7 +193,9 @@ function poissonDisk(width, height, minDist, k, rng) {
       var gcy = Math.floor(ny / cellSize);
       for (var dy = -2; dy <= 2 && ok; dy++) {
         for (var dx = -2; dx <= 2 && ok; dx++) {
-          var neighbor = grid[(gcy+dy)*cols + (gcx+dx)];
+          var nx2 = gcx + dx, ny2 = gcy + dy;
+          if (nx2 < 0 || nx2 >= cols || ny2 < 0 || ny2 >= rows) continue;  // 경계 가드
+          var neighbor = grid[ny2 * cols + nx2];
           if (neighbor) {
             var dxx = neighbor[0]-nx, dyy = neighbor[1]-ny;
             if (dxx*dxx + dyy*dyy < minDist*minDist) ok = false;
@@ -250,6 +252,10 @@ function buildMarkov(names, n) {
   var table = {};
   names.forEach(function(name) {
     var s = '^' + name.toLowerCase() + '$';
+    // '^' 단독 키: 이름 첫 글자 빈도 등록 (generateName 진입점)
+    if (!table['^']) table['^'] = {};
+    table['^'][s[1]] = (table['^'][s[1]] || 0) + 1;
+    // n-gram 전이 테이블 구축
     for (var i = 0; i < s.length - n; i++) {
       var key = s.slice(i, i + n);
       var next = s[i + n];
@@ -262,11 +268,13 @@ function buildMarkov(names, n) {
 
 function generateName(table, n, rng, minLen, maxLen) {
   for (var attempt = 0; attempt < 20; attempt++) {
-    var cur = '^'.repeat(n - 1).slice(0, n - 1) + '^';
-    // n=2일 때 cur = '^'
     var result = '';
     for (var i = 0; i < maxLen; i++) {
-      var key = (cur + result).slice(-(n));  // 마지막 n 문자
+      // result 가 n-1 글자 미만이면 '^' 패딩을 앞에 붙여 n글자 키를 구성
+      // 예) n=2, result='': key=('^'+'').slice(-2)='^' → table['^'] 에서 첫 글자 선택
+      //     n=2, result='g': key=('^'+'g').slice(-2)='^g' → 정상 전이
+      var padded = '^' + result;
+      var key = padded.length >= n ? padded.slice(-n) : padded;
       var choices = table[key];
       if (!choices) break;
       var items = Object.keys(choices);
