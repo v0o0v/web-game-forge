@@ -80,6 +80,53 @@ update: function () {
 }
 ```
 
+### 3-b) EventBus 기반 씬↔HUD 디커플 (권장 — 폴링 대안)
+
+위 3)의 update() 폴링은 매 프레임 Game 씬 state 를 읽어 비교한다(`this.scene.get('Game')` 강결합). 값이 *바뀔 때만* 갱신하고 싶고 씬↔HUD 를 완전히 분리하려면 `engine/eventbus.js` 의 EventBus 로 발행-구독한다. 씬은 HUD 를 모른 채 사실만 `emit` 하고, HUD 는 `on` 으로 구독한다. **등록순 동기 디스패치 + 시각함수·무작위 0** 이라 game-qa 헤드리스 검증에서 이벤트 흐름이 그대로 재현된다.
+
+```html
+<!-- index.html — phaser 다음에 1줄 추가(외부 파일 0, 부담 거의 없음) -->
+<script src="engine/eventbus.js"></script>
+```
+
+```js
+// game.js — 버스를 registry 에 한 번 올려 모든 씬이 공유
+var BootScene = {
+  create: function () {
+    this.registry.set('bus', new EventBus());   // 씬·HUD 가 같은 버스를 본다
+    this.scene.start('Game'); this.scene.launch('UI');
+  }
+};
+
+// GameScene — HUD 의 존재를 모르고 사실만 발행(직접 참조 0)
+create: function () {
+  this.bus = this.registry.get('bus');
+  this.state = { score: 0, coins: 0, lives: 3, time: 300 };
+},
+addScore: function (d) { this.state.score += d; this.bus.emit('score', this.state.score); },
+loseLife: function () {
+  this.state.lives--; this.bus.emit('lives', this.state.lives);
+  if (this.state.lives <= 0) this.bus.emit('gameover');
+}
+
+// UIScene — 씬을 폴링하지 않고 버스를 구독(값 변화 시에만 갱신)
+create: function () {
+  var ST = { fontFamily:'monospace', fontSize:'12px', color:'#fff', stroke:'#000', strokeThickness:4 };
+  this.scoreTxt = this.add.text(96, 8, 'SCORE 000000', ST);
+  this.livesTxt = this.add.text(22, 24, 'x3', ST);
+
+  var bus = this.registry.get('bus');
+  bus.on('score', function (v) { this.scoreTxt.setText('SCORE ' + String(v).padStart(6, '0')); }, this);
+  bus.on('lives', function (v) { this.livesTxt.setText('x' + v); }, this);
+  bus.once('gameover', function () { this.banner.setText('GAME OVER').setAlpha(1); }, this);
+
+  // 씬 종료/재시작 시 누수 없이 해제
+  this.events.once('shutdown', function () { bus.off('score'); bus.off('lives'); bus.off('gameover'); });
+}
+```
+
+**언제 무엇을:** 폴링(3)은 씬 객체에 이미 있는 `state` 를 그대로 읽으니 작은 게임에 간단. EventBus(3-b)는 발행처가 많거나(여러 씬·시스템이 점수에 기여) HUD 를 씬에서 떼어내 단독 테스트하고 싶을 때. 둘은 공존 가능하다.
+
 ### 4) 배너 트윈 (클리어·게임오버 팝업)
 ```js
 // Game 씬에서 이벤트 발행
@@ -145,6 +192,6 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right)
 ## 연계 / 원칙
 - web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(CC0/절차적).
 - UI Scene은 `setScrollFactor(0)`이 기본(카메라 독립) — 직접 설정 불필요.
-- HUD는 update()에서 매 프레임 setText를 호출해도 동작하지만, 성능상 값 변화 감지 후 갱신 권장.
+- HUD는 update()에서 매 프레임 setText를 호출해도 동작하지만, 성능상 값 변화 감지 후 갱신 권장. 더 나아가 씬↔HUD 를 완전히 분리하려면 `engine/eventbus.js` 의 EventBus 로 발행-구독한다(레시피 3-b) — 씬이 HUD 를 직접 참조하지 않고 `emit('score', v)` 만, 등록순 동기 디스패치라 헤드리스 검증에서 재현된다.
 - 아이콘은 `PixelForge.buildAll`이 등록한 스프라이트(coin, hero 등) 또는 커스텀 bake 스프라이트를 재활용.
 - Phaser 4 API 참고: [text-and-bitmaptext](../wgf-web-game-builder/reference/phaser/text-and-bitmaptext.md), [scenes](../wgf-web-game-builder/reference/phaser/scenes.md), [scale-and-responsive](../wgf-web-game-builder/reference/phaser/scale-and-responsive.md). 전체 색인은 [reference/phaser/INDEX.md](../wgf-web-game-builder/reference/phaser/INDEX.md).
