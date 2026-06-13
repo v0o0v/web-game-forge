@@ -14,6 +14,9 @@ _t.json
 # Node (향후 대비)
 node_modules/
 
+# WGF Studio export 스모크 테스트 산출물 (test-export.mjs 가 임시 생성·정리, KEEP=1 보존 시 격리)
+games/_export-smoke/
+
 # sprite-picker 세션 산출물 (피커에 주입하는 후보 데이터 — 매 요청마다 새로 생성)
 skills/wgf-sprite-picker/picker/data.js
 # sprite-picker "선택 완료" 핸드오프 파일 (serve.mjs 가 사용자 선택을 여기에 저장)
