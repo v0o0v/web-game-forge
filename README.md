@@ -200,42 +200,45 @@ WGF Studio 에디터 켜줘
 
 <br>
 
-메인 `web-game-builder`가 전체 흐름을 조율하고, 요청 성격에 따라 전문 스킬이 자동 발동합니다.
+> 스킬 호출명은 모두 `wgf-` prefix가 붙습니다(디렉터리명과 동일). 플러그인 네임스페이스 자체는
+> `web-game-builder` 이고, 슬래시 커맨드는 `/web-game-builder:wgf-make-game` 형태입니다.
+
+메인 `wgf-web-game-builder`가 전체 흐름을 조율하고, 요청 성격에 따라 전문 스킬이 자동 발동합니다.
 **장르로 스캐폴드 → 제작요소로 살붙이기 → 품질로 검증·최적화** 순서로 협력합니다.
 
 | 분류 | 스킬 | 역할 |
 |------|------|------|
-| 메인 | `web-game-builder` | 게임 제작 요청 감지·오케스트레이션 |
-| 🖥 에디터 | `editor` | **WGF Studio** 브라우저 게임 에디터 — 유니티식 GUI 씬 편집·Claude 협업·무빌드 export |
-| 🎮 장르 | `platformer-game` | 옆스크롤 플랫포머(마리오류) |
-| | `topdown-shooter` | 탑다운/트윈스틱 슈팅 |
-| | `arcade-classic` | 벽돌깨기·뱀·퐁·인베이더 |
-| | `puzzle-game` | 테트리스·매치3·2048 + 퍼즐 보드게임 |
-| | `endless-runner` | 무한 러너·플래피류 |
-| 🎨 비주얼 | `style-architect` | **게임 전체 아트 디렉션** 정의·강제(팔레트·셰이딩·무드) — 단일 시각 언어 |
-| | `sprite-picker` | 실제 CC0 스프라이트/시트/애니를 **브라우저 갤러리에서 시각적으로 골라 적용** |
-| | `sprite-forge` | PixelForge 픽셀아트 스프라이트·애니메이션(절차 생성) |
-| | `vector-graphics` | VectorForge 미려한 스무스/벡터 그래픽 + 외부 HD CC0 로딩 |
-| 🔊 사운드 | `sound-architect` | 무드·BGM·효과음·**적응형 음악** 사운드 설계(8비트 너머, Tone.js v15) |
-| | `chip-sound` | ChipAudio 8비트(칩튠) 경량 효과음·BGM |
-| 📐 설계 | `world-map-architect` | 스테이지를 잇는 **진행 맵 위상** 설계 + 맵 화면 빌드 |
-| | `level-architect` | 난이도 곡선·재미 극대화 레벨 **설계** |
-| | `level-designer` | 레벨·맵(타일맵) **빌드**(구현) |
-| | `story-architect` | 톤·스토리·캐릭터·대사·반전 **서사 설계** (`STORY.md` 바이블) |
-| | `ability-architect` | 액티브·패시브·이동기·궁극기·콤보·스킬트리 **캐릭터 능력 시스템 설계** |
-| | `item-architect` | 소모품·장비·통화·시너지 **아이템 설계** (`ITEMS.md` + `items.json`) |
-| 🛠 연출 | `game-ui-hud` | HUD·메뉴·UI 화면 |
-| | `juice-fx` | 파티클·스크린셰이크·게임필 |
-| 🧩 Phaser 고급 | `matter-physics` | Matter 강체 물리(슬링샷·쌓기·래그돌) |
-| | `screen-fx` | 포스트FX 화면 룩(블룸·비네트·CRT·네온) |
-| | `lighting-mood` | 동적 라이팅·분위기(점광원·안개·밤하늘) |
-| | `path-motion` | 경로·모션(스플라인 패트롤·방사 탄막) |
-| | `virtual-joystick` | 가상 조이스틱(아날로그/트윈스틱) 터치 컨트롤 |
-| ✅ 품질·운영 | `mobile-webview-tune` | 모바일 웹뷰 최적화·감사 |
-| | `game-qa` | 헤드리스 step 하니스 동작 검증 |
-| | `ip-license-guard` | 저작권·라이선스 안전 점검 |
-| | `perf-60fps` | 60fps 성능 최적화 |
-| | `sprite-catalog-refresh` | sprite-picker의 CC0 소스 카탈로그 재조사·갱신 |
+| 메인 | `wgf-web-game-builder` | 게임 제작 요청 감지·오케스트레이션 |
+| 🖥 에디터 | `wgf-editor` | **WGF Studio** 브라우저 게임 에디터 — 유니티식 GUI 씬 편집·Claude 협업·무빌드 export |
+| 🎮 장르 | `wgf-platformer-game` | 옆스크롤 플랫포머(마리오류) |
+| | `wgf-topdown-shooter` | 탑다운/트윈스틱 슈팅 |
+| | `wgf-arcade-classic` | 벽돌깨기·뱀·퐁·인베이더 |
+| | `wgf-puzzle-game` | 테트리스·매치3·2048 + 퍼즐 보드게임 |
+| | `wgf-endless-runner` | 무한 러너·플래피류 |
+| 🎨 비주얼 | `wgf-style-architect` | **게임 전체 아트 디렉션** 정의·강제(팔레트·셰이딩·무드) — 단일 시각 언어 |
+| | `wgf-sprite-picker` | 실제 CC0 스프라이트/시트/애니를 **브라우저 갤러리에서 시각적으로 골라 적용** |
+| | `wgf-sprite-forge` | PixelForge 픽셀아트 스프라이트·애니메이션(절차 생성) |
+| | `wgf-vector-graphics` | VectorForge 미려한 스무스/벡터 그래픽 + 외부 HD CC0 로딩 |
+| 🔊 사운드 | `wgf-sound-architect` | 무드·BGM·효과음·**적응형 음악** 사운드 설계(8비트 너머, Tone.js v15) |
+| | `wgf-chip-sound` | ChipAudio 8비트(칩튠) 경량 효과음·BGM |
+| 📐 설계 | `wgf-world-map-architect` | 스테이지를 잇는 **진행 맵 위상** 설계 + 맵 화면 빌드 |
+| | `wgf-level-architect` | 난이도 곡선·재미 극대화 레벨 **설계** |
+| | `wgf-level-designer` | 레벨·맵(타일맵) **빌드**(구현) |
+| | `wgf-story-architect` | 톤·스토리·캐릭터·대사·반전 **서사 설계** (`STORY.md` 바이블) |
+| | `wgf-ability-architect` | 액티브·패시브·이동기·궁극기·콤보·스킬트리 **캐릭터 능력 시스템 설계** |
+| | `wgf-item-architect` | 소모품·장비·통화·시너지 **아이템 설계** (`ITEMS.md` + `items.json`) |
+| 🛠 연출 | `wgf-game-ui-hud` | HUD·메뉴·UI 화면 |
+| | `wgf-juice-fx` | 파티클·스크린셰이크·게임필 |
+| 🧩 Phaser 고급 | `wgf-matter-physics` | Matter 강체 물리(슬링샷·쌓기·래그돌) |
+| | `wgf-screen-fx` | 포스트FX 화면 룩(블룸·비네트·CRT·네온) |
+| | `wgf-lighting-mood` | 동적 라이팅·분위기(점광원·안개·밤하늘) |
+| | `wgf-path-motion` | 경로·모션(스플라인 패트롤·방사 탄막) |
+| | `wgf-virtual-joystick` | 가상 조이스틱(아날로그/트윈스틱) 터치 컨트롤 |
+| ✅ 품질·운영 | `wgf-mobile-webview-tune` | 모바일 웹뷰 최적화·감사 |
+| | `wgf-game-qa` | 헤드리스 step 하니스 동작 검증 |
+| | `wgf-ip-license-guard` | 저작권·라이선스 안전 점검 |
+| | `wgf-perf-60fps` | 60fps 성능 최적화 |
+| | `wgf-sprite-catalog-refresh` | wgf-sprite-picker의 CC0 소스 카탈로그 재조사·갱신 |
 
 각 전문 스킬은 tight한 description으로 관련 요청에만 발동하도록 설계해 스킬 listing 예산
 (컨텍스트 ~1%)을 관리합니다.
@@ -261,7 +264,7 @@ WGF Studio 에디터 켜줘
 | **TiledForge** (`tiled.js`) | Tiled 맵 포맷(.tmj)을 외부 PNG 없이 연동 + 애니메이션/등각·육각/GPU 레이어 |
 | **AbilityKit** (`abilitykit.js`) | 캐릭터 능력 런타임 — 쿨다운·자원·콤보·스킬트리 해금을 데이터 구동 |
 | **MatterKit / ScreenFX / LightingKit / PathKit** | Phaser 4 고급 기능(강체 물리·포스트FX·라이팅·경로)을 한 줄 API로 |
-| **StyleKit** (`stylekit.js`) | `style-architect`가 정의한 게임 전체 시각 언어를 엔진에 배선 |
+| **StyleKit** (`stylekit.js`) | `wgf-style-architect`가 정의한 게임 전체 시각 언어를 엔진에 배선 |
 | **SceneKit** (`scenekit*.js`) | WGF Studio 에디터의 선언형 씬(scene.json) 로직 코어 + Phaser 어댑터 |
 
 예) 픽셀아트 별 스프라이트 한 줄로 굽기:
@@ -290,11 +293,11 @@ PixelForge.bake(this, 'star', {
 
 ![VectorForge 스무스 그래픽 쇼케이스](docs/img/vectorforge.png)
 
-**🖼 스프라이트 직접 고르기** — 화면 비주얼은 재미를 크게 좌우하므로, `sprite-picker` 스킬이
+**🖼 스프라이트 직접 고르기** — 화면 비주얼은 재미를 크게 좌우하므로, `wgf-sprite-picker` 스킬이
 라이선스-안전(CC0) 스프라이트를 **브라우저 갤러리에서 클릭으로 골라** 적용 슬롯(플레이어·적·코인…)에
 배정하게 합니다. 출처는 ① 큐레이션 CC0 카탈로그 ② 로컬 파일 ③ 이전 사용분 ④ 절차 생성 중 선택.
 한 번 쓴 스프라이트는 `assets-library/`에 보관됩니다. 게임 전체 룩(팔레트·셰이딩·무드)은
-`style-architect`가 한 번 정의해 강제합니다.
+`wgf-style-architect`가 한 번 정의해 강제합니다.
 
 </details>
 
@@ -339,7 +342,7 @@ PixelForge.bake(this, 'star', {
 ```
 web-game-forge/
 ├── .claude-plugin/  plugin.json · marketplace.json   # 플러그인 매니페스트
-├── skills/                                            # 31종 스킬 (메인 + 전문)
+├── skills/                                            # 31종 스킬 (메인 + 전문, 모두 wgf- prefix)
 │   ├── wgf-web-game-builder/   (+ reference/engine-api · phaser/ 28종 · game-dna/ 164작 분석)
 │   ├── wgf-editor/             (WGF Studio 브라우저 에디터)
 │   ├── wgf-platformer-game/  wgf-topdown-shooter/  wgf-arcade-classic/  wgf-puzzle-game/  wgf-endless-runner/
@@ -391,6 +394,7 @@ chrome-devtools MCP로 실제 실행 검증 (nocturne — Phaser 고급 4종 통
 - **장르·메카닉은 자유**: 옆스크롤·점프·밟기·코인 등은 저작권 보호 대상이 아닙니다.
 
 > 플러그인 내부 식별자는 `web-game-builder`입니다(슬래시 커맨드·스킬 네임스페이스).
+> 개별 스킬 호출명은 `wgf-` prefix(예: `wgf-platformer-game`)입니다.
 > **WebGameForge**는 프로젝트/저장소 브랜드명입니다.
 
 ---

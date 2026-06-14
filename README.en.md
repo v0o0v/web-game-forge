@@ -201,43 +201,46 @@ open the WGF Studio editor
 
 <br>
 
-The main `web-game-builder` orchestrates the whole flow, and specialist skills auto-trigger based
-on the request. They collaborate in the order **scaffold by genre → flesh out with features →
-verify & optimize for quality**.
+> Every skill's invocation name carries the `wgf-` prefix (matching its directory). The plugin
+> namespace itself is `web-game-builder`, and the slash command is `/web-game-builder:wgf-make-game`.
+
+The main `wgf-web-game-builder` orchestrates the whole flow, and specialist skills auto-trigger
+based on the request. They collaborate in the order **scaffold by genre → flesh out with
+features → verify & optimize for quality**.
 
 | Category | Skill | Role |
 |------|------|------|
-| Main | `web-game-builder` | Detects game-build requests, orchestration |
-| 🖥 Editor | `editor` | **WGF Studio** browser game editor — Unity-style scene editing, Claude collaboration, no-build export |
-| 🎮 Genre | `platformer-game` | Side-scrolling platformer (Mario-like) |
-| | `topdown-shooter` | Top-down / twin-stick shooter |
-| | `arcade-classic` | Breakout, Snake, Pong, Invaders |
-| | `puzzle-game` | Tetris, Match-3, 2048 + puzzle board games |
-| | `endless-runner` | Endless runner / Flappy-like |
-| 🎨 Visual | `style-architect` | Defines & **enforces whole-game art direction** (palette, shading, mood) — single visual language |
-| | `sprite-picker` | Pick real CC0 sprites/sheets/anims **visually from a browser gallery** and apply them |
-| | `sprite-forge` | PixelForge pixel-art sprites & animation (procedural) |
-| | `vector-graphics` | VectorForge smooth/vector graphics + external HD CC0 loading |
-| 🔊 Sound | `sound-architect` | Mood, BGM, SFX, **adaptive music** sound design (beyond 8-bit, Tone.js v15) |
-| | `chip-sound` | ChipAudio 8-bit (chiptune) lightweight SFX/BGM |
-| 📐 Design | `world-map-architect` | **Progression map topology** linking stages + map-screen build |
-| | `level-architect` | Difficulty curves & fun-maximizing level **design** |
-| | `level-designer` | Level/map (tilemap) **build** (implementation) |
-| | `story-architect` | Tone, story, characters, dialogue, twists **narrative design** (`STORY.md` bible) |
-| | `ability-architect` | Actives, passives, mobility, ultimates, combos, skill trees **character ability system design** |
-| | `item-architect` | Consumables, equipment, currency, synergy **item design** (`ITEMS.md` + `items.json`) |
-| 🛠 Polish | `game-ui-hud` | HUD, menus, UI screens |
-| | `juice-fx` | Particles, screen shake, game feel |
-| 🧩 Phaser advanced | `matter-physics` | Matter rigid-body physics (slingshot, stacking, ragdoll) |
-| | `screen-fx` | Post-FX screen looks (bloom, vignette, CRT, neon) |
-| | `lighting-mood` | Dynamic lighting & mood (point lights, fog, night sky) |
-| | `path-motion` | Paths & motion (spline patrols, radial bullets) |
-| | `virtual-joystick` | Virtual joystick (analog / twin-stick) touch controls |
-| ✅ Quality & ops | `mobile-webview-tune` | Mobile webview optimization & audit |
-| | `game-qa` | Headless step-harness behavior verification |
-| | `ip-license-guard` | Copyright/license safety check |
-| | `perf-60fps` | 60fps performance optimization |
-| | `sprite-catalog-refresh` | Re-survey & refresh sprite-picker's CC0 source catalog |
+| Main | `wgf-web-game-builder` | Detects game-build requests, orchestration |
+| 🖥 Editor | `wgf-editor` | **WGF Studio** browser game editor — Unity-style scene editing, Claude collaboration, no-build export |
+| 🎮 Genre | `wgf-platformer-game` | Side-scrolling platformer (Mario-like) |
+| | `wgf-topdown-shooter` | Top-down / twin-stick shooter |
+| | `wgf-arcade-classic` | Breakout, Snake, Pong, Invaders |
+| | `wgf-puzzle-game` | Tetris, Match-3, 2048 + puzzle board games |
+| | `wgf-endless-runner` | Endless runner / Flappy-like |
+| 🎨 Visual | `wgf-style-architect` | Defines & **enforces whole-game art direction** (palette, shading, mood) — single visual language |
+| | `wgf-sprite-picker` | Pick real CC0 sprites/sheets/anims **visually from a browser gallery** and apply them |
+| | `wgf-sprite-forge` | PixelForge pixel-art sprites & animation (procedural) |
+| | `wgf-vector-graphics` | VectorForge smooth/vector graphics + external HD CC0 loading |
+| 🔊 Sound | `wgf-sound-architect` | Mood, BGM, SFX, **adaptive music** sound design (beyond 8-bit, Tone.js v15) |
+| | `wgf-chip-sound` | ChipAudio 8-bit (chiptune) lightweight SFX/BGM |
+| 📐 Design | `wgf-world-map-architect` | **Progression map topology** linking stages + map-screen build |
+| | `wgf-level-architect` | Difficulty curves & fun-maximizing level **design** |
+| | `wgf-level-designer` | Level/map (tilemap) **build** (implementation) |
+| | `wgf-story-architect` | Tone, story, characters, dialogue, twists **narrative design** (`STORY.md` bible) |
+| | `wgf-ability-architect` | Actives, passives, mobility, ultimates, combos, skill trees **character ability system design** |
+| | `wgf-item-architect` | Consumables, equipment, currency, synergy **item design** (`ITEMS.md` + `items.json`) |
+| 🛠 Polish | `wgf-game-ui-hud` | HUD, menus, UI screens |
+| | `wgf-juice-fx` | Particles, screen shake, game feel |
+| 🧩 Phaser advanced | `wgf-matter-physics` | Matter rigid-body physics (slingshot, stacking, ragdoll) |
+| | `wgf-screen-fx` | Post-FX screen looks (bloom, vignette, CRT, neon) |
+| | `wgf-lighting-mood` | Dynamic lighting & mood (point lights, fog, night sky) |
+| | `wgf-path-motion` | Paths & motion (spline patrols, radial bullets) |
+| | `wgf-virtual-joystick` | Virtual joystick (analog / twin-stick) touch controls |
+| ✅ Quality & ops | `wgf-mobile-webview-tune` | Mobile webview optimization & audit |
+| | `wgf-game-qa` | Headless step-harness behavior verification |
+| | `wgf-ip-license-guard` | Copyright/license safety check |
+| | `wgf-perf-60fps` | 60fps performance optimization |
+| | `wgf-sprite-catalog-refresh` | Re-survey & refresh wgf-sprite-picker's CC0 source catalog |
 
 Each specialist skill has a tight description so it only triggers on relevant requests, keeping
 the skill-listing budget (~1% of context) under control.
@@ -263,7 +266,7 @@ Games add only the modules they need to `index.html` as scripts. Zero cost for g
 | **TiledForge** (`tiled.js`) | Tiled map format (.tmj) with no external PNGs + animated/iso-hex/GPU layers |
 | **AbilityKit** (`abilitykit.js`) | Character ability runtime — data-driven cooldowns, resources, combos, skill-tree unlocks |
 | **MatterKit / ScreenFX / LightingKit / PathKit** | Phaser 4 advanced features (rigid physics, post-FX, lighting, paths) as one-line APIs |
-| **StyleKit** (`stylekit.js`) | Wires the whole-game visual language defined by `style-architect` into the engine |
+| **StyleKit** (`stylekit.js`) | Wires the whole-game visual language defined by `wgf-style-architect` into the engine |
 | **SceneKit** (`scenekit*.js`) | WGF Studio editor's declarative scene (scene.json) logic core + Phaser adapter |
 
 e.g. bake a pixel-art star sprite in one call:
@@ -292,11 +295,11 @@ Each game picks one render style — both are zero external downloads, code-gene
 
 ![VectorForge smooth graphics showcase](docs/img/vectorforge.png)
 
-**🖼 Pick sprites yourself** — on-screen visuals matter a lot for fun, so the `sprite-picker` skill
-lets you **pick license-safe (CC0) sprites by clicking in a browser gallery** and assign them to
-slots (player, enemy, coin…). Sources: ① curated CC0 catalog ② local files ③ previously used
-④ procedural generation. Once-used sprites are kept in `assets-library/`. The whole-game look
-(palette, shading, mood) is defined and enforced once by `style-architect`.
+**🖼 Pick sprites yourself** — on-screen visuals matter a lot for fun, so the `wgf-sprite-picker`
+skill lets you **pick license-safe (CC0) sprites by clicking in a browser gallery** and assign
+them to slots (player, enemy, coin…). Sources: ① curated CC0 catalog ② local files ③ previously
+used ④ procedural generation. Once-used sprites are kept in `assets-library/`. The whole-game look
+(palette, shading, mood) is defined and enforced once by `wgf-style-architect`.
 
 </details>
 
@@ -343,7 +346,7 @@ analyzed** — names, characters, sprites, music and other copyrighted works are
 ```
 web-game-forge/
 ├── .claude-plugin/  plugin.json · marketplace.json   # Plugin manifests
-├── skills/                                            # 31 skills (main + specialists)
+├── skills/                                            # 31 skills (main + specialists, all wgf- prefixed)
 │   ├── wgf-web-game-builder/   (+ reference/engine-api · phaser/ 28 · game-dna/ 164-title analysis)
 │   ├── wgf-editor/             (WGF Studio browser editor)
 │   ├── wgf-platformer-game/  wgf-topdown-shooter/  wgf-arcade-classic/  wgf-puzzle-game/  wgf-endless-runner/
@@ -395,6 +398,7 @@ Verified by actually running with chrome-devtools MCP (nocturne — 4-in-1 Phase
 - **Genres & mechanics are free**: side-scrolling, jumping, stomping, coins, etc. are not copyrightable.
 
 > The plugin's internal identifier is `web-game-builder` (used for slash commands & skill namespace).
+> Individual skill invocation names carry the `wgf-` prefix (e.g. `wgf-platformer-game`).
 > **WebGameForge** is the project/repository brand name.
 
 ---
