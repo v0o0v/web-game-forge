@@ -214,8 +214,8 @@ async function main() {
 
       const listRes = await mcp.rpc('tools/list', {});
       const tools = listRes.result && listRes.result.tools;
-      ok('G-MCP tools/list 도구 목록(22종 — P4 에서 skill_run_tool·asset_* 4종 추가)',
-        Array.isArray(tools) && tools.length === 22,
+      ok('G-MCP tools/list 도구 목록(24종 — P4 4종 + P6 unity 2종 추가)',
+        Array.isArray(tools) && tools.length === 24,
         `count=${tools && tools.length}`);
       // 핵심 도구 존재 단언(P4 추가 4종 포함).
       const names = (tools || []).map((t) => t.name);

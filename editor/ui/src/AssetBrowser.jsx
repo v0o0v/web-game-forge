@@ -23,6 +23,7 @@ export function AssetBrowser({ controller, selection }) {
   const [assets, setAssets] = useState(controller.getAssets ? controller.getAssets() : { sprites: [] });
   const [showProc, setShowProc] = useState(false);
   const [showCc0, setShowCc0] = useState(false);
+  const [showUnity, setShowUnity] = useState(false);
   const [msg, setMsg] = useState('');
 
   // 에셋 목록 변경 구독(브리지 onAsset 델타 → 미러 동기).
@@ -59,12 +60,14 @@ export function AssetBrowser({ controller, selection }) {
 
         {/* 추가 버튼 */}
         <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
-          <button style={addBtn} disabled={!remote} onClick={() => { setShowProc(!showProc); setShowCc0(false); }}>＋ 절차</button>
-          <button style={addBtn} disabled={!remote} onClick={() => { setShowCc0(!showCc0); setShowProc(false); }}>＋ CC0</button>
+          <button style={addBtn} disabled={!remote} onClick={() => { setShowProc(!showProc); setShowCc0(false); setShowUnity(false); }}>＋ 절차</button>
+          <button style={addBtn} disabled={!remote} onClick={() => { setShowCc0(!showCc0); setShowProc(false); setShowUnity(false); }}>＋ CC0</button>
+          <button style={addBtn} disabled={!remote} onClick={() => { setShowUnity(!showUnity); setShowProc(false); setShowCc0(false); }}>＋ Unity</button>
         </div>
 
         {showProc && <ProceduralDefiner controller={controller} onDone={(t) => { setShowProc(false); flash(t); }} />}
         {showCc0 && <Cc0Adder controller={controller} onDone={(t) => { setShowCc0(false); flash(t); }} />}
+        {showUnity && <UnityFolderImporter controller={controller} onDone={(t) => { setShowUnity(false); flash(t); }} />}
         {msg && <div style={{ color: 'var(--accent2)', fontSize: '11px', margin: '4px 0' }}>{msg}</div>}
 
         {/* 에셋 목록 */}
@@ -81,19 +84,27 @@ export function AssetBrowser({ controller, selection }) {
 
 function AssetCard({ asset, onAssign }) {
   const isCc0 = asset.source === 'cc0';
+  const isLocal = asset.source === 'local';
   // HTML5 드래그: 에셋 id 를 dataTransfer 에 실어 Hierarchy 엔티티에 드롭하면 배정.
   function onDragStart(e) {
     try { e.dataTransfer.setData('application/wgf-asset', asset.id); e.dataTransfer.effectAllowed = 'copy'; } catch (err) {}
   }
+  // 배지 색상: cc0=accent2(초록), local=accent(청록), 절차=accent(기본)
+  const badgeBg = isCc0 ? 'var(--accent2)' : isLocal ? 'var(--accent)' : 'var(--accent)';
+  const badgeLabel = isCc0 ? 'CC0' : isLocal ? 'Unity' : '절차';
   return (
     <div draggable onDragStart={onDragStart} title="엔티티로 드래그하거나 ↓ 버튼으로 선택 엔티티에 적용"
          style={{ border: '1px solid var(--border)', borderRadius: '4px', padding: '5px 7px', marginBottom: '5px',
                   display: 'flex', alignItems: 'center', gap: '6px', cursor: 'grab', background: 'var(--panel2)' }}>
       <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px',
-        background: isCc0 ? 'var(--accent2)' : 'var(--accent)', color: '#08121a' }}>{isCc0 ? 'CC0' : '절차'}</span>
+        background: badgeBg, color: '#08121a' }}>{badgeLabel}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asset.id}</div>
+        <div style={{ fontWeight: 600, fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {asset.id}
+          {isLocal && asset.attested && <span title="사용자 권리 보유 선언" style={{ marginLeft: '4px', fontSize: '9px' }}>⚠️</span>}
+        </div>
         {asset.desc && <div style={{ fontSize: '10px', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asset.desc}</div>}
+        {isLocal && asset.license && <div style={{ fontSize: '9px', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asset.license}</div>}
       </div>
       <button style={assignBtn} title="선택 엔티티에 Sprite 로 적용" onClick={onAssign}>↓</button>
     </div>
@@ -189,6 +200,220 @@ function Cc0Adder({ controller, onDone }) {
   );
 }
 
+// ── Unity 폴더 임포트 위저드 ───────────────────────────────────────────────────
+// Cc0Adder 패턴 재사용. 스텝1(스캔) → 스텝2(검토·선택·attestation) → 가져오기.
+function UnityFolderImporter({ controller, onDone }) {
+  const [folder, setFolder] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState(null);   // {ok, items, truncated, ...}
+  const [scanError, setScanError] = useState('');
+  // 각 item 의 선택 상태. key=relPath → {checked, id, attested:{checked,owner,license}}
+  const [rowState, setRowState] = useState({});
+  const [importing, setImporting] = useState(false);
+
+  function initRowState(items) {
+    const s = {};
+    for (const it of items) {
+      s[it.relPath] = {
+        checked: it.status !== 'blocked',
+        id: it.suggestedId || '',
+        attested: { checked: false, owner: '', license: 'user-owned' }
+      };
+    }
+    setRowState(s);
+  }
+
+  async function doScan() {
+    const f = folder.trim();
+    if (!f) return;
+    setScanning(true);
+    setScanError('');
+    setScanResult(null);
+    let r;
+    try { r = await controller.scanUnityFolder(f); }
+    catch (e) { r = { ok: false, error: String(e) }; }
+    setScanning(false);
+    if (!r || !r.ok) { setScanError(r && r.error ? r.error : '스캔 실패'); return; }
+    setScanResult(r);
+    initRowState(r.items || []);
+  }
+
+  function updateRow(relPath, patch) {
+    setRowState(prev => ({ ...prev, [relPath]: { ...prev[relPath], ...patch } }));
+  }
+  function updateAttested(relPath, patch) {
+    setRowState(prev => ({
+      ...prev,
+      [relPath]: { ...prev[relPath], attested: { ...prev[relPath].attested, ...patch } }
+    }));
+  }
+
+  // 선택된 항목 계산 + attestation 충족 여부 검사.
+  function computeSelections() {
+    if (!scanResult) return { selections: [], warnUnmet: 0 };
+    const selections = [];
+    let warnUnmet = 0;
+    for (const it of scanResult.items) {
+      const rs = rowState[it.relPath];
+      if (!rs || !rs.checked) continue;
+      if (it.status === 'blocked') continue;
+      if (it.status === 'warn') {
+        const a = rs.attested;
+        if (!a.checked || !a.owner.trim() || !a.license) { warnUnmet++; continue; }
+        selections.push({ relPath: it.relPath, id: rs.id || it.suggestedId,
+          attested: { owner: a.owner.trim(), declaredLicense: a.license } });
+      } else {
+        selections.push({ relPath: it.relPath, id: rs.id || it.suggestedId });
+      }
+    }
+    return { selections, warnUnmet };
+  }
+
+  async function doImport() {
+    const { selections, warnUnmet } = computeSelections();
+    if (warnUnmet > 0 || selections.length === 0) return;
+    setImporting(true);
+    let r;
+    try { r = await controller.importUnityAssets(folder.trim(), selections); }
+    catch (e) { r = { ok: false, error: String(e) }; }
+    setImporting(false);
+    if (!r || !r.ok) { onDone('임포트 실패: ' + (r && r.error || '')); return; }
+    const addedN = (r.added || []).length;
+    const rejN = (r.rejected || []).length;
+    let msg = addedN + '개 추가';
+    if (rejN > 0) {
+      const reasons = (r.rejected || []).slice(0, 3).map(x => x.relPath + ': ' + x.reason).join(' / ');
+      msg += ' / ' + rejN + '개 거부(' + reasons + (rejN > 3 ? '…' : '') + ')';
+    }
+    onDone(msg + ' ✓');
+  }
+
+  const { selections, warnUnmet } = computeSelections();
+  const selectedCount = selections.length + warnUnmet; // warnUnmet 포함 체크된 수(버튼 비활성 판단용)
+  const checkedCount = !scanResult ? 0 : (scanResult.items || []).filter(it => {
+    const rs = rowState[it.relPath];
+    return rs && rs.checked && it.status !== 'blocked';
+  }).length;
+
+  function fmtBytes(b) {
+    if (b == null) return '';
+    if (b < 1024) return b + 'B';
+    if (b < 1024 * 1024) return (b / 1024).toFixed(1) + 'KB';
+    return (b / 1024 / 1024).toFixed(1) + 'MB';
+  }
+
+  return (
+    <div style={form}>
+      <div style={formTitle}>Unity 폴더 임포트</div>
+
+      {/* 스텝1: 폴더 경로 입력 */}
+      <div style={{ display: 'flex', gap: '4px' }}>
+        <input style={{ ...finp, flex: 1 }}
+          placeholder="예: D:\\MyUnityGame\\Assets"
+          value={folder}
+          onInput={(e) => { setFolder(e.target.value); setScanResult(null); setScanError(''); }}
+          disabled={scanning}
+        />
+        <button style={{ ...okBtn, marginTop: 0, whiteSpace: 'nowrap' }}
+          disabled={scanning || !folder.trim()}
+          onClick={doScan}>
+          {scanning ? '스캔 중…' : '스캔'}
+        </button>
+      </div>
+
+      {scanError && <div style={errTxt}>{scanError}</div>}
+
+      {/* 스텝2: 결과 목록 */}
+      {scanResult && (
+        <div>
+          <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '4px' }}>
+            {scanResult.totals && scanResult.totals.count}개 항목 발견
+            {scanResult.truncated && ' (일부만 표시 — 2000개 한도)'}
+          </div>
+          <div style={itemList}>
+            {(scanResult.items || []).map((it) => {
+              const rs = rowState[it.relPath] || { checked: false, id: '', attested: { checked: false, owner: '', license: 'user-owned' } };
+              const isBlocked = it.status === 'blocked';
+              const isWarn = it.status === 'warn';
+              return (
+                <div key={it.relPath} style={{ ...itemRow, opacity: isBlocked ? 0.55 : 1 }}>
+                  {/* 배지 + 체크박스 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input type="checkbox"
+                      disabled={isBlocked}
+                      checked={!isBlocked && rs.checked}
+                      onChange={(e) => updateRow(it.relPath, { checked: e.target.checked })}
+                    />
+                    <span style={{ ...statusBadge, background: isBlocked ? '#c0392b' : isWarn ? '#b8860b' : '#1a6e3c', color: '#fff' }}>
+                      {isBlocked ? '⛔차단' : isWarn ? '⚠️확인' : '✅허용'}
+                    </span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-dim)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          title={it.relPath}>{it.relPath}</span>
+                    <span style={{ fontSize: '9px', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>{it.kind} {fmtBytes(it.bytes)}</span>
+                  </div>
+                  {/* reason */}
+                  {it.reason && <div style={{ fontSize: '9px', color: isBlocked ? '#e57373' : '#c8a000', marginLeft: '20px' }}>{it.reason}</div>}
+                  {/* id 편집 */}
+                  {!isBlocked && rs.checked && (
+                    <input style={{ ...finp, fontSize: '10px', marginLeft: '20px', marginTop: '2px' }}
+                      placeholder={'id: ' + (it.suggestedId || '')}
+                      value={rs.id}
+                      onInput={(e) => updateRow(it.relPath, { id: e.target.value })}
+                    />
+                  )}
+                  {/* warn attestation 패널 */}
+                  {isWarn && !isBlocked && rs.checked && (
+                    <div style={attestPanel}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
+                        <input type="checkbox"
+                          checked={rs.attested.checked}
+                          onChange={(e) => updateAttested(it.relPath, { checked: e.target.checked })}
+                        />
+                        내가 이 파일의 권리를 보유합니다
+                      </label>
+                      {rs.attested.checked && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '3px' }}>
+                          <input style={{ ...finp, fontSize: '10px' }}
+                            placeholder="권리 보유 주체(이름/조직)"
+                            value={rs.attested.owner}
+                            onInput={(e) => updateAttested(it.relPath, { owner: e.target.value })}
+                          />
+                          <select style={{ ...finp, fontSize: '10px' }}
+                            value={rs.attested.license}
+                            onChange={(e) => updateAttested(it.relPath, { license: e.target.value })}>
+                            <option value="user-owned">user-owned (자체 제작)</option>
+                            <option value="CC0-1.0">CC0-1.0</option>
+                            <option value="MIT">MIT</option>
+                            <option value="CC-BY-4.0">CC-BY-4.0</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 가져오기 버튼 */}
+          <div style={{ marginTop: '6px' }}>
+            {warnUnmet > 0 && (
+              <div style={{ fontSize: '9px', color: '#c8a000', marginBottom: '3px' }}>
+                ⚠️ 확인 필요 {warnUnmet}개 — attestation(권리 보유 + 라이선스)을 완성해야 가져올 수 있습니다.
+              </div>
+            )}
+            <button style={{ ...okBtn, width: '100%', opacity: (checkedCount === 0 || warnUnmet > 0 || importing) ? 0.5 : 1 }}
+              disabled={checkedCount === 0 || warnUnmet > 0 || importing}
+              onClick={doImport}>
+              {importing ? '가져오는 중…' : '가져오기(' + selections.length + ')'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const panel = { display: 'flex', flexDirection: 'column', height: '100%',
   background: 'var(--panel)', borderLeft: '1px solid var(--border)' };
 const header = { padding: '8px 10px', fontWeight: 600, fontSize: '12px',
@@ -206,3 +431,11 @@ const okBtn = { background: 'var(--accent)', color: '#08121a', border: 'none', b
   padding: '5px 8px', cursor: 'pointer', fontWeight: 600, fontSize: '11px', marginTop: '2px' };
 const tabOn = { flex: 1, background: 'var(--accent)', color: '#08121a', border: 'none', borderRadius: '3px', padding: '3px', cursor: 'pointer', fontSize: '10px' };
 const tabOff = { flex: 1, background: 'var(--panel2)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '3px', padding: '3px', cursor: 'pointer', fontSize: '10px' };
+// Unity 임포트 위저드 전용 스타일
+const itemList = { maxHeight: '240px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '3px',
+  background: 'var(--bg)', padding: '4px' };
+const itemRow = { borderBottom: '1px solid var(--border)', paddingBottom: '5px', marginBottom: '5px' };
+const statusBadge = { fontSize: '9px', padding: '1px 4px', borderRadius: '3px', whiteSpace: 'nowrap', flexShrink: 0 };
+const attestPanel = { marginLeft: '20px', marginTop: '3px', padding: '5px 6px', background: 'var(--panel2)',
+  border: '1px solid var(--border)', borderRadius: '3px' };
+const errTxt = { fontSize: '10px', color: '#e57373', padding: '2px 0' };

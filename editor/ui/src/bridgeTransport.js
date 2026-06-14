@@ -238,6 +238,22 @@ export function createRemoteTransport(config) {
       const { json } = await apiFetch('GET', '/api/asset/list');
       return (json && json.assets) || { sprites: [] };
     },
+    // ── Unity 로컬 폴더 임포트 ────────────────────────────────────────────────
+    async scanUnityFolder(folder) {
+      const { status, json } = await apiFetch('POST', '/api/asset/unity-scan', { folder });
+      if (status !== 200 || !json || json.ok !== true) {
+        return { ok: false, error: (json && json.error) || ('스캔 실패 status=' + status) };
+      }
+      return { ok: true, root: json.root, items: json.items || [], skipped: json.skipped || [],
+               totals: json.totals || { count: 0, bytes: 0 }, truncated: !!json.truncated };
+    },
+    async importUnityAssets(folder, selections) {
+      const { status, json } = await apiFetch('POST', '/api/asset/unity-import', { folder, selections: selections || [] });
+      if (status !== 200 || !json || json.ok !== true) {
+        return { ok: false, error: (json && json.error) || ('임포트 실패 status=' + status) };
+      }
+      return { ok: true, added: json.added || [], rejected: json.rejected || [], seq: json.seq };
+    },
     async sendCommand(cmd) {
       const { status, json } = await apiFetch('POST', '/api/command', { command: cmd });
       if (status === 409) return { rejected: true, reason: 'play-readonly' };

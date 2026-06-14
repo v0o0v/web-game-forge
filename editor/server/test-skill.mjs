@@ -30,6 +30,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -348,6 +349,243 @@ async function main() {
 
       const badData = parseToolResult(await mcp.rpc('tools/call', { name: 'asset_add_cc0', arguments: { id: 'spr_xss2', url: 'data:text/html,<script>alert(1)</script>' } }));
       ok('G-CC0 data: 스킴 cc0 url 거부', badData.isError === true || (badData.data && badData.data.ok === false), `isError=${badData.isError}`);
+    }
+
+    // ── G-UNITY: 로컬 Unity 폴더 스캔·임포트 E2E ──────────────────────────────
+    // 테스트 전용 임시 fixture 폴더를 생성해 브리지 기동 상태에서 scan→import 전 과정을 검증.
+    // 테스트가 만든 vendored 파일·IMPORT_ATTESTATIONS.json 은 끝나고 정리(repo 오염 금지).
+    {
+      // -- fixture 폴더 구조 설계 --
+      // ├── cc0_dir/
+      // │   ├── cc0_sprite.png    (allowed — cc0_dir 의 LICENSE 가 CC0)
+      // │   └── LICENSE           (CC0 문구 — cc0_sprite.png 에만 영향)
+      // ├── warn_dir/
+      // │   └── nolic.png         (warn — 라이선스 단서 없음)
+      // └── mario.png             (blocked — IP 금칙)
+      // 이렇게 폴더를 분리해야 cc0_dir/LICENSE 가 warn_dir/nolic.png 에 영향을 주지 않는다.
+      const UNITY_TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'wgf-gunity-fix-'));
+      const TINY_PNG = Buffer.from([
+        0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A,
+        0x00,0x00,0x00,0x0D,0x49,0x48,0x44,0x52,
+        0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x01,
+        0x08,0x02,0x00,0x00,0x00,0x90,0x77,0x53,
+        0xDE,0x00,0x00,0x00,0x0C,0x49,0x44,0x41,
+        0x54,0x08,0xD7,0x63,0xF8,0xCF,0xC0,0x00,
+        0x00,0x00,0x02,0x00,0x01,0xE2,0x21,0xBC,
+        0x33,0x00,0x00,0x00,0x00,0x49,0x45,0x4E,
+        0x44,0xAE,0x42,0x60,0x82
+      ]);
+      // cc0_dir: LICENSE(CC0) + cc0_sprite.png → allowed
+      const cc0Dir = path.join(UNITY_TMP, 'cc0_dir');
+      fs.mkdirSync(cc0Dir, { recursive: true });
+      fs.writeFileSync(path.join(cc0Dir, 'cc0_sprite.png'), TINY_PNG);
+      fs.writeFileSync(path.join(cc0Dir, 'LICENSE'), 'Creative Commons Zero v1.0 Universal\nCC0 1.0 Public Domain Dedication\n');
+      // warn_dir: 라이선스 단서 없음 → nolic.png warn
+      const warnDir = path.join(UNITY_TMP, 'warn_dir');
+      fs.mkdirSync(warnDir, { recursive: true });
+      fs.writeFileSync(path.join(warnDir, 'nolic.png'), TINY_PNG);
+      // 루트에 mario.png → blocked(IP)
+      fs.writeFileSync(path.join(UNITY_TMP, 'mario.png'), TINY_PNG);
+
+      // currentGameDir() = scene.json 의 직계 부모(보안 LOW-1):
+      // SCENE_REL='games/_editor-samples/topdown-min/scene.json'
+      // → gameDir = games/_editor-samples/topdown-min
+      // → importedDir = games/_editor-samples/topdown-min/assets/imported/
+      const REPO_ROOT = path.resolve(SERVER_DIR, '..', '..');
+      const gameSlugDir = path.join(REPO_ROOT, 'games', '_editor-samples', 'topdown-min');
+      const importedDir = path.join(gameSlugDir, 'assets', 'imported');
+      fs.mkdirSync(importedDir, { recursive: true });
+
+      // 테스트 전 vendored 파일 목록 스냅샷(정리용)
+      let preImportedFiles = [];
+      try { preImportedFiles = fs.readdirSync(importedDir); } catch (e) { preImportedFiles = []; }
+      const attestLogPath = path.join(gameSlugDir, 'IMPORT_ATTESTATIONS.json');
+      let preAttest = null;
+      try { preAttest = fs.readFileSync(attestLogPath, 'utf8'); } catch (e) { preAttest = null; }
+      // export 스모크 산출물 위치(games/topdown-min/ — export 의 slug 기반 별도 outDir).
+      // 테스트가 새로 만들면 정리해 작업트리 오염을 막는다(pre-existence 스냅샷).
+      const exportOutDir = path.join(REPO_ROOT, 'games', 'topdown-min');
+      const exportOutDirExisted = fs.existsSync(exportOutDir);
+
+      try {
+        // 1) MCP asset_scan_unity_folder — allowed·warn·blocked 분류 확인
+        const scanOut = parseToolResult(await mcp.rpc('tools/call', {
+          name: 'asset_scan_unity_folder',
+          arguments: { folder: UNITY_TMP }
+        }, 10000));
+        ok('G-UNITY scan ok', !scanOut.isError && scanOut.data && scanOut.data.ok === true,
+          `ok=${scanOut.data && scanOut.data.ok} err=${scanOut.isError}`);
+
+        const items = scanOut.data && scanOut.data.items;
+        const byRel = new Map((Array.isArray(items) ? items : []).map((i) => [i.relPath, i]));
+        ok('G-UNITY scan cc0_dir/cc0_sprite.png → allowed',
+          byRel.get('cc0_dir/cc0_sprite.png') && byRel.get('cc0_dir/cc0_sprite.png').status === 'allowed',
+          `status=${byRel.get('cc0_dir/cc0_sprite.png') && byRel.get('cc0_dir/cc0_sprite.png').status}`);
+        ok('G-UNITY scan warn_dir/nolic.png → warn',
+          byRel.get('warn_dir/nolic.png') && byRel.get('warn_dir/nolic.png').status === 'warn',
+          `status=${byRel.get('warn_dir/nolic.png') && byRel.get('warn_dir/nolic.png').status}`);
+        ok('G-UNITY scan mario.png → blocked',
+          byRel.get('mario.png') && byRel.get('mario.png').status === 'blocked',
+          `status=${byRel.get('mario.png') && byRel.get('mario.png').status}`);
+
+        // 2) warn-무attestation 거부: warn_dir/nolic.png, attestation 없음 → rejected
+        const importBadAttest = parseToolResult(await mcp.rpc('tools/call', {
+          name: 'asset_import_unity',
+          arguments: {
+            folder: UNITY_TMP,
+            selections: [{ relPath: 'warn_dir/nolic.png', id: 'g_unity_noattest' }]
+          }
+        }, 10000));
+        const nolicRejected = importBadAttest.isError
+          ? true
+          : (importBadAttest.data && Array.isArray(importBadAttest.data.rejected) &&
+             importBadAttest.data.rejected.some((r) => r.relPath === 'warn_dir/nolic.png'));
+        ok('G-UNITY warn 무attestation → rejected', nolicRejected,
+          `isError=${importBadAttest.isError} rejected=${JSON.stringify(importBadAttest.data && importBadAttest.data.rejected)}`);
+
+        // 3) blocked(mario) → rejected
+        const importBlocked = parseToolResult(await mcp.rpc('tools/call', {
+          name: 'asset_import_unity',
+          arguments: {
+            folder: UNITY_TMP,
+            selections: [{ relPath: 'mario.png', id: 'g_unity_mario' }]
+          }
+        }, 10000));
+        const marioRejected = importBlocked.isError
+          ? true
+          : (importBlocked.data && Array.isArray(importBlocked.data.rejected) &&
+             importBlocked.data.rejected.some((r) => r.relPath === 'mario.png'));
+        ok('G-UNITY blocked(mario) → rejected', marioRejected,
+          `isError=${importBlocked.isError} rejected=${JSON.stringify(importBlocked.data && importBlocked.data.rejected)}`);
+
+        // 4) allowed(cc0_dir/cc0_sprite.png) + warn(warn_dir/nolic.png)+attested → 둘 다 임포트
+        const importOut = parseToolResult(await mcp.rpc('tools/call', {
+          name: 'asset_import_unity',
+          arguments: {
+            folder: UNITY_TMP,
+            selections: [
+              { relPath: 'cc0_dir/cc0_sprite.png', id: 'g_unity_cc0' },
+              { relPath: 'warn_dir/nolic.png', id: 'g_unity_nolic',
+                attested: { owner: 'TestOwner', declaredLicense: 'user-owned' } }
+            ]
+          }
+        }, 10000));
+        ok('G-UNITY import ok', !importOut.isError && importOut.data && importOut.data.ok === true,
+          `ok=${importOut.data && importOut.data.ok} isError=${importOut.isError}`);
+
+        const added = importOut.data && Array.isArray(importOut.data.added) ? importOut.data.added : [];
+        const rejected = importOut.data && Array.isArray(importOut.data.rejected) ? importOut.data.rejected : [];
+        ok('G-UNITY import added 2개(allowed+attested warn)', added.length === 2,
+          `added=${added.map((a) => a.id).join(',')} rejected=${rejected.map((r) => r.relPath).join(',')}`);
+        ok('G-UNITY import rejected 0개', rejected.length === 0,
+          `rejected=${JSON.stringify(rejected)}`);
+
+        // added 레코드 검증: source='local', url, sha256
+        const addedCc0 = added.find((a) => a.id === 'g_unity_cc0');
+        const addedNolic = added.find((a) => a.id === 'g_unity_nolic');
+        ok('G-UNITY added cc0 source=local', addedCc0 && addedCc0.source === 'local',
+          `source=${addedCc0 && addedCc0.source}`);
+        ok('G-UNITY added cc0 url 있음',
+          addedCc0 && typeof addedCc0.url === 'string' && addedCc0.url.length > 0,
+          `url=${addedCc0 && addedCc0.url}`);
+        ok('G-UNITY added cc0 sha256 있음',
+          addedCc0 && typeof addedCc0.sha256 === 'string' && addedCc0.sha256.length === 64,
+          `sha256=${addedCc0 && addedCc0.sha256 && addedCc0.sha256.slice(0,8)}`);
+        ok('G-UNITY added nolic attested 있음',
+          addedNolic && addedNolic.attested && addedNolic.attested.owner === 'TestOwner',
+          `attested=${JSON.stringify(addedNolic && addedNolic.attested)}`);
+
+        // 5) asset_list 에 source:'local' 2개 반영
+        const listOut2 = parseToolResult(await mcp.rpc('tools/call', { name: 'asset_list', arguments: {} }));
+        const sprites2 = listOut2.data && listOut2.data.assets && listOut2.data.assets.sprites;
+        const localSprites = Array.isArray(sprites2) ? sprites2.filter((s) => s.source === 'local') : [];
+        ok('G-UNITY asset_list source:local 2개 반영', localSprites.length >= 2,
+          `localCount=${localSprites.length} ids=${localSprites.map((s) => s.id).join(',')}`);
+
+        // 6) vendored 파일이 games/_editor-samples/topdown-min/assets/imported/ 에 실제 존재
+        //    (잔여물에 견고하도록 API 가 보고한 url 위치의 파일 존재로 단언 — pre/post 차집합 대신.)
+        const vfCc0 = addedCc0 && addedCc0.url && fs.existsSync(path.join(REPO_ROOT, addedCc0.url.split('/').join(path.sep)));
+        const vfNolic = addedNolic && addedNolic.url && fs.existsSync(path.join(REPO_ROOT, addedNolic.url.split('/').join(path.sep)));
+        ok('G-UNITY vendored 파일 2개 신규 존재', !!(vfCc0 && vfNolic),
+          `cc0=${!!vfCc0} nolic=${!!vfNolic} importedDir=${importedDir}`);
+
+        // 7) IMPORT_ATTESTATIONS.json 에 attested 항목 기록됐는지
+        let attestAfter = null;
+        try { attestAfter = JSON.parse(fs.readFileSync(attestLogPath, 'utf8')); } catch (e) { attestAfter = null; }
+        const attestHasNolic = Array.isArray(attestAfter) &&
+          attestAfter.some((a) => a.owner === 'TestOwner' && a.declaredLicense === 'user-owned');
+        ok('G-UNITY IMPORT_ATTESTATIONS.json 에 attested 항목 기록', attestHasNolic,
+          `entries=${attestAfter && attestAfter.length} found=${attestHasNolic}`);
+
+        // 8) export.mjs 직접 spawn → CREDITS.txt 에 "임포트 자산" + "사용자 권리 보유 선언" 포함
+        // 현재 브리지가 편집 중인 씬: games/_editor-samples/topdown-min/scene.json
+        // export.mjs 는 scene.json 에서 assets 를 직접 읽는다(브리지 인메모리 아님).
+        // 따라서 임포트된 에셋 레코드를 scene.json 에 직접 패치 후 export 한다.
+        {
+          const sceneFile = path.join(REPO_ROOT, 'games', '_editor-samples', 'topdown-min', 'scene.json');
+          let sceneDoc, origSceneRaw = null;
+          try { origSceneRaw = fs.readFileSync(sceneFile, 'utf8'); sceneDoc = JSON.parse(origSceneRaw); } catch (e) { sceneDoc = null; }
+          let creditsText = '';
+          if (sceneDoc) {
+            // scene.json 에 local 에셋 임시 주입(복원은 origSceneRaw 바이트로).
+            if (!sceneDoc.assets) sceneDoc.assets = {};
+            if (!Array.isArray(sceneDoc.assets.sprites)) sceneDoc.assets.sprites = [];
+            sceneDoc.assets.sprites.push({
+              id: 'g_unity_cc0_exp', source: 'local',
+              url: addedCc0 ? addedCc0.url : 'games/_editor-samples/topdown-min/assets/imported/g_unity_cc0.png',
+              license: 'CC0', credit: '', desc: '원본: cc0_dir/cc0_sprite.png'
+            });
+            sceneDoc.assets.sprites.push({
+              id: 'g_unity_nolic_exp', source: 'local',
+              url: addedNolic ? addedNolic.url : 'games/_editor-samples/topdown-min/assets/imported/g_unity_nolic.png',
+              license: 'user-owned', credit: '', desc: '원본: warn_dir/nolic.png',
+              attested: { owner: 'TestOwner', declaredLicense: 'user-owned', at: new Date().toISOString() }
+            });
+            fs.writeFileSync(sceneFile, JSON.stringify(sceneDoc, null, 2), 'utf8');
+            try {
+              // spawn export.mjs
+              const expResult = await new Promise((resolve) => {
+                const child = spawn(process.execPath, [path.join(SERVER_DIR, 'export.mjs'), sceneFile], {
+                  env: process.env, stdio: ['ignore', 'pipe', 'pipe']
+                });
+                let out = '';
+                child.stdout.on('data', (c) => { out += c.toString(); });
+                child.stderr.on('data', (c) => { out += c.toString(); });
+                child.on('exit', () => { resolve(out); });
+                setTimeout(() => { try { child.kill(); } catch(e){} resolve(out); }, 15000);
+              });
+              // export outDir: games/topdown-min/CREDITS.txt
+              const creditsPath = path.join(REPO_ROOT, 'games', 'topdown-min', 'CREDITS.txt');
+              try { creditsText = fs.readFileSync(creditsPath, 'utf8'); } catch (e) { creditsText = ''; }
+            } catch (e) { creditsText = ''; }
+            // scene.json 원상복구 — 원본 바이트 그대로(포맷·개행 보존, git diff 잔여 방지).
+            if (origSceneRaw !== null) fs.writeFileSync(sceneFile, origSceneRaw, 'utf8');
+          }
+          ok('G-UNITY export CREDITS.txt 임포트 자산 섹션 포함',
+            creditsText.includes('임포트 자산'),
+            `has=${creditsText.includes('임포트 자산')}`);
+          ok('G-UNITY export CREDITS.txt 사용자 권리 보유 선언 포함',
+            creditsText.includes('사용자 권리 보유 선언'),
+            `has=${creditsText.includes('사용자 권리 보유 선언')}`);
+        }
+
+      } finally {
+        // -- 테스트 정리: fixture 폴더 제거 + vendored 파일 삭제 + attestation 원상복구 --
+        try { fs.rmSync(UNITY_TMP, { recursive: true, force: true }); } catch (e) {}
+        try {
+          const afterFiles = fs.readdirSync(importedDir);
+          for (const f of afterFiles.filter((f) => !preImportedFiles.includes(f))) {
+            try { fs.unlinkSync(path.join(importedDir, f)); } catch (e) {}
+          }
+        } catch (e) {}
+        try {
+          if (preAttest === null) { try { fs.unlinkSync(attestLogPath); } catch (e) {} }
+          else { fs.writeFileSync(attestLogPath, preAttest, 'utf8'); }
+        } catch (e) {}
+        // export 스모크 산출물(games/topdown-min/) — 테스트가 새로 만들었으면 제거(작업트리 위생).
+        try { if (!exportOutDirExisted) fs.rmSync(exportOutDir, { recursive: true, force: true }); } catch (e) {}
+        // asset_list 추가 local 에셋은 브리지 인메모리 → 프로세스 종료와 함께 사라짐
+      }
     }
 
   } catch (e) {
