@@ -301,6 +301,8 @@ web-game-builder 워크플로에서 게임 제작 경로가 둘로 갈린다:
 | Play 중 편집이 409 거부 | Play 권위 read-only(정상) | Stop(`/api/mode {mode:'edit'}`) 후 편집 |
 | `scene_screenshot` 이 "뷰포트 없음" | 브라우저 미오픈(헤드리스) 또는 v1 캡처 파이프라인 미도입 | 헤드리스 편집은 계속 가능. 시각 확인은 SSE 페이지 직접 관찰 |
 | SSE 페이지 스크린샷이 정지/타임아웃 | EventSource 스트림 특성(라이브 캡처 함정) | 라이브 스크린샷 대신 `/api/scene` 동기 GET 으로 상태 확인 |
+| 브라우저에서 `GAME_INPUT.<dir>=true` 줬는데 안 움직임 | 어댑터가 매 프레임 Phaser 키보드로 `GAME_INPUT` 덮어씀(합성 쓰기 클로버) | 진짜 `KeyboardEvent` 를 `window.dispatchEvent` ([browser-verify.md](./reference/browser-verify.md)) |
+| 수동 `setMode('play')` 후 엔티티 정지(스폰·이동 없음) | rAF 스텝 루프는 `?autostart=1`→`start()` 경로만 구동 | `?autostart=1` 로 로드해 스텝 구동 확인 |
 | `export` 가 "scene.json 을 찾을 수 없습니다" | 경로/slug 오인 | `games/<slug>/scene.json` 경로 또는 slug 직접 지정, `--out` 으로 출력 slug 명시 |
 
 ## 연계 / 레퍼런스
@@ -312,6 +314,7 @@ web-game-builder 워크플로에서 게임 제작 경로가 둘로 갈린다:
   [`sprite-forge`](../wgf-sprite-forge/SKILL.md)/[`vector-graphics`](../wgf-vector-graphics/SKILL.md)(절차 생성).
 - **레퍼런스(한글):** [architecture.md](./reference/architecture.md) ·
   [workflow.md](./reference/workflow.md) · [components.md](./reference/components.md) ·
-  [security.md](./reference/security.md) · [tools.md](./reference/tools.md).
+  [security.md](./reference/security.md) · [tools.md](./reference/tools.md) ·
+  [browser-verify.md](./reference/browser-verify.md)(브라우저 상호작용 검증 함정).
 - **스키마 원본:** [games/_editor-samples/SCHEMA.md](../../games/_editor-samples/SCHEMA.md) ·
   설계서 [.omc/plans/wgf-editor-plan.md](../../.omc/plans/wgf-editor-plan.md).
