@@ -4,7 +4,7 @@
 # skills/
 
 ## Purpose
-WebGameForge의 **29종 스킬 체계**가 사는 곳. 메인 오케스트레이터 `web-game-builder`가 전체 흐름을 조율하고, 요청 성격에 따라 전문 스킬이 자동 발동한다. 협력 순서는 **장르로 스캐폴드 → 제작요소로 살붙이기 → 품질로 검증·최적화**. 각 스킬은 `SKILL.md`(YAML frontmatter `name`+`description` + 본문 지침)가 진실의 원천이며, 일부는 `reference/`(설계 이론·인터뷰 대본)와 `tools/`(무의존성 `.mjs` validator/베이커)를 동반한다. tight한 description으로 관련 요청에만 발동해 스킬 listing 예산(컨텍스트 ~1%, 개별 캡 1,536자)을 관리한다.
+WebGameForge의 **30종 스킬 체계**가 사는 곳. 메인 오케스트레이터 `web-game-builder`가 전체 흐름을 조율하고, 요청 성격에 따라 전문 스킬이 자동 발동한다. 협력 순서는 **장르로 스캐폴드 → 제작요소로 살붙이기 → 품질로 검증·최적화**. 각 스킬은 `SKILL.md`(YAML frontmatter `name`+`description` + 본문 지침)가 진실의 원천이며, 일부는 `reference/`(설계 이론·인터뷰 대본)와 `tools/`(무의존성 `.mjs` validator/베이커)를 동반한다. tight한 description으로 관련 요청에만 발동해 스킬 listing 예산(컨텍스트 ~1%, 개별 캡 1,536자)을 관리한다.
 
 > **이 디렉터리의 AGENTS.md는 카탈로그/라우터다.** 각 스킬의 상세 동작은 그 스킬의 `SKILL.md`를 직접 읽어라. 복합 구조를 가진 두 허브 스킬은 자체 AGENTS.md를 둔다(`wgf-web-game-builder/`, `wgf-sprite-picker/`).
 
@@ -14,6 +14,7 @@ WebGameForge의 **29종 스킬 체계**가 사는 곳. 메인 오케스트레이
 | Skill | 역할 |
 |-------|------|
 | `wgf-web-game-builder/` | 게임 제작 요청 감지·오케스트레이션. 거대 `reference/`(phaser 28종·game-dna·engine-api) 보유 (see `wgf-web-game-builder/AGENTS.md`) |
+| `wgf-editor/` | **비주얼/선언형 에디터 트랙** — GUI 씬 편집·Claude 협업·에디터 Play·무빌드 export. v1 탑다운 한정. 산출 단일 진실 = `games/<slug>/scene.json`(wgf-scene@1), export → 무빌드 `game.js`/`index.html`. 기존 손코딩 `game.js` 게임과 별도 트랙. |
 
 ### 🎮 장르 스캐폴드 (5)
 | Skill | 역할 |
