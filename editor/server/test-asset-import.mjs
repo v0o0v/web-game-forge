@@ -14,6 +14,7 @@
  *   U-GUID      .meta 형제 GUID 채집
  *   U-IMPORT_LIC import-licenses.json 오버라이드 적용
  *   U-VENDOR    vendorFile 실제 복사·해시 검증
+ *   U-AUXCAP    과대 보조 텍스트(LICENSE/README/.meta) read 상한 — DoS 가드(MED-1)
  *
  * 사용: node editor/server/test-asset-import.mjs
  * 출력: 사람용 줄 + 마지막 줄 단일 JSON {"ok":bool,"pass":n,"fail":n,"checks":[...]}
@@ -130,6 +131,45 @@ function buildFixture() {
   fs.writeFileSync(path.join(overrideDir, 'import-licenses.json'), JSON.stringify({
     'override.png': { license: 'MIT', attribution: 'Test Author', owner: 'Test Owner' }
   }));
+}
+
+// ── U-AUXCAP fixture: 과대 보조 텍스트(LICENSE) read 상한 검증용 ────────────────
+// readHeadText 는 보조 텍스트(LICENSE/README/.meta/import-licenses.json)를 선두 64KB 만
+// 읽고, 8MB(hardCap) 초과는 통째로 스킵한다(보안 MED-1 — 멀티-GB LICENSE 로 OOM 방지).
+// 각 art 는 자기 폴더의 LICENSE 만 최근접으로 잡도록 서브폴더로 격리한다.
+const AUXCAP = path.join(TMP, 'auxcap');
+function buildAuxCapFixture() {
+  // (a) big-in-cap: 70KB(>64KB head, <8MB) LICENSE — head 에 키워드 없음 → warn(완주 확인).
+  const beyondDir = path.join(AUXCAP, 'beyond');
+  fs.mkdirSync(beyondDir, { recursive: true });
+  fs.writeFileSync(path.join(beyondDir, 'art_beyond.png'), TINY_PNG);
+  {
+    const filler = Buffer.alloc(70 * 1024, 0x2e);                       // '.' × 70KB (키워드 없음)
+    const tail = Buffer.from('\nSPDX-License-Identifier: MIT\n', 'utf8'); // head 밖 마커(읽히면 안 됨)
+    fs.writeFileSync(path.join(beyondDir, 'LICENSE'), Buffer.concat([filler, tail]));
+  }
+  // (b) in-head: CC0 마커를 선두에 + 2MB filler — head 읽기 동작 + 대용량 완주 → allowed.
+  const inheadDir = path.join(AUXCAP, 'inhead');
+  fs.mkdirSync(inheadDir, { recursive: true });
+  fs.writeFileSync(path.join(inheadDir, 'art_inhead.png'), TINY_PNG);
+  {
+    const marker = Buffer.from('Creative Commons Zero v1.0 Universal\nCC0 1.0 Public Domain Dedication\n', 'utf8');
+    const filler = Buffer.alloc(2 * 1024 * 1024, 0x2e);                 // 2MB '.'
+    fs.writeFileSync(path.join(inheadDir, 'LICENSE'), Buffer.concat([marker, filler]));
+  }
+  // (c) too-big: 9MB(>8MB hardCap) sparse LICENSE — 선두에 CC0 가 있어도 통째 스킵 → warn.
+  //     (전체를 읽었다면 선두 CC0 → allowed 가 됐을 것 — 비-타우톨로지 회귀 감지.)
+  const toobigDir = path.join(AUXCAP, 'toobig');
+  fs.mkdirSync(toobigDir, { recursive: true });
+  fs.writeFileSync(path.join(toobigDir, 'art_toobig.png'), TINY_PNG);
+  {
+    const TOO_BIG = 9 * 1024 * 1024;                                    // > 8MB hardCap
+    const head = Buffer.from('Creative Commons Zero v1.0 Universal\nCC0 1.0\n', 'utf8');
+    const fd = fs.openSync(path.join(toobigDir, 'LICENSE'), 'w');
+    fs.writeSync(fd, head, 0, head.length, 0);
+    fs.writeSync(fd, Buffer.from([0x2e]), 0, 1, TOO_BIG - 1);           // sparse 확장(실제 9MB 안 씀)
+    fs.closeSync(fd);
+  }
 }
 
 // ── 메인 ──────────────────────────────────────────────────────────────────────
@@ -323,6 +363,58 @@ async function main() {
     ok('licenseClassify 과대 → blocked', licenseClassify({ license: 'CC0' }, 'coin.png', pol, MAX_FILE_BYTES + 1).status === 'blocked');
     ok('licenseClassify user-owned → allowed', licenseClassify({ license: 'user-owned' }, 'myart.png', pol, 100).status === 'allowed');
     ok('licenseClassify USER-OWNED → allowed', licenseClassify({ license: 'USER-OWNED' }, 'myart.png', pol, 100).status === 'allowed');
+  }
+
+  // ── U-AUXCAP: 과대 보조 텍스트 파일 read 상한(DoS 가드, 보안 MED-1) ─────────────
+  // 보조 텍스트(LICENSE/README/.meta/import-licenses.json)는 readHeadText(선두 64KB,
+  // 8MB 초과 스킵)로만 읽혀야 한다. "전체 파일을 읽지 않음" 을 두 각도로 비-타우톨로지 검증:
+  //   (1) fs.readFileSync 스파이 — 보조파일이 무제한 readFileSync 로 읽히지 않음을 직접 확인.
+  //   (2) 8MB 초과 LICENSE 통째 스킵(전체 read 였다면 선두 CC0 → allowed 가 됐을 것).
+  {
+    buildAuxCapFixture();
+
+    // fs.readFileSync 스파이: 스캔 중 보조 텍스트 파일이 무제한 read 되는지 기록.
+    // (정상 코드는 보조파일을 fs.readSync 로만 읽으므로 0 건이어야 한다. sha256/asset png 은
+    //  여전히 readFileSync 를 쓰므로 totalCalls>0 으로 스파이가 실제 활성임을 함께 증명.)
+    const AUX_RE = /(^|[\/\\])(LICENSE|COPYING|README)([.\-][^\/\\]*)?$|\.(meta|license)$|import-licenses\.json$/i;
+    const realReadFileSync = fs.readFileSync;
+    const auxReadWhole = [];
+    let totalReadFileSync = 0;
+    fs.readFileSync = function (p, ...rest) {
+      totalReadFileSync++;
+      try { if (typeof p === 'string' && AUX_RE.test(p)) auxReadWhole.push(p); } catch (e) { /* 무시 */ }
+      return realReadFileSync.call(this, p, ...rest);
+    };
+    let auxResult = null, auxErr = null;
+    try { auxResult = scanLocalFolder(AUXCAP, {}); }
+    catch (e) { auxErr = e; }
+    finally { fs.readFileSync = realReadFileSync; }  // 항상 원복(다른 코드 영향 차단)
+
+    ok('U-AUXCAP 과대 LICENSE(9MB·2MB·70KB) 있어도 scan 완주(OOM/throw 없음)',
+      !auxErr && auxResult && auxResult.ok === true,
+      `err=${auxErr && auxErr.message} ok=${auxResult && auxResult.ok}`);
+
+    // 스파이 활성 증명(asset png sha256 등으로 readFileSync 가 실제 호출됨).
+    ok('U-AUXCAP readFileSync 스파이 활성(호출 관측됨)', totalReadFileSync > 0,
+      `totalReadFileSync=${totalReadFileSync}`);
+    // 핵심: 보조 텍스트 파일은 무제한 readFileSync 로 읽히지 않음(= 전체 파일 read 안 함).
+    ok('U-AUXCAP 보조 텍스트 파일 무제한 readFileSync 0건(전체 read 안 함)',
+      auxReadWhole.length === 0,
+      `auxReadWhole=${auxReadWhole.map((p) => path.basename(p)).join(',') || '없음'}`);
+
+    const auxByRel = new Map(((auxResult && auxResult.items) || []).map((i) => [i.relPath, i]));
+
+    // (c) 8MB hardCap 초과 LICENSE 통째 스킵 → 선두 CC0 도 미탐지 → warn(비-타우톨로지).
+    const toobig = auxByRel.get('toobig/art_toobig.png');
+    ok('U-AUXCAP hardCap(8MB) 초과 LICENSE 전체 스킵(선두 CC0 미탐지 → warn)',
+      toobig && toobig.status === 'warn',
+      `status=${toobig && toobig.status} license=${toobig && toobig.detected && toobig.detected.license}`);
+
+    // (b) in-head: 선두 CC0 마커는 정상 탐지 + 2MB 대용량 완주 → allowed.
+    const inhead = auxByRel.get('inhead/art_inhead.png');
+    ok('U-AUXCAP head 내 CC0 마커 탐지 + 2MB 대용량 완주 → allowed',
+      inhead && inhead.status === 'allowed' && inhead.detected && inhead.detected.license === 'CC0',
+      `status=${inhead && inhead.status} license=${inhead && inhead.detected && inhead.detected.license}`);
   }
 
   cleanup();
