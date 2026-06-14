@@ -1,0 +1,160 @@
+{
+  "format": "wgf-scene@1",
+  "slug": "wgf-demo-arena",
+  "meta": {
+    "title": "절차 아레나",
+    "genre": "topdown",
+    "viewport": { "w": 480, "h": 320 },
+    "pixelArt": true,
+    "seed": 73501
+  },
+  "assets": {
+    "sprites": [
+      { "id": "spr_player", "source": "procedural", "desc": "주인공 — 청록 원형 탐사대원, 흰 바이저", "w": 16, "h": 16 },
+      { "id": "spr_drone",  "source": "procedural", "desc": "추격 드론 — 자홍 마름모, 붉은 센서 눈", "w": 14, "h": 14 },
+      { "id": "spr_turret", "source": "procedural", "desc": "정지 포탑 — 강철 회색 사각, 노란 포구", "w": 14, "h": 14 },
+      { "id": "spr_bullet", "source": "procedural", "desc": "발사체 — 작은 하늘색 광탄", "w": 6, "h": 6 },
+      { "id": "spr_coin",   "source": "procedural", "desc": "금빛 동전 — 반짝이는 노란 원반", "w": 10, "h": 10 },
+      { "id": "spr_medkit", "source": "procedural", "desc": "회복 키트 — 흰 상자에 초록 십자", "w": 12, "h": 12 },
+      { "id": "spr_beacon", "source": "procedural", "desc": "신호 비콘 — 점멸하는 보라 등대(장식)", "w": 12, "h": 16 },
+      { "id": "spr_pad",    "source": "procedural", "desc": "소환 패드 — 청록 테두리의 발광 타일", "w": 16, "h": 16 }
+    ]
+  },
+  "walls": [
+    { "x": 0,   "y": 0,   "w": 480, "h": 12  },
+    { "x": 0,   "y": 308, "w": 480, "h": 12  },
+    { "x": 0,   "y": 0,   "w": 12,  "h": 320 },
+    { "x": 468, "y": 0,   "w": 12,  "h": 320 },
+    { "x": 150, "y": 120, "w": 40,  "h": 16  },
+    { "x": 300, "y": 180, "w": 16,  "h": 56  }
+  ],
+  "scenes": [
+    {
+      "id": "main",
+      "systems": {},
+      "entities": [
+        {
+          "id": "player",
+          "name": "플레이어",
+          "transform": { "x": 240, "y": 250, "rotation": 0, "scaleX": 1, "scaleY": 1, "depth": 20 },
+          "components": [
+            { "type": "Sprite", "sprite": "spr_player" },
+            { "type": "Body", "shape": "circle", "radius": 7, "isStatic": false },
+            { "type": "TopDownController", "speed": 90, "input": "both" },
+            { "type": "Shooter", "cooldown": 0.4, "speed": 200, "target": "turret_01", "auto": true, "damage": 1, "projectileLifetime": 1.2, "projectileSprite": "spr_bullet" },
+            { "type": "Health", "max": 20, "hp": 20, "invuln": 0.4, "onDeath": "flag" },
+            { "type": "CameraFollow", "target": "player", "lerp": 0.2 },
+            { "type": "AbilityBinding", "abilities": [{ "id": "dash", "cooldown": 1.5 }], "bindings": { "Space": "dash" } },
+            { "type": "HUDBinding", "element": "hpbar", "source": "Health.hp", "format": "HP {v}" },
+            { "type": "HUDBinding", "element": "coins", "source": "world.counters.coin", "format": "코인 {v}" },
+            { "type": "AudioEmitter", "sound": "sfx_step", "trigger": "onStep", "cooldown": 0.5 }
+          ]
+        },
+        {
+          "id": "drone_01",
+          "name": "추격드론01",
+          "transform": { "x": 80, "y": 70, "rotation": 0, "scaleX": 1, "scaleY": 1, "depth": 15 },
+          "components": [
+            { "type": "Sprite", "sprite": "spr_drone" },
+            { "type": "Body", "shape": "circle", "radius": 6, "isStatic": false },
+            { "type": "EnemyAI", "mode": "chase", "target": "player", "speed": 55, "range": 220 },
+            { "type": "Health", "max": 6, "hp": 6, "onDeath": "remove" },
+            { "type": "ContactDamage", "damage": 2, "cooldown": 0.6 }
+          ]
+        },
+        {
+          "id": "drone_02",
+          "name": "추격드론02",
+          "transform": { "x": 400, "y": 70, "rotation": 0, "scaleX": 1, "scaleY": 1, "depth": 15 },
+          "components": [
+            { "type": "Sprite", "sprite": "spr_drone" },
+            { "type": "Body", "shape": "circle", "radius": 6, "isStatic": false },
+            { "type": "EnemyAI", "mode": "chase", "target": "player", "speed": 55, "range": 220 },
+            { "type": "Health", "max": 6, "hp": 6, "onDeath": "remove" },
+            { "type": "ContactDamage", "damage": 2, "cooldown": 0.6 }
+          ]
+        },
+        {
+          "id": "turret_01",
+          "name": "포탑01",
+          "transform": { "x": 240, "y": 60, "rotation": 0, "scaleX": 1, "scaleY": 1, "depth": 15 },
+          "components": [
+            { "type": "Sprite", "sprite": "spr_turret" },
+            { "type": "Body", "shape": "aabb", "w": 14, "h": 14, "isStatic": true },
+            { "type": "Shooter", "cooldown": 1.2, "speed": 140, "target": "player", "auto": true, "damage": 1, "projectileLifetime": 2, "projectileSprite": "spr_bullet" },
+            { "type": "Health", "max": 10, "hp": 10, "onDeath": "remove" }
+          ]
+        },
+        {
+          "id": "coin_01",
+          "name": "코인01",
+          "transform": { "x": 60, "y": 160, "rotation": 0, "scaleX": 1, "scaleY": 1, "depth": 5 },
+          "components": [
+            { "type": "Sprite", "sprite": "spr_coin" },
+            { "type": "Body", "shape": "circle", "radius": 5, "isStatic": false },
+            { "type": "Pickup", "kind": "coin", "amount": 1, "collector": "player" }
+          ]
+        },
+        {
+          "id": "coin_02",
+          "name": "코인02",
+          "transform": { "x": 240, "y": 160, "rotation": 0, "scaleX": 1, "scaleY": 1, "depth": 5 },
+          "components": [
+            { "type": "Sprite", "sprite": "spr_coin" },
+            { "type": "Body", "shape": "circle", "radius": 5, "isStatic": false },
+            { "type": "Pickup", "kind": "coin", "amount": 1, "collector": "player" }
+          ]
+        },
+        {
+          "id": "coin_03",
+          "name": "코인03",
+          "transform": { "x": 420, "y": 160, "rotation": 0, "scaleX": 1, "scaleY": 1, "depth": 5 },
+          "components": [
+            { "type": "Sprite", "sprite": "spr_coin" },
+            { "type": "Body", "shape": "circle", "radius": 5, "isStatic": false },
+            { "type": "Pickup", "kind": "coin", "amount": 1, "collector": "player" }
+          ]
+        },
+        {
+          "id": "medkit_01",
+          "name": "회복키트01",
+          "transform": { "x": 240, "y": 110, "rotation": 0, "scaleX": 1, "scaleY": 1, "depth": 5 },
+          "components": [
+            { "type": "Sprite", "sprite": "spr_medkit" },
+            { "type": "Body", "shape": "circle", "radius": 5, "isStatic": false },
+            { "type": "Pickup", "kind": "heal", "amount": 5, "collector": "player" }
+          ]
+        },
+        {
+          "id": "spawner_pad",
+          "name": "소환패드",
+          "transform": { "x": 80, "y": 250, "rotation": 0, "scaleX": 1, "scaleY": 1, "depth": 2 },
+          "components": [
+            { "type": "Sprite", "sprite": "spr_pad" },
+            { "type": "Body", "shape": "aabb", "w": 16, "h": 16, "isStatic": true },
+            { "type": "Spawner", "interval": 3, "max": 4, "jitter": 8, "template": {
+                "name": "졸개드론",
+                "components": [
+                  { "type": "Sprite", "sprite": "spr_drone" },
+                  { "type": "Body", "shape": "circle", "radius": 6, "isStatic": false },
+                  { "type": "EnemyAI", "mode": "chase", "target": "player", "speed": 50, "range": 200 },
+                  { "type": "Health", "max": 5, "hp": 5, "onDeath": "remove" },
+                  { "type": "ContactDamage", "damage": 2, "cooldown": 0.6 }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "beacon_01",
+          "name": "신호비콘",
+          "transform": { "x": 400, "y": 250, "rotation": 0, "scaleX": 1, "scaleY": 1, "depth": 3 },
+          "components": [
+            { "type": "AnimatedSprite", "sprite": "spr_beacon", "anims": [{ "key": "pulse", "frames": [0, 1, 2, 3], "fps": 6, "loop": true }], "play": "pulse" }
+          ]
+        }
+      ]
+    }
+  ],
+  "dataLayers": {}
+}

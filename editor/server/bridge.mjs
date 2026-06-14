@@ -302,12 +302,18 @@ function loadChatQueue() {
 }
 
 // 챗 큐를 파일에 영속(원자적 쓰기 — tmp 후 rename, 부분 쓰기로 인한 손상 방지).
+// 챗 큐는 사용자 메시지(잠재적 민감 텍스트)를 담으므로 0o600(소유자 rw only) 으로 격리한다.
+// tmp 부터 0o600 으로 쓰고, rename 후에도 명시적 chmod 로 권한 보장(rename 은 권한 보존하나
+// 안전망). Windows 등 POSIX 외에서 chmod 는 read-only 비트만 반영돼 무해 → 실패 무시(보안 §6).
 function persistChatQueue() {
   try {
-    fs.mkdirSync(path.dirname(CHAT_FILE), { recursive: true });
+    // 보관 디렉터리도 소유자 전용(0o700) — 다른 로컬 사용자의 traverse·메타데이터 열람 차단(보안 리뷰 MED-1).
+    fs.mkdirSync(path.dirname(CHAT_FILE), { recursive: true, mode: 0o700 });
+    try { fs.chmodSync(path.dirname(CHAT_FILE), 0o700); } catch (e) { /* POSIX 외 무시 */ }
     const tmp = CHAT_FILE + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({ messages: chat.messages, nextId: chat.nextId }), 'utf8');
+    fs.writeFileSync(tmp, JSON.stringify({ messages: chat.messages, nextId: chat.nextId }), { encoding: 'utf8', mode: 0o600 });
     fs.renameSync(tmp, CHAT_FILE);
+    try { fs.chmodSync(CHAT_FILE, 0o600); } catch (e) { /* POSIX 외 무시 */ }
   } catch (e) {
     process.stderr.write(`[wgf-bridge] 챗 큐 영속 실패: ${String(e)}\n`);
   }
@@ -516,11 +522,27 @@ function replayMissed(sub, lastId) {
 }
 
 // ── 보안 헬퍼 ─────────────────────────────────────────────────────────────────
+// 상수시간 토큰 비교(타이밍 사이드채널 차단, 보안 §6).
+//  - 단순 `a === TOKEN` 은 첫 불일치 바이트에서 조기 반환하므로 비교 시간이 일치 길이에
+//    비례한다 → 공격자가 응답 지연으로 토큰을 한 바이트씩 추측 가능. crypto.timingSafeEqual
+//    은 길이가 같은 두 Buffer 를 항상 끝까지 비교해 시간 차로 정보가 새지 않게 한다.
+//  - timingSafeEqual 은 길이가 다르면 throw 하므로, 먼저 Buffer 길이를 비교해 다르면 즉시
+//    false(throw 금지 — 잘못된 길이의 토큰이 와도 브리지가 죽지 않아야 함).
+//  - a 가 비문자열(undefined 헤더·미존재 쿼리 등)이면 안전하게 false.
+function safeEqual(a, TOKEN) {
+  if (typeof a !== 'string') return false;
+  const x = Buffer.from(a);
+  const y = Buffer.from(TOKEN);
+  if (x.length !== y.length) return false;   // 길이 불일치 — 즉시 false(timingSafeEqual throw 회피)
+  return crypto.timingSafeEqual(x, y);
+}
+
 // /api/* 토큰 검사. EventSource 는 헤더 못 넣으므로 ?token= 쿼리도 허용.
+// 헤더·쿼리 중 하나라도 TOKEN 과 상수시간 일치하면 통과(safeEqual 로 타이밍 사이드채널 차단).
 function checkToken(req, u) {
   const hdr = req.headers['x-wgf-token'];
   const q = u.searchParams.get('token');
-  return hdr === TOKEN || q === TOKEN;
+  return safeEqual(hdr, TOKEN) || safeEqual(q, TOKEN);
 }
 
 // Origin 검사 — 동일 호스트(127.0.0.1/localhost) origin 만 허용. Origin 없으면(same-origin
@@ -970,10 +992,17 @@ function handleApi(req, res, u, p) {
 }
 
 // 브리지 엔드포인트(port·token)를 토큰 공유 파일에 기록 — mcp.mjs 프록시가 읽는다.
+// 토큰이 담기므로 0o600(소유자 rw only) 으로 써서 같은 머신의 다른 로컬 사용자에게 노출 방지.
+// (POSIX 에서 완전 적용. Windows 에서 mode 는 read-only 비트만 반영돼 무해 — 보안 §6.)
 function writeEndpointFile(port) {
   try {
-    fs.mkdirSync(path.dirname(ENDPOINT_FILE), { recursive: true });
-    fs.writeFileSync(ENDPOINT_FILE, JSON.stringify({ port, token: TOKEN, host: HOST, pid: process.pid }), 'utf8');
+    // 보관 디렉터리도 소유자 전용(0o700) — 토큰 파일이 든 디렉터리의 traverse 차단(보안 리뷰 MED-1).
+    fs.mkdirSync(path.dirname(ENDPOINT_FILE), { recursive: true, mode: 0o700 });
+    try { fs.chmodSync(path.dirname(ENDPOINT_FILE), 0o700); } catch (e) { /* POSIX 외 무시 */ }
+    fs.writeFileSync(ENDPOINT_FILE, JSON.stringify({ port, token: TOKEN, host: HOST, pid: process.pid }), { encoding: 'utf8', mode: 0o600 });
+    // 파일이 이미 존재했다면 writeFileSync 의 mode 는 무시되므로 명시적 chmod 로 권한 보장.
+    // Windows/일부 FS 에서 chmod 실패는 무해(무시) — 토큰 노출 방지 best-effort.
+    try { fs.chmodSync(ENDPOINT_FILE, 0o600); } catch (e) { /* POSIX 외 무시 */ }
   } catch (e) {
     process.stderr.write(`[wgf-bridge] 엔드포인트 파일 기록 실패: ${String(e)}\n`);
   }
