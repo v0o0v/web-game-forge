@@ -142,20 +142,30 @@ function main() {
     try { fs.statSync(p); } catch { warnings.push(`엔진 파일 누락(런타임 로드 실패 가능): engine/${f}`); }
   }
 
-  // 자산: cc0 url 참조는 CREDITS 에 기록(P2.5 는 절차 생성 위주, 실제 파일 복사는 후속).
-  const cc0Assets = collectCc0Assets(doc);
-  for (const a of cc0Assets) {
-    if (!a.url) warnings.push(`cc0 자산 "${a.id}" 에 url 이 없습니다(CREDITS 출처 불완전).`);
-    if (!a.license) warnings.push(`cc0 자산 "${a.id}" 에 license 가 없습니다(라이선스 미상).`);
+  // 자산: cc0·local url 참조는 CREDITS 에 기록.
+  const externalAssets = collectExternalAssets(doc);
+  for (const a of externalAssets) {
+    if (!a.url) warnings.push(`${a.source} 자산 "${a.id}" 에 url 이 없습니다(CREDITS 출처 불완전).`);
+    if (!a.license) warnings.push(`${a.source} 자산 "${a.id}" 에 license 가 없습니다(라이선스 미상).`);
+    // CC-BY 류 attribution 누락 경고.
+    if (a.license && /^CC-BY/i.test(a.license) && !a.attribution && !a.credit) {
+      warnings.push(`${a.source} 자산 "${a.id}" 는 CC-BY 류이나 attribution 이 없습니다.`);
+    }
   }
 
   // ── 산출물 생성 ──────────────────────────────────────────────────────────────
   fs.mkdirSync(outDir, { recursive: true });
 
+  // local 자산 url 재작성: repo-root 상대("games/<slug>/assets/imported/x.png") →
+  // game-root 상대("assets/imported/x.png"). index.html 이 games/<slug>/ 에 위치하므로
+  // 런타임 로더가 game-root 기준 상대경로로 해석한다. 원본 doc 은 건드리지 않고 복사본만 수정.
+  const gamePrefix = 'games/' + slug + '/';
+  const docForExport = rewriteLocalUrls(doc, gamePrefix);
+
   const sceneTitle = (doc.meta && doc.meta.title) || slug;
   const indexHtml = buildIndexHtml({ title: sceneTitle, meta: doc.meta || {} });
-  const gameJs = buildGameJs({ slug, Slug, sceneJson: stableJson(doc) });
-  const credits = buildCredits({ slug, title: sceneTitle, cc0Assets });
+  const gameJs = buildGameJs({ slug, Slug, sceneJson: stableJson(docForExport) });
+  const credits = buildCredits({ slug, title: sceneTitle, externalAssets });
 
   const files = [];
   writeFile(path.join(outDir, 'index.html'), indexHtml, files, outDir);
@@ -176,7 +186,7 @@ function main() {
     sceneFile: path.relative(REPO_ROOT, sceneFile).split(path.sep).join('/'),
     files,
     warnings,
-    cc0Count: cc0Assets.length
+    externalCount: externalAssets.length
   }));
   process.exit(0);
 }
@@ -205,17 +215,28 @@ function stableJson(obj) {
     .replace(/\u2029/g, '\\u2029');
 }
 
-// cc0 자산 수집(assets.sprites + scenes[].assets.sprites 등 source:'cc0').
-function collectCc0Assets(doc) {
+// 외부 자산 수집(assets.sprites + scenes[].assets.sprites 등 source:'cc0'|'local').
+// 반환 항목: {id, url, license, credit, attribution, desc, source, origin?, attested?}.
+function collectExternalAssets(doc) {
   const out = [];
   const seen = new Set();
   const scanAssets = (assets) => {
     if (!assets || typeof assets !== 'object') return;
     const sprites = Array.isArray(assets.sprites) ? assets.sprites : [];
     for (const s of sprites) {
-      if (s && s.source === 'cc0' && s.id && !seen.has(s.id)) {
+      if (s && (s.source === 'cc0' || s.source === 'local') && s.id && !seen.has(s.id)) {
         seen.add(s.id);
-        out.push({ id: s.id, url: s.url || null, license: s.license || null, desc: s.desc || null });
+        out.push({
+          id: s.id,
+          url: s.url || null,
+          license: s.license || null,
+          credit: s.credit || null,
+          attribution: s.attribution || null,
+          desc: s.desc || null,
+          source: s.source,
+          origin: s.origin || null,
+          attested: s.attested || null
+        });
       }
     }
   };
@@ -384,8 +405,39 @@ function indent(s, n) {
   return String(s).split('\n').map((line, i) => (i === 0 ? line : pad + line)).join('\n');
 }
 
+// local 자산 url 재작성: repo-root 상대("games/<slug>/assets/...") →
+// game-root 상대("assets/..."). 원본 doc 을 깊은 복사 후 sprites 의 url 만 변경.
+// gamePrefix 예: "games/my-game/" (trailing slash 포함).
+function rewriteLocalUrls(doc, gamePrefix) {
+  // 얕은 구조 복사(스프라이트 배열만 새 배열로 — 엔티티 등 나머지는 참조 공유 OK,
+  // stableJson 이 직렬화 시점에 스냅샷을 찍으므로 레이스 없음).
+  const rewriteSprites = (sprites) => {
+    if (!Array.isArray(sprites)) return sprites;
+    return sprites.map((s) => {
+      if (!s || s.source !== 'local' || typeof s.url !== 'string') return s;
+      let url = s.url;
+      if (url.startsWith(gamePrefix)) {
+        url = url.slice(gamePrefix.length);  // "assets/imported/x.png"
+      }
+      return Object.assign({}, s, { url });
+    });
+  };
+  const rewriteAssets = (assets) => {
+    if (!assets || typeof assets !== 'object') return assets;
+    return Object.assign({}, assets, { sprites: rewriteSprites(assets.sprites) });
+  };
+  const out = Object.assign({}, doc, { assets: rewriteAssets(doc.assets) });
+  if (Array.isArray(doc.scenes)) {
+    out.scenes = doc.scenes.map((sc) => {
+      if (!sc) return sc;
+      return Object.assign({}, sc, { assets: rewriteAssets(sc.assets) });
+    });
+  }
+  return out;
+}
+
 // ── CREDITS.txt 빌더 ──────────────────────────────────────────────────────────
-function buildCredits({ slug, title, cc0Assets }) {
+function buildCredits({ slug, title, externalAssets, warnings }) {
   const lines = [];
   lines.push(`${title} (${slug}) — 크레딧`);
   lines.push('='.repeat(48));
@@ -395,19 +447,43 @@ function buildCredits({ slug, title, cc0Assets }) {
   lines.push('');
   lines.push('## 자산 출처·라이선스');
   lines.push('');
-  if (cc0Assets.length === 0) {
+
+  const cc0List = (externalAssets || []).filter((a) => a.source === 'cc0');
+  const localList = (externalAssets || []).filter((a) => a.source === 'local');
+
+  if (cc0List.length === 0 && localList.length === 0) {
     lines.push('- 모든 그래픽 자산은 PixelForge/VectorForge 로 **코드 절차 생성**(CC0, 오리지널).');
     lines.push('- 외부 IP(닌텐도 등) 스프라이트·이름·시그니처 미사용.');
   } else {
-    lines.push('- 일부 자산은 외부 CC0 라이브러리 참조입니다(아래). 나머지는 절차 생성(CC0).');
-    lines.push('');
-    for (const a of cc0Assets) {
-      lines.push(`- ${a.id}`);
-      lines.push(`    출처(url): ${a.url || '(미상 — 출처 확인 필요)'}`);
-      lines.push(`    라이선스: ${a.license || '(미상 — 라이선스 확인 필요)'}`);
-      if (a.desc) lines.push(`    설명: ${a.desc}`);
+    if (cc0List.length > 0) {
+      lines.push('- 일부 자산은 외부 CC0 라이브러리 참조입니다(아래). 나머지는 절차 생성(CC0).');
+      lines.push('');
+      for (const a of cc0List) {
+        lines.push(`- ${a.id}`);
+        lines.push(`    출처(url): ${a.url || '(미상 — 출처 확인 필요)'}`);
+        lines.push(`    라이선스: ${a.license || '(미상 — 라이선스 확인 필요)'}`);
+        if (a.credit) lines.push(`    크레딧: ${a.credit}`);
+        if (a.desc) lines.push(`    설명: ${a.desc}`);
+      }
+    }
+    if (localList.length > 0) {
+      if (cc0List.length > 0) lines.push('');
+      lines.push('## 임포트 자산(로컬/Unity)');
+      lines.push('');
+      for (const a of localList) {
+        lines.push(`- ${a.id}`);
+        lines.push(`    라이선스: ${a.license || '(미상 — 라이선스 확인 필요)'}`);
+        if (a.credit) lines.push(`    크레딧: ${a.credit}`);
+        if (a.attribution) lines.push(`    저작자 표기: ${a.attribution}`);
+        if (a.desc) lines.push(`    설명: ${a.desc}`);
+        if (a.attested) {
+          lines.push(`    사용자 권리 보유 선언: ${a.attested.owner} (선언 라이선스 ${a.attested.declaredLicense}, ${a.attested.at})`);
+        }
+        if (a.origin && a.origin.relPath) lines.push(`    원본 경로: ${a.origin.relPath}`);
+      }
     }
   }
+
   lines.push('');
   lines.push('## 사운드');
   lines.push('');

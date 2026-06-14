@@ -490,6 +490,20 @@ export function createController(opts) {
     }
     return await transport.addAsset('cc0', partial || {});
   }
+  // Unity 로컬 폴더 스캔(복사 없음 — 미리보기).
+  async function scanUnityFolder(folder) {
+    if (!isRemote || !transport || !transport.scanUnityFolder) {
+      return { ok: false, error: '브리지 필요 — local 모드에서는 동작하지 않습니다' };
+    }
+    return await transport.scanUnityFolder(folder);
+  }
+  // Unity 에셋 가져오기. selections = [{relPath, id?, credit?, attested?:{owner,declaredLicense}}].
+  async function importUnityAssets(folder, selections) {
+    if (!isRemote || !transport || !transport.importUnityAssets) {
+      return { ok: false, error: '브리지 필요 — local 모드에서는 동작하지 않습니다' };
+    }
+    return await transport.importUnityAssets(folder, selections || []);
+  }
   // 에셋을 엔티티에 드래그 배정 — 그 엔티티에 Sprite(sprite=자산 id) 컴포넌트 추가.
   //  applyCommand(addComponent) 경유 → 결정론 불변식 준수 + scene.json 자산 ref 유효.
   function assignAssetToEntity(entityId, spriteId) {
@@ -521,6 +535,7 @@ export function createController(opts) {
     // P4 — 스킬(2트랙) + 에셋
     runSkill, dispatchCreative, sceneContextSummary,
     getAssets, addProceduralAsset, addCc0Asset, assignAssetToEntity, onAssetChange,
+    scanUnityFolder, importUnityAssets,
     STORAGE_KEY
   };
 }

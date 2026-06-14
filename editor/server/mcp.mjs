@@ -442,6 +442,33 @@ const TOOLS = {
       if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError((r.json && r.json.error) || '에셋 추가 실패', { status: r.status });
       return toolText({ ok: true, asset: r.json.asset, seq: r.json.seq });
     }
+  },
+
+  // ── 로컬 Unity 폴더 임포트(설계 §5) ─────────────────────────────────────────
+  asset_scan_unity_folder: {
+    description: '로컬 Unity 폴더를 스캔해 임포트 가능한 이미지·오디오와 각 라이선스 분류(allowed/warn/blocked)를 미리 보여준다(복사 안 함). folder 는 절대경로.',
+    inputSchema: OBJ({ folder: { type: 'string' } }, ['folder']),
+    async handler(args) {
+      if (!args || typeof args.folder !== 'string') return toolError('folder 필수');
+      const r = await bridgeRequest('POST', '/api/asset/unity-scan', { folder: args.folder });
+      if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError((r.json && r.json.error) || '스캔 실패', { status: r.status });
+      return toolText({ ok: true, root: r.json.root, items: r.json.items, totals: r.json.totals, truncated: r.json.truncated });
+    }
+  },
+
+  asset_import_unity: {
+    description: '스캔 결과 중 selections 를 vendoring 임포트한다. warn 항목은 attested(owner+declaredLicense) 필수, blocked 는 거부. folder 는 절대경로, selections 는 [{relPath, id?, credit?, attested?:{owner,declaredLicense}}] 배열.',
+    inputSchema: OBJ({
+      folder: { type: 'string' },
+      selections: { type: 'array', items: { type: 'object' } }
+    }, ['folder', 'selections']),
+    async handler(args) {
+      if (!args || typeof args.folder !== 'string') return toolError('folder 필수');
+      if (!Array.isArray(args.selections)) return toolError('selections 배열 필수');
+      const r = await bridgeRequest('POST', '/api/asset/unity-import', { folder: args.folder, selections: args.selections });
+      if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError((r.json && r.json.error) || '임포트 실패', { status: r.status });
+      return toolText({ ok: true, added: r.json.added, rejected: r.json.rejected, seq: r.json.seq });
+    }
   }
 };
 

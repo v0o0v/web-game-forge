@@ -36,6 +36,7 @@ import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import * as AssetImport from './asset-import.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -158,6 +159,40 @@ function resolveScopedPath(value, scope) {
   const abs = path.resolve(REPO_ROOT, value);
   if (abs !== root && !abs.startsWith(root + path.sep)) return null;
   return abs;
+}
+
+// 외부(소스) 폴더 검증 — Unity 프로젝트 폴더는 repo 밖일 수 있음(사용자 개시·본인 머신).
+// 절대경로만 허용, length<=1024, 제어문자 차단, 실제 디렉터리 확인. 실패 시 null.
+// 보안: 이 폴더는 *읽기 전용 소스*로만 쓰이며, 쓰기는 절대 여기로 하지 않는다
+// (쓰기는 항상 resolveScopedPath('games') 로 이중검증된 games/<slug>/assets/imported/).
+function resolveExternalFolder(folder) {
+  if (typeof folder !== 'string' || folder.length === 0 || folder.length > 1024) return null;
+  // NUL 등 제어문자 차단.
+  for (let i = 0; i < folder.length; i++) { if (folder.charCodeAt(i) < 0x20) return null; }
+  // 절대경로만(상대경로는 REPO_ROOT 기준 해석돼 의도 불명확 — 명시적 절대경로 요구).
+  if (!path.isAbsolute(folder)) return null;
+  const abs = path.resolve(folder);
+  try {
+    const st = fs.statSync(abs);
+    if (!st.isDirectory()) return null;
+  } catch (e) {
+    return null;
+  }
+  return abs;
+}
+
+// 현재 편집 중 게임 디렉터리(절대경로) = scene.json 의 직계 부모.
+// SCENE_REL(예: games/<slug>/scene.json)에서 부모 디렉터리를 도출한다 — export 의
+// outDir/슬러그 기준(scene 부모)과 일치시켜 vendoring 위치·url 재작성을 정합시킨다.
+// 중첩 경로(games/_editor-samples/topdown-min/scene.json)도 실제 부모를 정확히 반환(보안 LOW-1).
+// (baseDoc.slug 는 'empty'/'scene' fallback 일 수 있어 경로가 더 신뢰됨.)
+// games/ 직속(게임 폴더 없음)·games/ 밖(빈 씬 폴백)이면 null — 임포트 비활성.
+function currentGameDir() {
+  const absScene = path.resolve(REPO_ROOT, SCENE_REL);
+  const gamesRoot = path.resolve(REPO_ROOT, 'games');
+  const dir = path.dirname(absScene);
+  if (dir === gamesRoot || !dir.startsWith(gamesRoot + path.sep)) return null;
+  return dir;
 }
 
 // {tool, args} 검증 → execFile 인자 배열 생성. 위반 시 {error} 반환.
@@ -701,8 +736,59 @@ function addAsset(kind, raw) {
     };
     if (typeof raw.w === 'number' && raw.w > 0) asset.w = raw.w | 0;
     if (typeof raw.h === 'number' && raw.h > 0) asset.h = raw.h | 0;
+  } else if (kind === 'local') {
+    // 로컬 vendored 에셋(설계 §2). url 은 repo-root 상대경로(games/ 하위)만 허용.
+    // resolveScopedPath('games') 로 이중검증 + 실제 파일 존재 확인.
+    if (typeof raw.url !== 'string' || raw.url.length === 0) {
+      return { ok: false, code: 400, error: 'local asset 은 url 필수' };
+    }
+    // 절대경로·위험스킴·http(s) 거부 — 상대경로만.
+    {
+      const urlLower = raw.url.trimStart().toLowerCase();
+      const dangerSchemes = ['javascript:', 'data:', 'file:', 'vbscript:', 'http:', 'https:'];
+      if (dangerSchemes.some((s) => urlLower.startsWith(s))) {
+        return { ok: false, code: 400, error: 'local url 위험/외부 스킴 거부(games/ 상대경로만): ' + JSON.stringify(raw.url.slice(0, 64)) };
+      }
+    }
+    const absUrl = resolveScopedPath(raw.url, 'games');
+    if (!absUrl) {
+      return { ok: false, code: 400, error: 'local url games/ 범위 밖/traversal 거부: ' + JSON.stringify(raw.url.slice(0, 128)) };
+    }
+    let exists = false;
+    try { exists = fs.statSync(absUrl).isFile(); } catch (e) { exists = false; }
+    if (!exists) {
+      return { ok: false, code: 400, error: 'local url 파일 없음: ' + JSON.stringify(raw.url.slice(0, 128)) };
+    }
+    asset = {
+      id,
+      source: 'local',
+      url: raw.url.slice(0, 2048),
+      license: typeof raw.license === 'string' ? raw.license.slice(0, 128) : 'unknown',
+      credit: typeof raw.credit === 'string' ? raw.credit.slice(0, 256) : '',
+      attribution: typeof raw.attribution === 'string' ? raw.attribution.slice(0, 256) : '',
+      desc: typeof raw.desc === 'string' ? raw.desc.slice(0, 512) : ''
+    };
+    if (typeof raw.w === 'number' && raw.w > 0) asset.w = raw.w | 0;
+    if (typeof raw.h === 'number' && raw.h > 0) asset.h = raw.h | 0;
+    if (typeof raw.sha256 === 'string' && /^[a-f0-9]{64}$/i.test(raw.sha256)) asset.sha256 = raw.sha256.toLowerCase();
+    // origin: 원본 Unity 폴더(절대경로 표시용) + 폴더내 상대경로(메타데이터, 표시 전용).
+    if (raw.origin && typeof raw.origin === 'object') {
+      const o = {};
+      if (typeof raw.origin.folder === 'string') o.folder = raw.origin.folder.slice(0, 1024);
+      if (typeof raw.origin.relPath === 'string') o.relPath = raw.origin.relPath.slice(0, 1024);
+      if (Object.keys(o).length) asset.origin = o;
+    }
+    // attested: warn 항목을 사용자가 통과시킨 경우에만(권리 보유 선언 감사 기록).
+    if (raw.attested && typeof raw.attested === 'object' &&
+        typeof raw.attested.owner === 'string' && raw.attested.owner.length > 0) {
+      asset.attested = {
+        owner: raw.attested.owner.slice(0, 256),
+        declaredLicense: typeof raw.attested.declaredLicense === 'string' ? raw.attested.declaredLicense.slice(0, 128) : '',
+        at: typeof raw.attested.at === 'string' ? raw.attested.at.slice(0, 64) : new Date().toISOString()
+      };
+    }
   } else {
-    return { ok: false, code: 400, error: 'kind 는 procedural|cc0 만 허용' };
+    return { ok: false, code: 400, error: 'kind 는 procedural|cc0|local 만 허용' };
   }
   sprites.push(asset);
   // 'asset' 델타 브로드캐스트(seq 부여 — 구독자 미러가 assets 동기).
@@ -974,7 +1060,7 @@ function handleApi(req, res, u, p) {
     return;
   }
 
-  // POST /api/asset/add {kind, asset} — procedural|cc0 자산을 assets.sprites 에 추가.
+  // POST /api/asset/add {kind, asset} — procedural|cc0|local 자산을 assets.sprites 에 추가.
   if (req.method === 'POST' && p === '/api/asset/add') {
     readBody(req, (body) => {
       let parsed;
@@ -984,6 +1070,140 @@ function handleApi(req, res, u, p) {
       const r = addAsset(kind, asset);
       if (!r.ok) { sendJSON(res, r.code || 400, { ok: false, error: r.error }); return; }
       sendJSON(res, 200, { ok: true, asset: r.asset, seq: r.seq });
+    });
+    return;
+  }
+
+  // ── 로컬 Unity 폴더 임포트(설계 §4) ──────────────────────────────────────────
+  // POST /api/asset/unity-scan {folder} — 외부 폴더를 스캔해 임포트 후보·라이선스 분류를
+  //  미리 보여준다(복사 없음). resolveExternalFolder 로 절대경로·디렉터리 검증.
+  if (req.method === 'POST' && p === '/api/asset/unity-scan') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      const abs = resolveExternalFolder(parsed && parsed.folder);
+      if (!abs) { sendJSON(res, 400, { ok: false, error: '폴더 거부(절대경로·실존 디렉터리만)' }); return; }
+      let result;
+      try { result = AssetImport.scanLocalFolder(abs, { repoRoot: REPO_ROOT }); }
+      catch (e) { sendJSON(res, 500, { ok: false, error: '스캔 실패: ' + String(e && e.message || e) }); return; }
+      sendJSON(res, 200, Object.assign({ ok: true }, result));
+    });
+    return;
+  }
+
+  // POST /api/asset/unity-import {folder, selections:[...]} — 선택분을 vendoring 임포트.
+  //  selection: {relPath, id?, license?, credit?, attested?:{owner,declaredLicense}}.
+  //  blocked → reject. warn 인데 attested(owner+declaredLicense) 없으면 reject.
+  //  통과: games/<slug>/assets/imported/ 로 복사 후 addAsset('local'). attested 는 감사로그 append.
+  if (req.method === 'POST' && p === '/api/asset/unity-import') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      const abs = resolveExternalFolder(parsed && parsed.folder);
+      if (!abs) { sendJSON(res, 400, { ok: false, error: '폴더 거부(절대경로·실존 디렉터리만)' }); return; }
+      const selections = (parsed && Array.isArray(parsed.selections)) ? parsed.selections : null;
+      if (!selections || selections.length === 0) { sendJSON(res, 400, { ok: false, error: 'selections 배열 필요' }); return; }
+      if (selections.length > AssetImport.MAX_FILES) { sendJSON(res, 400, { ok: false, error: 'selections 과다' }); return; }
+
+      // 현재 편집 게임 디렉터리(쓰기 대상). games/ 밖(빈 씬 폴백)이면 임포트 불가.
+      const gameDir = currentGameDir();
+      if (!gameDir) { sendJSON(res, 409, { ok: false, error: '현재 씬이 games/<slug> 아님 — 임포트 대상 없음' }); return; }
+      // 쓰기 대상 디렉터리: <gameDir>/assets/imported/ — gameDir 의 repo-상대 전체경로로
+      // 구성(중첩 게임 경로도 정확) 후 resolveScopedPath('games') 로 games/ 안 이중검증.
+      const importedRel = path.relative(REPO_ROOT, path.join(gameDir, 'assets', 'imported')).split(path.sep).join('/');
+      const importedAbs = resolveScopedPath(importedRel, 'games');
+      if (!importedAbs) { sendJSON(res, 500, { ok: false, error: '임포트 대상 경로 검증 실패' }); return; }
+
+      // 폴더 전체를 1회 스캔해 신뢰 가능한 재분류 맵 구성(클라 입력 신뢰 안 함).
+      let scan;
+      try { scan = AssetImport.scanLocalFolder(abs, { repoRoot: REPO_ROOT }); }
+      catch (e) { sendJSON(res, 500, { ok: false, error: '재스캔 실패: ' + String(e && e.message || e) }); return; }
+      const scanByRel = new Map();
+      for (const it of scan.items) scanByRel.set(it.relPath, it);
+
+      const added = [];
+      const rejected = [];
+      const attestations = [];
+      const usedIds = new Set((listAssets().sprites || []).map((s) => s && s.id).filter(Boolean));
+
+      for (const sel of selections) {
+        const relPath = sel && typeof sel.relPath === 'string' ? sel.relPath : null;
+        if (!relPath) { rejected.push({ relPath: String(relPath), reason: 'relPath 누락' }); continue; }
+        // traversal 차단: scan 결과에 존재하는 relPath 만 허용(서버가 enumerate 한 안전 경로).
+        const item = scanByRel.get(relPath);
+        if (!item) { rejected.push({ relPath, reason: '스캔 결과 외 경로(거부)' }); continue; }
+        // 서버 재분류 기준(클라 status 신뢰 안 함).
+        if (item.status === 'blocked') { rejected.push({ relPath, reason: '차단됨: ' + item.reason }); continue; }
+
+        const attested = sel && sel.attested && typeof sel.attested === 'object' ? sel.attested : null;
+        const hasAttest = attested && typeof attested.owner === 'string' && attested.owner.length > 0 &&
+          typeof attested.declaredLicense === 'string' && attested.declaredLicense.length > 0;
+        if (item.status === 'warn' && !hasAttest) {
+          rejected.push({ relPath, reason: 'attestation 필요(owner+declaredLicense)' });
+          continue;
+        }
+
+        // 안전한 vendoring 파일명: id(요청) 또는 suggestedId → 안전화 + 충돌회피 + 확장자.
+        const reqId = (sel && typeof sel.id === 'string') ? sel.id : item.suggestedId;
+        const safeId = AssetImport.suggestIdFromPath(reqId, usedIds);
+        // 확장자는 스캔에서 검증된 allowlist 확장자만 사용(임의 확장자 금지).
+        const safeName = safeId + item.ext;
+
+        // 산출 소스 절대경로가 스캔 root 밖이면 거부(이중 traversal 가드).
+        const absSrc = path.join(abs, relPath.split('/').join(path.sep));
+        const absSrcResolved = path.resolve(absSrc);
+        if (absSrcResolved !== abs && !absSrcResolved.startsWith(abs + path.sep)) {
+          rejected.push({ relPath, reason: 'root 밖 경로 거부' });
+          continue;
+        }
+
+        const v = AssetImport.vendorFile(absSrcResolved, importedAbs, safeName, { repoRoot: REPO_ROOT });
+        if (!v.ok) { rejected.push({ relPath, reason: '복사 실패: ' + v.error }); continue; }
+
+        // addAsset('local') 레코드 구성.
+        const at = new Date().toISOString();
+        const isWarn = (item.status === 'warn');
+        const declared = isWarn ? (attested.declaredLicense) : null;
+        const record = {
+          id: safeId,
+          url: v.relUrl,
+          license: isWarn ? AssetImport.normalizeLicense(declared) : (item.detected.license || 'unknown'),
+          credit: (sel && typeof sel.credit === 'string') ? sel.credit : (item.detected.attribution || ''),
+          attribution: item.detected.attribution || '',
+          desc: '원본: ' + relPath,
+          sha256: v.sha256,
+          origin: { folder: abs, relPath }
+        };
+        if (isWarn) {
+          record.attested = { owner: attested.owner, declaredLicense: declared, at };
+        }
+        const r = addAsset('local', record);
+        if (!r.ok) { rejected.push({ relPath, reason: r.error }); continue; }
+        usedIds.add(safeId);
+        added.push(r.asset);
+        if (isWarn) attestations.push({ id: safeId, url: v.relUrl, owner: attested.owner, declaredLicense: declared, origin: { folder: abs, relPath }, at });
+      }
+
+      // 부수효과: attested 항목을 games/<slug>/IMPORT_ATTESTATIONS.json 에 append(감사 로그).
+      if (attestations.length > 0) {
+        try {
+          const logPath = path.join(gameDir, 'IMPORT_ATTESTATIONS.json');
+          let arr = [];
+          try {
+            const prev = JSON.parse(fs.readFileSync(logPath, 'utf8'));
+            if (Array.isArray(prev)) arr = prev;
+          } catch (e) {
+            // 파싱 실패(손상). 기존 감사 로그를 덮어써 유실하지 않도록 .corrupt 백업 후 새로 시작(보안 LOW-2).
+            try { if (fs.existsSync(logPath)) fs.renameSync(logPath, logPath + '.corrupt-' + Date.now()); } catch (e2) { /* 무시 */ }
+          }
+          for (const a of attestations) arr.push(a);
+          fs.writeFileSync(logPath, JSON.stringify(arr, null, 2), 'utf8');
+        } catch (e) {
+          process.stderr.write('[wgf-bridge] attestation 로그 기록 실패: ' + String(e && e.message || e) + '\n');
+        }
+      }
+
+      sendJSON(res, 200, { ok: true, added, rejected, seq: state.seq });
     });
     return;
   }
