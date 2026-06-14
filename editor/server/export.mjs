@@ -122,13 +122,19 @@ function main() {
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) bail('scene.json 루트가 객체가 아닙니다.');
 
   // slug: --out > doc.slug > 입력 파일 부모 디렉터리명.
-  const slug = sanitizeSlug(args.out || doc.slug || path.basename(path.dirname(sceneFile)));
+  const slug = sanitizeSlug(args.out || doc.slug || path.basename(path.dirname(sceneFile)), (m) => warnings.push(m));
   if (!slug) bail('유효한 slug 를 결정할 수 없습니다(--out 으로 지정하세요).');
   const Slug = toPascal(slug);
 
-  // 출력 디렉터리(games/<slug>/) — 리포 안 강제.
+  // 출력 디렉터리(games/<slug>/) — games/ 루트 하위로 강제(방어심화, 보안 §6).
+  //  sanitizeSlug 가 경로 구분자·'.' 를 제거하므로 정상 slug 는 항상 games/<slug> 안이지만,
+  //  단일 진실 방어로 outDir 가 games/ 루트(또는 그 하위)인지 명시 검사한다 — isInsideRepo
+  //  (리포 루트 기준)보다 좁혀 games/ 밖 어떤 디렉터리에도 쓰지 못하게 한다.
+  const gamesRoot = path.resolve(REPO_ROOT, 'games');
   const outDir = path.resolve(REPO_ROOT, 'games', slug);
-  if (!isInsideRepo(outDir)) bail(`출력 디렉터리가 리포 밖입니다(traversal 거부): ${outDir}`);
+  if (outDir !== gamesRoot && !outDir.startsWith(gamesRoot + path.sep)) {
+    bail(`출력 디렉터리가 games/ 밖입니다(traversal 거부): ${outDir}`);
+  }
 
   // 엔진 파일 존재 확인(무빌드 vendoring 전제).
   for (const f of ENGINE_ORDER) {
@@ -245,6 +251,8 @@ function buildIndexHtml({ title, meta }) {
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="${themeColor}">
+<!-- 빈 favicon — 브라우저 자동 /favicon.ico 요청에 의한 무해한 404 콘솔 에러 억제(QA 콘솔 0 보장). -->
+<link rel="icon" href="data:,">
 <title>${esc(title)}</title>
 <style>
   /* 모바일 웹뷰 CSS 리셋 (러버밴드/스크롤/탭하이라이트/롱프레스 메뉴 차단) */
