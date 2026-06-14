@@ -28,7 +28,12 @@ ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
 > 지난 10여 년 인기 2D 게임 35종 분석(장르별 6종) + 재미요소 사전·조합 플레이북([fun-elements.md](./reference/game-dna/fun-elements.md)) +
 > 색인([INDEX.md](./reference/game-dna/INDEX.md)). 활용법은 아래 "**0) 요청 명확화**" 참고. (온디맨드 Read, 자동 트리거 아님.)
 
-**장르 스캐폴드**
+**비주얼/선언형 에디터 트랙** — 코드 없이 GUI로 씬을 직접 편집하고 싶다면
+- 유니티식 GUI 씬 편집·Claude 협업·에디터 내 Play·무빌드 export → `wgf-editor`
+  _(v1 탑다운 한정. 신규 선언형 `games/<slug>/scene.json`(wgf-scene@1) 포맷 전용.
+  기존 손코딩 `game.js` 게임은 대상 외.)_
+
+**장르 스캐폴드** — 손코딩 Phaser game.js 트랙
 - 옆스크롤 플랫포머/마리오류 → `platformer-game`
 - 탑다운/트윈스틱 슈팅 → `topdown-shooter`
 - 벽돌깨기·뱀·퐁·인베이더 → `arcade-classic`
