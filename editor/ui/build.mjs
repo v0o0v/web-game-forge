@@ -25,7 +25,9 @@ const options = {
   jsx: 'automatic',
   jsxImportSource: 'preact',
   loader: { '.js': 'jsx', '.jsx': 'jsx' },
-  sourcemap: true,
+  // prod(1회 빌드)=minify 켜고 sourcemap 끔(번들 경량). watch(개발)=minify 끄고 sourcemap 유지(디버깅).
+  minify: !watch,
+  sourcemap: watch,
   logLevel: 'info',
   // SceneKit·SceneKitPhaser·Phaser 는 index.html 의 <script> 전역으로 로드되므로
   // 번들에 포함하지 않는다(무빌드 엔진 경계 보존). 셸은 window.* 로 접근.

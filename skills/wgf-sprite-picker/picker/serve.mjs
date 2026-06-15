@@ -58,6 +58,14 @@ const TYPES = {
 
 let lastSavedAt = null;
 
+// 정적 응답 캐시 정책: 래스터 이미지(파일명 안정·내용 불변)는 짧게 캐시해 반복 로드를 줄이고,
+// 그 외(html/js/json/svg 등 개발 중 바뀌는 산출물)는 no-store 로 항상 최신을 받는다.
+// (svg 는 편집 대상일 수 있어 의도적으로 no-store 유지 — 데이터 안전 우선.)
+const CACHEABLE_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+function cacheControlFor(ext) {
+  return CACHEABLE_EXT.has(ext) ? 'public, max-age=300' : 'no-store';
+}
+
 // 한 정적 루트 안에서만 파일을 서빙(경로 traversal 가드). rel 은 루트 기준 상대경로.
 // blockDot=true 면 닷파일/닷디렉터리(.git·.env 등)를 막는다(작업공간 루트 서빙용).
 function serveStatic(res, root, rel, blockDot) {
@@ -72,7 +80,8 @@ function serveStatic(res, root, rel, blockDot) {
   }
   fs.readFile(filePath, (err, buf) => {
     if (err) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('not found: ' + rel); return; }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-store' });
+    const ext = path.extname(filePath).toLowerCase();
+    res.writeHead(200, { 'Content-Type': TYPES[ext] || 'application/octet-stream', 'Cache-Control': cacheControlFor(ext) });
     res.end(buf);
   });
 }

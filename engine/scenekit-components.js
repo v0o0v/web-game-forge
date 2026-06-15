@@ -42,13 +42,22 @@
   SK.registerComponent('Sprite', {
     schema: {
       sprite: { type: 'string', required: true,  desc: 'assets.sprites[].id 참조' },
-      anim:   { type: 'string', required: false, desc: '재생할 애니메이션 키 (선택)' }
+      anim:   { type: 'string', required: false, desc: '재생할 애니메이션 키 (선택)' },
+      frame:  { type: 'number', required: false, desc: '스프라이트시트 프레임 인덱스(정적)' }
     },
 
     /** @param {{ entity, world, rng, getComponent }} ctx */
     init: function (ctx) {
       var comp = ctx.getComponent('Sprite');
       if (!comp) return;
+
+      // frame 보정(결정적): 유한한 숫자면 음수는 0 으로 클램프 + 정수 내림(시트 프레임은 정수),
+      // 그 외(undefined/null/NaN/문자열 등)는 미지정으로 키 제거.
+      if (typeof comp.frame === 'number' && isFinite(comp.frame)) {
+        comp.frame = Math.max(0, Math.floor(comp.frame));
+      } else if ('frame' in comp) {
+        delete comp.frame;
+      }
 
       // assets.sprites 에 해당 id 가 선언돼 있는지 검증(경고만, 실행 차단 안 함).
       // world.assets (SceneKit.load 가 문서 최상위 assets 를 노출) 우선,
@@ -83,6 +92,12 @@
         label: '애니메이션 키',
         type:  'string',
         placeholder: '(없음)'
+      },
+      {
+        key:   'frame',
+        label: '프레임',
+        type:  'number',
+        placeholder: '0'
       }
     ]
   });

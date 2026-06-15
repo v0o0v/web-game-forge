@@ -504,10 +504,28 @@ export function createController(opts) {
     }
     return await transport.importUnityAssets(folder, selections || []);
   }
-  // 에셋을 엔티티에 드래그 배정 — 그 엔티티에 Sprite(sprite=자산 id) 컴포넌트 추가.
+  // 에셋을 엔티티에 드래그/원클릭 배정 — 그 엔티티에 Sprite 또는 AnimatedSprite 컴포넌트 추가.
   //  applyCommand(addComponent) 경유 → 결정론 불변식 준수 + scene.json 자산 ref 유효.
-  function assignAssetToEntity(entityId, spriteId) {
-    return applyCommand({ type: 'addComponent', id: entityId, component: { type: 'Sprite', sprite: spriteId } });
+  //  하위호환: opts 생략 시 기존과 동일하게 { type:'Sprite', sprite } 부착(main.jsx 2-인자 호출 보존).
+  //  opts = { frame?:int, as?:'Sprite'|'AnimatedSprite', anims?:[...], play?:string }.
+  //   - as==='AnimatedSprite' → { type:'AnimatedSprite', sprite, anims, play }.
+  //   - 아니면 정적 Sprite(frame>=0 일 때만 frame 포함 — undefined/음수는 생략).
+  function assignAssetToEntity(entityId, spriteId, opts) {
+    opts = opts || {};
+    var component;
+    if (opts.as === 'AnimatedSprite') {
+      var anims = Array.isArray(opts.anims) ? opts.anims : [];
+      var play = (opts.play != null) ? opts.play
+        : (anims[0] && anims[0].key != null ? anims[0].key : undefined);
+      component = { type: 'AnimatedSprite', sprite: spriteId, anims: anims };
+      if (play != null) component.play = play;
+    } else {
+      component = { type: 'Sprite', sprite: spriteId };
+      if (typeof opts.frame === 'number' && isFinite(opts.frame) && opts.frame >= 0) {
+        component.frame = Math.floor(opts.frame);
+      }
+    }
+    return applyCommand({ type: 'addComponent', id: entityId, component: component });
   }
   function onAssetChange(cb) {
     assetListeners.push(cb);

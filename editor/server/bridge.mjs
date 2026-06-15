@@ -38,6 +38,7 @@ import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import * as AssetImport from './asset-import.mjs';
+import * as SpriteLibrary from './sprite-library.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -689,9 +690,29 @@ function listAssets() {
   return { sprites: Array.isArray(a.sprites) ? a.sprites : [] };
 }
 
-// 스프라이트시트 프레임 메타(frameConfig/frame) 위생화 — cc0·local 에셋에만 적용.
+// 비균일 명시 영역(frames[]) 위생화 — 슬라이서 free-mode 산출물({name?,x,y,w,h}).
+//  각 원소가 정수 x/y≥0, w/h>0 일 때만 채택. 전부 | 0 정수강제(인젝션 표면 0). 길이 상한 1024.
+//  유효 항목이 하나도 없으면 null(미설정). frameConfig 와 공존 가능 — 렌더는 frames 우선.
+const MAX_SHEET_FRAMES = 1024;
+function sanitizeFramesArray(frames) {
+  if (!Array.isArray(frames)) return null;
+  const out = [];
+  for (const f of frames) {
+    if (out.length >= MAX_SHEET_FRAMES) break;
+    if (!f || typeof f !== 'object') continue;
+    if (typeof f.x !== 'number' || !(f.x >= 0) || typeof f.y !== 'number' || !(f.y >= 0)) continue;
+    if (typeof f.w !== 'number' || !(f.w > 0) || typeof f.h !== 'number' || !(f.h > 0)) continue;
+    const item = { x: f.x | 0, y: f.y | 0, w: f.w | 0, h: f.h | 0 };
+    if (typeof f.name === 'string') item.name = f.name.slice(0, 64);
+    out.push(item);
+  }
+  return out.length ? out : null;
+}
+
+// 스프라이트시트 프레임 메타(frameConfig/frames/frame) 위생화 — cc0·local 에셋에만 적용.
 //  frameWidth/frameHeight 가 양수일 때만 frameConfig 채택, margin/spacing 은 음수 아닐 때만.
-//  frame 은 0 이상 정수만. 전부 정수로 강제(| 0) → 인젝션 표면 0. 시트가 아니면 미설정(전체 이미지).
+//  frames[] 는 비균일 명시 영역(free-mode) — 있으면 저장(렌더는 frames 우선). frame 은 0 이상 정수만.
+//  전부 정수로 강제(| 0) → 인젝션 표면 0. 시트가 아니면 미설정(전체 이미지).
 function sanitizeFrameMeta(asset, raw) {
   const fc = raw && raw.frameConfig;
   if (fc && typeof fc === 'object' &&
@@ -702,6 +723,8 @@ function sanitizeFrameMeta(asset, raw) {
     if (typeof fc.spacing === 'number' && fc.spacing >= 0) out.spacing = fc.spacing | 0;
     asset.frameConfig = out;
   }
+  const fr = sanitizeFramesArray(raw && raw.frames);
+  if (fr) asset.frames = fr;
   if (typeof raw.frame === 'number' && raw.frame >= 0) asset.frame = raw.frame | 0;
 }
 
@@ -911,8 +934,22 @@ function handleApi(req, res, u, p) {
   }
 
   // GET /api/scene — 현재 스냅샷 + seq(초기 동기·resync 재요청) + Claude 연결 상태.
+  //  ETag(계약 §2.6): "wgf-<state.seq>" — 스냅샷은 seq 와 1:1. If-None-Match 일치 시 304
+  //  (본문 생략 — resync 폭주 시 재직렬화 절감). seq 가 바뀌면 ETag 도 바뀌어 캐시 무효화.
   if (req.method === 'GET' && p === '/api/scene') {
-    sendJSON(res, 200, Object.assign({ ok: true, status: connectionStatus() }, sceneSnapshot()));
+    const etag = '"wgf-' + state.seq + '"';
+    const inm = req.headers['if-none-match'];
+    if (inm && inm === etag) {
+      res.writeHead(304, { 'ETag': etag, 'Cache-Control': 'no-store' });
+      res.end();
+      return;
+    }
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'ETag': etag
+    });
+    res.end(JSON.stringify(Object.assign({ ok: true, status: connectionStatus() }, sceneSnapshot())));
     return;
   }
 
@@ -1223,6 +1260,175 @@ function handleApi(req, res, u, p) {
       }
 
       sendJSON(res, 200, { ok: true, added, rejected, seq: state.seq });
+    });
+    return;
+  }
+
+  // ── 통합 스프라이트 브라우저(계약 §2) ────────────────────────────────────────
+  // GET /api/sprite/catalog — packs.json+sources.json 병합(preview 웹경로·downloaded·mtime 캐시).
+  if (req.method === 'GET' && p === '/api/sprite/catalog') {
+    let cat;
+    try { cat = SpriteLibrary.readCatalog(REPO_ROOT); }
+    catch (e) { sendJSON(res, 500, { ok: false, error: '카탈로그 읽기 실패: ' + String(e && e.message || e) }); return; }
+    sendJSON(res, 200, { ok: true, packs: cat.packs, sources: cat.sources });
+    return;
+  }
+
+  // GET /api/sprite/library — assets-library/** + 현재 게임 assets/** 스캔(사이드카 병합).
+  if (req.method === 'GET' && p === '/api/sprite/library') {
+    let lib;
+    try { lib = SpriteLibrary.scanLibrary(REPO_ROOT, currentGameDir()); }
+    catch (e) { sendJSON(res, 500, { ok: false, error: '라이브러리 스캔 실패: ' + String(e && e.message || e) }); return; }
+    sendJSON(res, 200, { ok: true, items: lib.items, truncated: lib.truncated });
+    return;
+  }
+
+  // POST /api/sprite/slice {relPath, patch} — 슬라이스 사이드카 머지 저장(frameConfig 위생화).
+  if (req.method === 'POST' && p === '/api/sprite/slice') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      const relPath = parsed && parsed.relPath;
+      const patch = parsed && parsed.patch;
+      let r;
+      try { r = SpriteLibrary.writeSlice(REPO_ROOT, relPath, patch); }
+      catch (e) { sendJSON(res, 500, { ok: false, error: '슬라이스 저장 실패: ' + String(e && e.message || e) }); return; }
+      if (!r.ok) { sendJSON(res, r.code || 400, { ok: false, error: r.error }); return; }
+      sendJSON(res, 200, { ok: true, item: r.item });
+    });
+    return;
+  }
+
+  // POST /api/sprite/use {relPath, id?, frameConfig?, frame?, license?, credit?} —
+  //  선택 시트/프레임을 현재 게임에 vendoring + local 에셋 등록(컴포넌트 부착은 안 함, 단일 책임).
+  //  동일 sha 가 이미 vendored(기존 local 에셋) 면 재사용 → reused:true 로 기존 asset 반환.
+  if (req.method === 'POST' && p === '/api/sprite/use') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+
+      // 현재 편집 게임 디렉터리(쓰기 대상). 빈 씬(games/ 밖)이면 409.
+      const gameDir = currentGameDir();
+      if (!gameDir) { sendJSON(res, 409, { ok: false, error: '현재 씬이 games/<slug> 아님 — 적용 대상 없음' }); return; }
+
+      // relPath 검증(assets-library/ 또는 games/ 하위) + 실제 이미지 파일 확인.
+      const relPath = parsed && parsed.relPath;
+      const absSrc = SpriteLibrary.resolveLibraryPath(REPO_ROOT, relPath);
+      if (!absSrc) { sendJSON(res, 400, { ok: false, error: 'relPath 범위 밖/traversal 거부: ' + JSON.stringify(String(relPath).slice(0, 128)) }); return; }
+      let srcStat;
+      try { srcStat = fs.lstatSync(absSrc); }
+      catch (e) { sendJSON(res, 400, { ok: false, error: '원본 파일 없음: ' + JSON.stringify(String(relPath).slice(0, 128)) }); return; }
+      if (srcStat.isSymbolicLink() || !srcStat.isFile()) { sendJSON(res, 400, { ok: false, error: '원본이 일반 파일 아님(심볼릭링크/디렉터리 거부)' }); return; }
+
+      // frameConfig/frames/frame 위생화(addAsset 의 sanitizeFrameMeta 가 최종 위생화하나 여기서도 정규화).
+      //  frames[] = 비균일 명시 영역(슬라이서 free-mode) — sanitizeFramesArray 동등 위생화(M-1).
+      const frameConfig = SpriteLibrary.sanitizeFrameConfig(parsed && parsed.frameConfig);
+      const frames = sanitizeFramesArray(parsed && parsed.frames);
+      const frame = (typeof (parsed && parsed.frame) === 'number' && parsed.frame >= 0) ? (parsed.frame | 0) : undefined;
+      const license = (typeof (parsed && parsed.license) === 'string') ? parsed.license : '';
+      const credit = (typeof (parsed && parsed.credit) === 'string') ? parsed.credit : '';
+
+      // 소스 sha256 — 동일 sha 기존 local 에셋 재사용 판정.
+      let srcSha;
+      try { srcSha = SpriteLibrary.sha256OfFile(absSrc); }
+      catch (e) { sendJSON(res, 500, { ok: false, error: 'sha256 계산 실패: ' + String(e && e.message || e) }); return; }
+
+      // 재사용 키 = sha256 + frameConfig + frames(M-5). 동일 sha 라도 슬라이스 메타가 다르면
+      //  다른 에셋이므로 재사용하지 않는다(frameConfig/frames 만 다른 두 번 적용을 별 id 로 분리).
+      //  비교는 위생화된 형태의 결정적 JSON(키 순서·정수 강제가 양쪽 동일) — frame(표시 셀)은 키 제외
+      //  (같은 텍스처를 가리키되 표시 프레임만 다른 경우는 컴포넌트 frame 으로 처리 가능).
+      const reqFcKey = JSON.stringify(frameConfig || null);
+      const reqFrKey = JSON.stringify(frames || null);
+      const existingSprites = (listAssets().sprites || []);
+      const reusedAsset = existingSprites.find((s) =>
+        s && s.source === 'local' && s.sha256 === srcSha &&
+        JSON.stringify(s.frameConfig || null) === reqFcKey &&
+        JSON.stringify(s.frames || null) === reqFrKey);
+      if (reusedAsset) {
+        // 이미 vendored — 컴포넌트가 참조할 기존 asset 을 그대로 반환(추가 복사·등록 없음).
+        sendJSON(res, 200, { ok: true, asset: reusedAsset, reused: true, seq: state.seq });
+        return;
+      }
+
+      // vendoring 대상 디렉터리: <gameDir>/assets/imported/ — games/ 안으로 이중검증.
+      const importedRel = path.relative(REPO_ROOT, path.join(gameDir, 'assets', 'imported')).split(path.sep).join('/');
+      const importedAbs = resolveScopedPath(importedRel, 'games');
+      if (!importedAbs) { sendJSON(res, 500, { ok: false, error: '적용 대상 경로 검증 실패' }); return; }
+
+      // 안전 asset id: 요청 id 또는 relPath basename → 안전화 + 충돌회피.
+      const usedIds = new Set(existingSprites.map((s) => s && s.id).filter(Boolean));
+      const reqId = (parsed && typeof parsed.id === 'string') ? parsed.id : AssetImport.suggestIdFromPath(relPath);
+      const safeId = AssetImport.suggestIdFromPath(reqId, usedIds);
+      // 확장자는 원본 확장자(검증된 이미지 확장자) 그대로.
+      const ext = path.extname(absSrc).toLowerCase();
+      const safeName = safeId + ext;
+
+      // vendorFile 로 복사(심볼릭링크·과대 거부는 vendorFile 내부).
+      const v = AssetImport.vendorFile(absSrc, importedAbs, safeName, { repoRoot: REPO_ROOT });
+      if (!v.ok) { sendJSON(res, 400, { ok: false, error: '복사 실패: ' + v.error }); return; }
+
+      // addAsset('local') 레코드. url 은 games/ 상대(vendorFile relUrl), frameConfig/frame 포함.
+      const record = {
+        id: safeId,
+        url: v.relUrl,
+        license: license || 'unknown',
+        credit: credit,
+        desc: '원본: ' + (parsed && typeof parsed.relPath === 'string' ? parsed.relPath : ''),
+        sha256: v.sha256
+      };
+      if (frameConfig) record.frameConfig = frameConfig;
+      if (frames) record.frames = frames;
+      if (frame !== undefined) record.frame = frame;
+      const r = addAsset('local', record);
+      if (!r.ok) { sendJSON(res, r.code || 400, { ok: false, error: r.error }); return; }
+      sendJSON(res, 200, { ok: true, asset: r.asset, reused: false, seq: r.seq });
+    });
+    return;
+  }
+
+  // POST /api/sprite/download {packId} — CC0 카탈로그 팩을 에디터 안에서 다운로드(방어적).
+  //  packs.json safetyTier==='cc0' 만 허용. fetch-pack.mjs → analyze-pack.mjs 순차 execFile
+  //  (배열 인자·셸 미경유, cwd=REPO_ROOT, timeout 120s). 네트워크 실패는 비치명({ok:false,error}).
+  if (req.method === 'POST' && p === '/api/sprite/download') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      const packId = parsed && parsed.packId;
+      // packId slug 형식 검증(영숫자._- 만 — execFile 인자라 메타문자 무해하나 카탈로그 키 형식 강제).
+      if (typeof packId !== 'string' || !/^[A-Za-z0-9._\-]{1,128}$/.test(packId)) {
+        sendJSON(res, 400, { ok: false, error: 'packId 형식 위반(영숫자._- 1~128자)' });
+        return;
+      }
+      // CC0 게이트: 카탈로그에서 safetyTier 확인. cc0 아니면 403.
+      let cat;
+      try { cat = SpriteLibrary.readCatalog(REPO_ROOT); }
+      catch (e) { sendJSON(res, 500, { ok: false, error: '카탈로그 읽기 실패' }); return; }
+      const pack = cat.packs.find((x) => x.id === packId);
+      if (!pack) { sendJSON(res, 404, { ok: false, error: '카탈로그에 없는 packId: ' + packId }); return; }
+      if (pack.safetyTier !== 'cc0') {
+        sendJSON(res, 403, { ok: false, error: 'CC0 아님(safetyTier=' + pack.safetyTier + ') — 다운로드 거부' });
+        return;
+      }
+
+      const fetchScript = path.resolve(REPO_ROOT, 'skills/wgf-sprite-picker/catalog/fetch-pack.mjs');
+      const analyzeScript = path.resolve(REPO_ROOT, 'skills/wgf-sprite-picker/catalog/analyze-pack.mjs');
+      const execOpts = { cwd: REPO_ROOT, timeout: 120000, maxBuffer: 8 * 1024 * 1024, windowsHide: true };
+
+      // 1) fetch-pack.mjs --pack <packId>.
+      execFile(process.execPath, [fetchScript, '--pack', packId], execOpts, (fErr, fOut, fStderr) => {
+        if (fErr) {
+          sendJSON(res, 200, { ok: false, error: 'fetch 실패: ' + String((fErr && fErr.message) || fErr), stdout: String(fOut || '').slice(-2048), stderr: String(fStderr || '').slice(-1024) });
+          return;
+        }
+        // 2) analyze-pack.mjs --pack <packId>.
+        execFile(process.execPath, [analyzeScript, '--pack', packId], execOpts, (aErr, aOut, aStderr) => {
+          if (aErr) {
+            sendJSON(res, 200, { ok: false, error: 'analyze 실패: ' + String((aErr && aErr.message) || aErr), stdout: String(aOut || '').slice(-2048), stderr: String(aStderr || '').slice(-1024) });
+            return;
+          }
+          sendJSON(res, 200, { ok: true, packId, stdout: (String(fOut || '') + String(aOut || '')).slice(-2048) });
+        });
+      });
     });
     return;
   }

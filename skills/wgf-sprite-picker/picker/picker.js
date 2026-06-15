@@ -133,6 +133,56 @@
   // 현재 다운로드 큐 상태(낙관적 dlStatus). 없으면 ''.
   function dlStatusOf(it, state) { return state.dlStatus[it.id] || ''; }
 
+  // ── 성능: 이미지 디코드 캐시(url 1회 로드 후 슬라이스 공유) ──────────────────
+  // 같은 시트의 여러 프레임 썸네일·라이트박스·에디터가 같은 url 을 반복 new Image() 하던 것을
+  // url→디코드 Image 1개로 공유한다(불필요 재디코드 제거). 디코드 이미지는 읽기 전용(drawImage
+  // 소스)이라 공유 안전. 콜백은 로드 완료 시(이미 완료면 동기) 1회 호출.
+  var _imgCache = {};   // url → { img, state:'load'|'ok'|'err', cbs:[{ok,err}] }
+  function loadImage(url, onReady, onErr) {
+    if (!url) { if (onErr) onErr(); return; }
+    var e = _imgCache[url];
+    if (e) {
+      if (e.state === 'ok') { if (onReady) onReady(e.img); return; }
+      if (e.state === 'err') { if (onErr) onErr(); return; }
+      e.cbs.push({ ok: onReady, err: onErr }); return;   // 로딩 중 — 완료 시 함께 호출
+    }
+    e = _imgCache[url] = { img: new Image(), state: 'load', cbs: [{ ok: onReady, err: onErr }] };
+    e.img.onload = function () { e.state = 'ok'; var cbs = e.cbs; e.cbs = []; cbs.forEach(function (c) { if (c.ok) { try { c.ok(e.img); } catch (x) {} } }); };
+    e.img.onerror = function () { e.state = 'err'; var cbs = e.cbs; e.cbs = []; cbs.forEach(function (c) { if (c.err) { try { c.err(); } catch (x) {} } }); };
+    e.img.src = url;
+  }
+
+  // ── 성능: 썸네일 IntersectionObserver lazy + 동시 로드 제한 ──────────────────
+  // 화면 밖 카드 썸네일은 보이기 전까지 src 를 설정하지 않고(네트워크 절약), 보이면 동시
+  // 요청 한도(_MAX_INFLIGHT) 안에서 순차 로드한다. IO 미지원 환경은 즉시 로드(기존 동작).
+  var _MAX_INFLIGHT = 6, _inflight = 0, _lazyQueue = [];
+  var _io = (typeof IntersectionObserver !== 'undefined') ? new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) { if (en.isIntersecting) { var img = en.target; _io.unobserve(img); enqueueLazy(img); } });
+  }, { rootMargin: '200px' }) : null;
+  function enqueueLazy(img) { _lazyQueue.push(img); pumpLazy(); }
+  function pumpLazy() {
+    while (_inflight < _MAX_INFLIGHT && _lazyQueue.length) {
+      var img = _lazyQueue.shift();
+      var src = img.getAttribute('data-lazy-src');
+      if (!src) continue;
+      img.removeAttribute('data-lazy-src');
+      _inflight++;
+      var release = function () { _inflight--; pumpLazy(); };
+      img.addEventListener('load', release, { once: true });
+      img.addEventListener('error', release, { once: true });
+      img.src = src;
+    }
+  }
+  // 가시영역 진입 시 로드되도록 등록. IO 없으면 즉시 src(기존과 동일). onerror 는 호출 전 설정 전제.
+  function lazyImg(img, src) {
+    if (!src) return img;
+    img.loading = 'lazy';                       // 네이티브 lazy 병용(중복 무해)
+    if (!_io) { img.src = src; return img; }
+    img.setAttribute('data-lazy-src', src);
+    _io.observe(img);
+    return img;
+  }
+
   // ── 추천 점수 ───────────────────────────────────────────────────
   function recoTokens(state) {
     var toks = [];
@@ -149,15 +199,25 @@
     if (it.safetyTier === 'cc0') s += 0.25;
     return s;
   }
+  // 추천 베이스 목록(필터·검색 적용 전, 점수순 정렬). 토큰은 activeTarget 변경 때만 바뀌므로
+  // 토큰 시그니처로 메모이즈한다 — updateNavCounts 가 매 renderBody(검색/페이지/선택)마다 호출해도
+  // O(n*m) 재점수를 막는다. 편집(이름 변경 등)은 saveEditor.apply() 가 캐시를 무효화한다.
   function recoList(items, state) {
     var toks = recoTokens(state);
+    var sig = (toks.length ? '1:' + toks.join('|') : '0');
+    var c = state._recoCache;
+    if (c && c.sig === sig && c.items === items) return c.list;
     var pool = items.filter(function (it) { return it.group !== 'candidate' || true; }); // 전 그룹 후보
+    var list;
     if (!toks.length) { // 기준 없음: cc0 우선, library 우선
-      return pool.slice().sort(function (a, b) { return tierRank(a) - tierRank(b); });
+      list = pool.slice().sort(function (a, b) { return tierRank(a) - tierRank(b); });
+    } else {
+      var scored = pool.map(function (it) { return { it: it, s: scoreItem(it, toks) }; }).filter(function (x) { return x.s > 0; });
+      scored.sort(function (a, b) { return b.s - a.s || tierRank(a.it) - tierRank(b.it); });
+      list = scored.map(function (x) { return x.it; });
     }
-    var scored = pool.map(function (it) { return { it: it, s: scoreItem(it, toks) }; }).filter(function (x) { return x.s > 0; });
-    scored.sort(function (a, b) { return b.s - a.s || tierRank(a.it) - tierRank(b.it); });
-    return scored.map(function (x) { return x.it; });
+    state._recoCache = { sig: sig, items: items, list: list };
+    return list;
   }
   function tierRank(it) { return ({ 'cc0': 0, 'permissive-attribution': 1, 'mixed-per-item': 2, 'avoid': 3 })[it.safetyTier] != null ? ({ 'cc0': 0, 'permissive-attribution': 1, 'mixed-per-item': 2, 'avoid': 3 })[it.safetyTier] : 2; }
 
@@ -334,7 +394,7 @@
   function bigPreview(it) {
     var wrap = document.createElement('div'); wrap.className = 'big-preview';
     var src = previewSrc(it);
-    if (src) { var img = document.createElement('img'); img.src = src; img.alt = it.name; img.loading = 'lazy'; img.onerror = function () { img.replaceWith(placeholder(it)); }; wrap.appendChild(img); }
+    if (src) { var img = document.createElement('img'); img.alt = it.name; img.onerror = function () { img.replaceWith(placeholder(it)); }; lazyImg(img, src); wrap.appendChild(img); }
     else { wrap.appendChild(placeholder(it)); }
     if (it.notes) { var n = document.createElement('p'); n.className = 'big-notes muted small'; n.textContent = it.notes; wrap.appendChild(n); }
     return wrap;
@@ -410,7 +470,7 @@
     el.setAttribute('role', 'button'); el.setAttribute('tabindex', '0'); el.setAttribute('draggable', 'true');
     el.addEventListener('dragstart', function (e) { e.dataTransfer.setData('text/plain', it.id); e.dataTransfer.effectAllowed = 'copy'; });
     var src = fullUrl(it) || previewSrc(it);
-    if (src) { var img = document.createElement('img'); img.className = 'thumb full'; img.alt = it.name; img.loading = 'lazy'; img.src = src; img.onerror = function () { img.replaceWith(placeholder(it)); }; el.appendChild(img); }
+    if (src) { var img = document.createElement('img'); img.className = 'thumb full'; img.alt = it.name; img.onerror = function () { img.replaceWith(placeholder(it)); }; lazyImg(img, src); el.appendChild(img); }
     else el.appendChild(placeholder(it));
     var check = document.createElement('div'); check.className = 'check'; check.textContent = '✓'; el.appendChild(check);
     var dl = document.createElement('span'); dl.className = 'dl-badge'; dl.textContent = '다운로드됨'; el.appendChild(dl);
@@ -452,7 +512,7 @@
   function previewEl(it) {
     var src = previewSrc(it);
     if (it.animated && src) { var obj = document.createElement('object'); obj.className = 'thumb anim'; obj.type = 'image/svg+xml'; obj.data = src; obj.setAttribute('aria-label', it.name); return obj; }
-    if (src) { var img = document.createElement('img'); img.className = 'thumb'; img.alt = it.name; img.loading = 'lazy'; img.src = src; img.onerror = function () { img.replaceWith(placeholder(it)); }; return img; }
+    if (src) { var img = document.createElement('img'); img.className = 'thumb'; img.alt = it.name; img.onerror = function () { img.replaceWith(placeholder(it)); }; lazyImg(img, src); return img; }
     return placeholder(it);
   }
 
@@ -539,14 +599,13 @@
   function frameCanvas(it, frame) {
     var cv = document.createElement('canvas'); cv.className = 'thumb';
     if (it.style === 'pixel') cv.style.imageRendering = 'pixelated';
-    var img = new Image();
-    img.onload = function () {
+    // 공유 디코드 캐시 사용 — 같은 시트의 여러 프레임을 한 번만 디코드(이미 로드면 동기 슬라이스).
+    loadImage(fullUrl(it), function (img) {
       var rect = frameRect(it, frame, img.width, img.height);
       if (!rect || !rect.w || !rect.h) return;
       cv.width = rect.w; cv.height = rect.h;
       try { cv.getContext('2d').drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h); } catch (e) {}
-    };
-    img.src = fullUrl(it);
+    });
     return cv;
   }
 
@@ -563,8 +622,8 @@
     title.textContent = it.name + (isSheet(it) ? ' — 프레임 클릭으로 선택' : '');
     body.innerHTML = ''; els.lightbox.hidden = false;
     if (isSheet(it)) {
-      var img = new Image();
-      img.onload = function () {
+      // 시트 전체를 1회 디코드(공유 캐시) 후 각 프레임을 슬라이스 — 프레임당 재디코드 없음.
+      loadImage(fullUrl(it), function (img) {
         var n = frameCount(it, img.width, img.height);
         var excl = {}; (it.excludedFrames || []).forEach(function (i) { excl[i] = true; });
         var grid = document.createElement('div'); grid.className = 'frame-grid';
@@ -583,9 +642,7 @@
           grid.appendChild(cell);
         }
         body.appendChild(grid);
-      };
-      img.onerror = function () { body.innerHTML = '<p class="muted">이미지를 불러오지 못했습니다: ' + fullUrl(it) + '</p>'; };
-      img.src = fullUrl(it);
+      }, function () { body.innerHTML = '<p class="muted">이미지를 불러오지 못했습니다: ' + fullUrl(it) + '</p>'; });
     } else {
       var big = document.createElement('img'); big.className = 'lightbox-img'; big.alt = it.name; big.src = fullUrl(it);
       if (it.style === 'pixel') big.style.imageRendering = 'pixelated';
@@ -603,9 +660,8 @@
     var body = document.getElementById('lightboxBody'); var title = document.getElementById('lightboxTitle');
     title.textContent = '편집 — ' + it.name;
     body.innerHTML = '<p class="muted">이미지를 불러오는 중…</p>'; lb.hidden = false;
-    var img = new Image();
-    img.onerror = function () { body.innerHTML = '<p class="muted">이미지를 불러오지 못했습니다: ' + fullUrl(it) + '</p>'; };
-    img.onload = function () {
+    // 공유 디코드 캐시 — 이미 본 시트면 재디코드 없이 즉시 에디터 진입.
+    loadImage(fullUrl(it), function (img) {
       var ed = {
         it: it, img: img, state: state,
         // 깊은 복사(저장 전까지 원본 불변)
@@ -618,8 +674,7 @@
         sel: -1, multi: [], drag: null, animTimer: null, animIdx: 0, animPlaying: null
       };
       buildEditorUI(ed, body, state);
-    };
-    img.src = fullUrl(it);
+    }, function () { body.innerHTML = '<p class="muted">이미지를 불러오지 못했습니다: ' + fullUrl(it) + '</p>'; });
   }
 
   // 작업 사본의 프레임 사각 계산(grid/free 모드 통합) — frameRect 와 동일 규칙이나 ed 기준.
@@ -1023,6 +1078,7 @@
       var it = ed.it;
       it.name = patch.name; it.frameConfig = patch.frameConfig != null ? patch.frameConfig : it.frameConfig;
       it.frames = patch.frames; it.excludedFrames = patch.excludedFrames; it.anims = patch.anims;
+      ed.state._recoCache = null;   // 이름 변경이 점수에 반영되도록 추천 캐시 무효화
       renderBody(ed.state._items, ed.state);
       if (assignMode(ed.state)) renderSlots(ed.state);
     };
