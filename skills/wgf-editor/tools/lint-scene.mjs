@@ -19,9 +19,9 @@ import fs   from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// ── 허용 컴포넌트 화이트리스트 (정확히 15종 — 설계서 §4.3) ────────────────────
-// P0a 3종 + P0b 12종 = 15종. 전부 구현 완료(IMPL_SET == ALL_COMPONENTS).
-// 이 목록 밖(16번째/미등록) 컴포넌트 타입은 UNKNOWN_COMPONENT error + exit 1.
+// ── 허용 컴포넌트 화이트리스트 (16종) ────────────────────────────────────────
+// P0a 3종 + P0b 12종 + 멀티씬 1종(SceneTrigger) = 16종. 전부 구현 완료(IMPL_SET == ALL_COMPONENTS).
+// 이 목록 밖(미등록) 컴포넌트 타입은 UNKNOWN_COMPONENT error + exit 1.
 const ALL_COMPONENTS = [
   // P0a 구현 완료
   'Sprite',
@@ -39,10 +39,12 @@ const ALL_COMPONENTS = [
   'CameraFollow',
   'AbilityBinding',
   'AudioEmitter',
-  'HUDBinding'
+  'HUDBinding',
+  // 인게임 씬 전환(Unity LoadScene 의미) — engine/scenekit-components.js 의 SceneTrigger
+  'SceneTrigger'
 ];
 
-// 구현 완료 집합 = 전체 15종(모두 구현됨). COMPONENT_NOT_YET 분기는 더 이상 발화하지 않는다.
+// 구현 완료 집합 = 전체 16종(모두 구현됨). COMPONENT_NOT_YET 분기는 더 이상 발화하지 않는다.
 const IMPL_SET = new Set(ALL_COMPONENTS);
 
 // ── 인자 파싱 ────────────────────────────────────────────────────────────────

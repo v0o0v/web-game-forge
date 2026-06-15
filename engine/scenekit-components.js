@@ -1163,6 +1163,88 @@
     if (comp.element) ctx.world.hud[comp.element] = val;
   }
 
+  /* ──────────────────────────────────────────────────────────────────────────
+   * 16. SceneTrigger — 선언형 인게임 씬 전환 트리거(Unity LoadScene 의미)
+   *
+   * 조건 충족 시 1회만 ctx.requestScene(target) 호출 → world._sceneRequest 설정.
+   * 어댑터(scenekit-phaser.js)가 step 직후 이를 소비해 대상 씬을 t=0 으로 새로 로드.
+   *
+   * on:
+   *   - 'timer'(기본): 누적 dt(_elapsed)가 delay(초) 도달 시 발동.
+   *   - 'overlap': 자기 Body(또는 트랜스폼 점)가 대상과 겹칠 때 발동.
+   *       targetSelector 지정 시 그 엔티티(id/name)와의 오버랩만, 비우면 임의의 Body
+   *       보유 다른 엔티티와 겹칠 때(ContactDamage/Pickup 의 오버랩 판정 헬퍼 재사용).
+   *
+   * 결정론: 무작위·시간 함수 미사용. _elapsed 는 주입 dt 누적, overlap 은 순수 좌표 비교.
+   * 중복 방지: _fired 플래그 — 한 번 발동하면 다시 requestScene 호출 안 함(외부에서
+   * _sceneRequest 를 null 로 비워도 재설정하지 않는다).
+   * edit 모드/play 아님: step 자체가 play 에서만 호출되므로 자동으로 동작 안 함.
+   * ──────────────────────────────────────────────────────────────────────── */
+  SK.registerComponent('SceneTrigger', {
+    schema: {
+      target:         { type: 'string', required: true,  desc: '이동할 대상 씬 id' },
+      on:             { type: 'enum',   values: ['timer', 'overlap'], required: false, desc: "발동 조건('timer' 기본 | 'overlap')" },
+      delay:          { type: 'number', required: false, desc: "on:'timer' 일 때 발동까지 누적 시간(초, 기본 1)" },
+      targetSelector: { type: 'string', required: false, desc: "on:'overlap' 일 때 겹칠 대상 엔티티 id/name(비우면 임의 Body)" }
+    },
+
+    init: function (ctx) {
+      var comp = ctx.getComponent('SceneTrigger');
+      if (!comp) return;
+      // target 정규화(빈 문자열이면 발동해도 무시되지만 데이터는 보존).
+      if (typeof comp.target !== 'string') comp.target = '';
+      // on 보정: 허용값 외엔 'timer'.
+      if (comp.on !== 'timer' && comp.on !== 'overlap') comp.on = 'timer';
+      // delay 보정: 유한 양수 아니면 1.
+      if (typeof comp.delay !== 'number' || !isFinite(comp.delay) || comp.delay < 0) comp.delay = 1;
+      comp._elapsed = 0;     // timer 누적 시간(초)
+      comp._fired = false;   // 1회 발동 플래그(중복 방지)
+    },
+
+    step: function (ctx, dt) {
+      var comp = ctx.getComponent('SceneTrigger');
+      if (!comp || comp._fired) return;       // 이미 발동했으면 다시 안 함
+      if (!comp.target) return;               // 대상 씬 미지정이면 동작 안 함
+
+      var fire = false;
+
+      if (comp.on === 'overlap') {
+        // 오버랩 판정 — ContactDamage/Pickup 과 동일한 순수 헬퍼(overlaps) 재사용.
+        if (comp.targetSelector) {
+          // 특정 대상(id/name)과의 오버랩만.
+          var tgt = resolveTarget(ctx.world, ctx.entity, comp.targetSelector);
+          if (tgt && tgt !== ctx.entity && overlaps(ctx.entity, tgt)) fire = true;
+        } else {
+          // 임의의 Body 보유 다른 엔티티와 겹치면 발동(id 정렬 순으로 결정적 순회).
+          var bodies = entitiesWithComponent(ctx.world, 'Body', ctx.entity.id);
+          for (var i = 0; i < bodies.length; i++) {
+            if (overlaps(ctx.entity, bodies[i])) { fire = true; break; }
+          }
+        }
+      } else {
+        // 'timer': 누적 dt 가 delay 도달 시 발동.
+        if (dt > 0) comp._elapsed += dt;
+        if (comp._elapsed >= comp.delay) fire = true;
+      }
+
+      if (fire) {
+        comp._fired = true;
+        ctx.requestScene(comp.target);        // world._sceneRequest = target
+      }
+    },
+
+    inspectorFields: [
+      { key: 'target', label: '대상 씬 id', type: 'string', required: true },
+      { key: 'on',     label: '발동 조건', type: 'enum',
+        options: [ { value: 'timer', label: '타이머' }, { value: 'overlap', label: '오버랩' } ],
+        default: 'timer' },
+      { key: 'delay',  label: '지연(초)', type: 'number', min: 0, default: 1,
+        showWhen: { field: 'on', value: 'timer' } },
+      { key: 'targetSelector', label: '겹칠 대상(id/name, 비우면 임의)', type: 'string',
+        showWhen: { field: 'on', value: 'overlap' } }
+    ]
+  });
+
   // Node 환경에서는 SceneKit 을 다시 export (체이닝 편의).
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = SK;

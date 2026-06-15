@@ -130,7 +130,7 @@ function AnimPreview({ img, frameSeq, fps, pixel, loop = true, size = 64 }) {
 
 // ── 라이브러리 항목(시트/컬렉션) 카드 — 펼치면 프레임 그리드 + 애니 미리보기 ─────
 //  애니 미리보기 동시 개수는 부모(LibraryTab) 의 previewCount/maxPreview 로 제한(§3.4).
-function LibraryItem({ item, onApply, onEdit, selectedFrame, onSelectFrame, previewCount, maxPreview, onPreviewToggle }) {
+function LibraryItem({ item, onApply, onEdit, onEditAnim, selectedFrame, onSelectFrame, previewCount, maxPreview, onPreviewToggle }) {
   const [open, setOpen] = useState(false);
   const [img, setImg] = useState(null);          // 시트 단일 이미지
   const [collImgs, setCollImgs] = useState(null); // 컬렉션 개별 이미지 배열
@@ -207,6 +207,28 @@ function LibraryItem({ item, onApply, onEdit, selectedFrame, onSelectFrame, prev
   }
 
   const canPreviewAnim = previewCount < maxPreview;
+  // 시트가 동작 클립(anims)을 가지면 "하나의 캐릭터(AnimatedSprite)"로 통째로 드래그 가능(D4).
+  const hasAnims = !isCollection && !!(item.anims && item.anims.length);
+
+  // 캐릭터 드래그 페이로드(§드래그 페이로드): 시트 전체 + anims + 기본 play.
+  //  anims 가 없으면 비활성(먼저 자동분석/편집해 클립 생성 안내). 빈 relPath 는 싣지 않는다.
+  function onCharacterDragStart(e) {
+    try {
+      if (!hasAnims || !item.relPath) { e.preventDefault(); return; }
+      // frameConfig/frames 를 페이로드에 실어 use 가 vendored asset 레코드에 보존하게 한다.
+      //  (어댑터가 시트를 셀로 슬라이싱하려면 이 메타가 필요 — 없으면 시트 전체 한 장으로 렌더된다.)
+      const payload = JSON.stringify({
+        relPath: item.relPath,
+        as: 'AnimatedSprite',
+        anims: item.anims,
+        play: (item.anims[0] && (item.anims[0].key || item.anims[0].name)) || undefined,
+        frameConfig: item.frameConfig,
+        frames: (item.frames && item.frames.length) ? item.frames : undefined
+      });
+      e.dataTransfer.setData('application/wgf-asset', payload);
+      e.dataTransfer.effectAllowed = 'copy';
+    } catch (err) {}
+  }
 
   return (
     <div style={libItem}>
@@ -215,6 +237,16 @@ function LibraryItem({ item, onApply, onEdit, selectedFrame, onSelectFrame, prev
         <span style={{ flex: 1, fontSize: '12px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.relPath}>
           {item.name || item.relPath}
         </span>
+        {/* 캐릭터로 드래그(시트+anims → AnimatedSprite). anims 없으면 비활성. */}
+        {!isCollection && (
+          <span draggable={hasAnims}
+                onDragStart={onCharacterDragStart}
+                onClick={(e) => e.stopPropagation()}
+                style={hasAnims ? dragHandle : dragHandleOff}
+                title={hasAnims ? '캐릭터로 드래그(전체 동작 AnimatedSprite) → 씬/뷰포트에 드롭' : '먼저 "애니 편집"으로 동작 클립을 만들면 캐릭터로 드래그할 수 있습니다'}>
+            🧍
+          </span>
+        )}
         <span style={kindBadge}>{isCollection ? `컬렉션 ${item.count || (item.files || []).length}` : '시트'}</span>
       </div>
       {open && (
@@ -224,6 +256,7 @@ function LibraryItem({ item, onApply, onEdit, selectedFrame, onSelectFrame, prev
           <div style={{ display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap' }}>
             <button style={miniAction} onClick={() => onApply(item, selectedFrame)}>선택 엔티티에 적용</button>
             {!isCollection && <button style={miniAction} onClick={() => onEdit(item)}>시트 편집</button>}
+            {!isCollection && <button style={hasAnims ? miniActionOn : miniAction} onClick={() => onEditAnim(item)} title="동작별 애니메이션 클립 편집·자동분석">{hasAnims ? `애니 편집(${item.anims.length})` : '애니 편집'}</button>}
             {!isCollection && img && frameCount > 1 && (
               <button style={showAnim ? miniActionOn : miniAction}
                       onClick={toggleAnim}
@@ -329,6 +362,246 @@ function ApplyDialog({ item, frame, onConfirm, onCancel }) {
           <button style={ghostBtn} onClick={onCancel}>취소</button>
           <button style={primaryBtn} onClick={() => onConfirm(as)}>적용</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 시트 애니메이션 에디터(D3) — "동작별 애니메이션" 클립 편집 모달 ──────────────
+//  SheetSlicer(그리드/영역 지오메트리 편집)와 별개로, 이미 슬라이싱된 시트의 anims[] 를
+//  "동작 클립"으로 편집한다. AnimPreview·FrameCanvas·rectOf·frameCountOf(상단 헬퍼) 재사용.
+//
+//  · 프레임 그리드: 클릭 토글 다중선택, Shift+클릭 범위선택. 선택 순서를 클립 frames[] 로.
+//  · 클립 목록: key 인라인 편집, fps 숫자, loop 체크박스, 삭제, ▶ 라이브 프리뷰(AnimPreview),
+//    "선택 프레임으로 설정"(현재 다중선택을 그 클립 frames 로 덮어쓰기).
+//  · 클립 추가: 이름·fps·loop 지정 → 현재 다중선택을 frames 로.
+//  · "동작 자동 분석": spriteApi.analyze({relPath,w,h,frameConfig}) → 반환 anims 로 채움(대체/병합).
+//  · 저장: spriteApi.slice(relPath, { name?, frameConfig?, frames?, anims }).
+function AnimEditor({ item, onClose, onSaved }) {
+  const [img, setImg] = useState(null);
+  const [loadErr, setLoadErr] = useState('');
+  const [sel, setSel] = useState([]);              // 다중선택 프레임 인덱스(선택 순서 보존)
+  const [lastClicked, setLastClicked] = useState(-1); // Shift 범위선택 기준
+  const [anims, setAnims] = useState(
+    (item.anims || []).map((a) => ({ key: a.key || a.name || 'anim', frames: (a.frames || []).slice(), fps: a.fps || a.frameRate || 8, loop: a.loop != null ? !!a.loop : true }))
+  );
+  const [playing, setPlaying] = useState(-1);       // 라이브 프리뷰 중인 클립 index
+  const [newKey, setNewKey] = useState('');
+  const [newFps, setNewFps] = useState(8);
+  const [newLoop, setNewLoop] = useState(true);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const pixel = item.style !== 'smooth' && item.style !== 'vector';
+  const relPath = item.relPath || '';
+
+  // 이미지 로드(동시성 제한 경유).
+  useEffect(() => {
+    let alive = true;
+    spriteApi.loadImage(spriteApi.assetUrl(item.url || item.relPath)).then(
+      (im) => { if (alive) setImg(im); },
+      () => { if (alive) setLoadErr('이미지를 불러오지 못했습니다.'); }
+    );
+    return () => { alive = false; };
+  }, [item.url, item.relPath]);
+
+  const frameCount = img ? frameCountOf(item.frameConfig, item.frames, img.width, img.height) : 0;
+
+  // 클립 frames → rect 시퀀스(AnimPreview 용). useMemo 로 안정 참조(rAF 재시작 방지).
+  const playSeq = useMemo(() => {
+    if (playing < 0 || !img || !anims[playing]) return [];
+    return (anims[playing].frames || [])
+      .map((i) => rectOf(item.frameConfig, item.frames, i, img.width))
+      .filter(Boolean);
+  }, [playing, anims, img, item.frameConfig, item.frames]);
+  const playFps = (playing >= 0 && anims[playing] && anims[playing].fps) || 8;
+  const playLoop = playing >= 0 && anims[playing] ? !!anims[playing].loop : true;
+
+  // 프레임 클릭: 일반=토글, Shift=lastClicked~i 범위 추가.
+  function clickFrame(i, e) {
+    if (e && e.shiftKey && lastClicked >= 0) {
+      const lo = Math.min(lastClicked, i), hi = Math.max(lastClicked, i);
+      setSel((prev) => {
+        const next = prev.slice();
+        for (let k = lo; k <= hi; k++) if (next.indexOf(k) === -1) next.push(k);
+        return next;
+      });
+    } else {
+      setSel((prev) => {
+        const k = prev.indexOf(i);
+        return k === -1 ? prev.concat([i]) : prev.filter((x) => x !== i);
+      });
+    }
+    setLastClicked(i);
+  }
+  function clearSel() { setSel([]); setLastClicked(-1); }
+
+  // 클립 조작.
+  function addClip() {
+    if (!sel.length) { setMsg('프레임을 먼저 선택하세요'); return; }
+    const key = (newKey || '').trim() || ('anim_' + (anims.length + 1));
+    setAnims((prev) => prev.concat([{ key, frames: sel.slice(), fps: Math.max(1, parseInt(newFps, 10) || 8), loop: !!newLoop }]));
+    setNewKey(''); clearSel(); setMsg('');
+  }
+  function removeClip(ci) {
+    if (playing === ci) setPlaying(-1);
+    setAnims((prev) => { const next = prev.slice(); next.splice(ci, 1); return next; });
+  }
+  function patchClip(ci, patch) {
+    setAnims((prev) => { const next = prev.slice(); next[ci] = { ...next[ci], ...patch }; return next; });
+  }
+  function setClipFramesFromSel(ci) {
+    if (!sel.length) { setMsg('프레임을 먼저 선택하세요'); return; }
+    patchClip(ci, { frames: sel.slice() });
+    setMsg('');
+  }
+  function loadClipToSel(ci) {
+    const a = anims[ci];
+    if (a) { setSel((a.frames || []).slice()); setLastClicked(a.frames && a.frames.length ? a.frames[a.frames.length - 1] : -1); }
+  }
+
+  // 동작 자동 분석 — 이미지 실제 픽셀 크기 + frameConfig 로 analyze 호출, 반환 anims 로 대체.
+  async function autoAnalyze() {
+    setAnalyzing(true); setMsg('');
+    const body = { relPath };
+    if (img) { body.w = img.naturalWidth || img.width; body.h = img.naturalHeight || img.height; }
+    if (item.frameConfig) body.frameConfig = item.frameConfig;
+    const r = await spriteApi.analyze(body);
+    setAnalyzing(false);
+    if (!r.ok) { setMsg('자동 분석 실패: ' + (r.error || '')); return; }
+    const got = (r.anims || []).map((a) => ({ key: a.key || a.name || 'anim', frames: (a.frames || []).slice(), fps: a.fps || a.frameRate || 8, loop: a.loop != null ? !!a.loop : true }));
+    if (!got.length) { setMsg('분석된 동작 클립이 없습니다(그리드/사이드카 메타 확인).'); return; }
+    setPlaying(-1);
+    setAnims(got);
+    setMsg(`동작 ${got.length}개 자동 도출됨 — 검토 후 저장하세요.`);
+  }
+
+  // 저장 — anims 보존(frameConfig/frames 도 함께 보내 라운드트립 안전).
+  async function save() {
+    setSaving(true); setMsg('');
+    const patch = { anims: anims.map((a) => ({ key: a.key, frames: a.frames.slice(), fps: a.fps, loop: !!a.loop })) };
+    if (item.name) patch.name = item.name;
+    if (item.frameConfig) patch.frameConfig = item.frameConfig;
+    if (item.frames && item.frames.length) patch.frames = item.frames;
+    const r = await spriteApi.slice(relPath, patch);
+    setSaving(false);
+    if (!r.ok) { setMsg('저장 실패: ' + (r.error || '')); return; }
+    setMsg('저장됨 ✓');
+    if (onSaved) onSaved(r.item || { ...item, ...patch });
+    setTimeout(() => { if (onClose) onClose(); }, 600);
+  }
+
+  // 프레임 그리드 셀.
+  const cells = [];
+  if (img) {
+    for (let i = 0; i < frameCount; i++) {
+      const r = rectOf(item.frameConfig, item.frames, i, img.width);
+      if (!r || !r.w || !r.h) continue;
+      const order = sel.indexOf(i);
+      cells.push(
+        <div key={i} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+          <FrameCanvas img={img} rect={r} pixel={pixel} size={40}
+                       selected={order !== -1} title={'#' + i + ' — 클릭 선택 / Shift 범위'}
+                       onClick={(e) => clickFrame(i, e)} />
+          {order !== -1 && <span style={animOrderBadge}>{order + 1}</span>}
+          <span style={frameIdx}>#{i}</span>
+        </div>
+      );
+    }
+  }
+
+  return (
+    <div style={backdrop} onClick={(e) => { if (e.target === e.currentTarget) onClose && onClose(); }}>
+      <div style={animModal}>
+        <div style={modalHead}>
+          <span style={{ fontWeight: 600 }}>동작 애니메이션 편집 — {item.name || relPath}</span>
+          <button style={closeBtn} onClick={() => onClose && onClose()}>✕</button>
+        </div>
+        {loadErr && <div style={{ padding: '12px', color: 'var(--danger)' }}>{loadErr}</div>}
+        {!img && !loadErr && <div style={{ padding: '12px', color: 'var(--text-dim)' }}>이미지 로딩 중…</div>}
+        {img && (
+          <div style={animBody}>
+            {/* 좌: 프레임 선택 그리드 */}
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={subHead}>프레임 선택</span>
+                <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{sel.length ? `${sel.length}개 선택(순서대로)` : '클릭으로 선택, Shift+클릭 범위'}</span>
+                {sel.length > 0 && <button style={miniAction} onClick={clearSel}>선택 해제</button>}
+              </div>
+              {frameCount === 0
+                ? <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>프레임 메타 없음 — "시트 편집"으로 그리드를 먼저 지정하세요.</div>
+                : <div style={{ ...frameGrid, maxHeight: '300px' }}>{cells}</div>}
+            </div>
+
+            {/* 우: 클립 목록 + 추가 + 자동분석 + 저장 */}
+            <div style={animCtrl}>
+              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                <button style={miniAction} disabled={analyzing} onClick={autoAnalyze}>
+                  {analyzing ? '분석 중…' : '🔍 동작 자동 분석'}
+                </button>
+              </div>
+
+              <div style={subHead}>동작 클립 ({anims.length})</div>
+              {anims.length === 0 && <p style={animMuted}>클립이 없습니다. 프레임을 선택해 아래에서 추가하거나, "동작 자동 분석"을 누르세요.</p>}
+              {anims.map((a, ci) => (
+                <div style={clipBox} key={ci}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input style={{ ...inp, flex: 1, fontSize: '11px' }} value={a.key}
+                           title="동작 이름" onInput={(e) => patchClip(ci, { key: e.target.value })} />
+                    <button style={miniBtn2} title={playing === ci ? '정지' : '미리보기'}
+                            onClick={() => setPlaying(playing === ci ? -1 : ci)}>{playing === ci ? '■' : '▶'}</button>
+                    <button style={{ ...miniBtn2, color: 'var(--danger)' }} title="삭제" onClick={() => removeClip(ci)}>✕</button>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px', flexWrap: 'wrap' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '10px', color: 'var(--text-dim)' }}>
+                      fps
+                      <input style={{ ...inp, width: '46px', fontSize: '10px' }} type="number" min="1"
+                             value={a.fps} onInput={(e) => patchClip(ci, { fps: Math.max(1, parseInt(e.target.value, 10) || 1) })} />
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '10px', color: 'var(--text-dim)' }} title="반복">
+                      <input type="checkbox" checked={!!a.loop} onChange={(e) => patchClip(ci, { loop: e.target.checked })} />loop
+                    </label>
+                    <span style={animMuted} title="프레임 인덱스">[{(a.frames || []).join(',')}]</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px', marginTop: '3px' }}>
+                    <button style={miniAction} title="현재 선택 프레임을 이 클립으로" onClick={() => setClipFramesFromSel(ci)}>선택→프레임</button>
+                    <button style={miniAction} title="이 클립 프레임을 선택으로 불러오기" onClick={() => loadClipToSel(ci)}>프레임→선택</button>
+                  </div>
+                  {playing === ci && playSeq.length > 0 && (
+                    <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'center' }}>
+                      <AnimPreview img={img} frameSeq={playSeq} fps={playFps} pixel={pixel} loop={playLoop} size={96} />
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* 클립 추가 */}
+              <div style={{ ...clipBox, borderStyle: 'dashed' }}>
+                <div style={{ fontSize: '10px', color: 'var(--accent)', fontWeight: 600, marginBottom: '4px' }}>새 클립 추가</div>
+                <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
+                  <input style={{ ...inp, flex: 1 }} type="text" placeholder="동작 이름(예: walk)" value={newKey} onInput={(e) => setNewKey(e.target.value)} />
+                  <input style={{ ...inp, width: '50px' }} type="number" min="1" title="fps" value={newFps} onInput={(e) => setNewFps(e.target.value)} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '10px', color: 'var(--text-dim)' }}>
+                    <input type="checkbox" checked={newLoop} onChange={(e) => setNewLoop(e.target.checked)} />loop
+                  </label>
+                  <button style={{ ...primaryBtn, flex: 1 }} disabled={!sel.length} onClick={addClip}>
+                    {sel.length ? `${sel.length}프레임으로 추가` : '프레임 선택 필요'}
+                  </button>
+                </div>
+              </div>
+
+              {/* 저장/닫기 */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid var(--border)', paddingTop: '8px', marginTop: '2px' }}>
+                {msg && <span style={{ fontSize: '10px', flex: 1, color: msg.indexOf('실패') >= 0 ? 'var(--danger)' : 'var(--ok)' }}>{msg}</span>}
+                <button style={ghostBtn} onClick={() => onClose && onClose()}>닫기</button>
+                <button style={primaryBtn} disabled={saving} onClick={save}>{saving ? '저장 중…' : '저장'}</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -462,6 +735,7 @@ function LibraryTab({ controller, selection, flash, onGotoCatalog }) {
   const [truncated, setTruncated] = useState(false);  // 스캔 상한 도달(L-1) 배너용
   const [err, setErr] = useState('');
   const [editItem, setEditItem] = useState(null);     // SheetSlicer 대상
+  const [editAnimItem, setEditAnimItem] = useState(null); // AnimEditor 대상(D3)
   const [applyTarget, setApplyTarget] = useState(null); // {item, frame}
   const [selectedFrame, setSelectedFrame] = useState(null);
   // 애니 미리보기 동시 개수 제한(과부하 방지, §3.4) — 토글이 카운트 증감, 상한 도달 시 비활성.
@@ -555,33 +829,67 @@ function LibraryTab({ controller, selection, flash, onGotoCatalog }) {
           <div style={packGroupHead}>{gk} <span style={{ color: 'var(--text-dim)', fontWeight: 400 }}>({groups[gk].length})</span></div>
           {groups[gk].map((it) => (
             <LibraryItem key={it.id} item={it}
-                         onApply={startApply} onEdit={setEditItem}
+                         onApply={startApply} onEdit={setEditItem} onEditAnim={setEditAnimItem}
                          selectedFrame={selectedFrame} onSelectFrame={setSelectedFrame}
                          previewCount={previewCount} maxPreview={MAX_PREVIEW} onPreviewToggle={onPreviewToggle} />
           ))}
         </div>
       ))}
       {editItem && <SheetSlicer item={editItem} onClose={() => setEditItem(null)} onSaved={() => { setEditItem(null); reload(); }} />}
+      {editAnimItem && <AnimEditor item={editAnimItem} onClose={() => setEditAnimItem(null)} onSaved={() => { setEditAnimItem(null); reload(); }} />}
       {applyTarget && <ApplyDialog item={applyTarget.item} frame={applyTarget.frame} onConfirm={confirmApply} onCancel={() => setApplyTarget(null)} />}
     </div>
   );
 }
 
+// ── 카탈로그 분류(group-by) 빌더 ───────────────────────────────────────────────
+//  필터 후 팩 배열을 분류 기준으로 묶는다. 반환 [{ key, label, packs:[...] }] (label 오름차순).
+//  · 'source'   : sourceId → sources[].name 매핑(없으면 sourceId 그대로). 팩 1개 → 그룹 1개.
+//  · 'contentType': contentTypes[] 각각으로 — 한 팩이 여러 그룹에 중복 노출(자연스러움).
+//  · 'style'    : pack.style. 그룹 내 팩은 입력 순서(=기존 정렬) 유지.
+function groupPacks(packs, groupBy, sourceNameById) {
+  if (groupBy === 'none') return [{ key: '__all__', label: '', packs }];
+  const map = new Map();  // key → { key, label, packs:[] }
+  const push = (key, label, p) => {
+    let g = map.get(key);
+    if (!g) { g = { key, label, packs: [] }; map.set(key, g); }
+    g.packs.push(p);
+  };
+  packs.forEach((p) => {
+    if (groupBy === 'source') {
+      const sid = p.sourceId || '기타';
+      push(sid, sourceNameById[sid] || sid, p);
+    } else if (groupBy === 'contentType') {
+      const cts = (p.contentTypes || []);
+      if (!cts.length) { push('기타', '기타', p); }
+      else cts.forEach((c) => push(c, c, p));
+    } else if (groupBy === 'style') {
+      const s = p.style || '기타';
+      push(s, s, p);
+    }
+  });
+  return Array.from(map.values()).sort((a, b) => String(a.label).localeCompare(String(b.label), 'ko'));
+}
+
 // ── 카탈로그 탭 ────────────────────────────────────────────────────────────────
 function CatalogTab({ flash }) {
   const [packs, setPacks] = useState(null);
+  const [sources, setSources] = useState([]);    // 출처 분류 라벨용(sourceId→name)
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
   const [fContent, setFContent] = useState('');
   const [fStyle, setFStyle] = useState('');
+  const [groupBy, setGroupBy] = useState('source'); // none | source | contentType | style (기본 출처)
+  const [collapsed, setCollapsed] = useState({});   // { [groupKey]: true } — 접힌 섹션
   const [detail, setDetail] = useState(null);
 
   const reload = useCallback(() => {
     setPacks(null); setErr('');
     spriteApi.catalog().then((r) => {
-      if (!r.ok) { setErr(r.error || '카탈로그 조회 실패'); setPacks([]); return; }
+      if (!r.ok) { setErr(r.error || '카탈로그 조회 실패'); setPacks([]); setSources([]); return; }
       setPacks(r.packs || []);
+      setSources(r.sources || []);
     });
   }, []);
   useEffect(() => { reload(); }, [reload]);
@@ -591,6 +899,13 @@ function CatalogTab({ flash }) {
     const t = setTimeout(() => setDebouncedQ(q.trim().toLowerCase()), 250);
     return () => clearTimeout(t);
   }, [q]);
+
+  // sourceId → name 매핑(출처 그룹 라벨).
+  const sourceNameById = useMemo(() => {
+    const m = {};
+    (sources || []).forEach((s) => { if (s && s.id) m[s.id] = s.name || s.id; });
+    return m;
+  }, [sources]);
 
   // 필터 옵션(팩에서 수집).
   const contentTypes = Array.from(new Set((packs || []).flatMap((p) => p.contentTypes || []))).filter(Boolean).sort();
@@ -606,12 +921,19 @@ function CatalogTab({ flash }) {
     return true;
   });
 
+  // 분류(필터 후 그룹핑).
+  const grouped = useMemo(() => groupPacks(filtered, groupBy, sourceNameById), [filtered, groupBy, sourceNameById]);
+
+  function toggleGroup(key) {
+    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
   return (
     <div style={{ padding: '8px 10px' }}>
       {err && <div style={{ color: 'var(--danger)', fontSize: '11px', marginBottom: '6px' }}>{err}</div>}
       {/* 검색 + 필터 */}
       <input style={{ ...inp, width: '100%', marginBottom: '6px' }} placeholder="팩 검색(이름·태그·타입)" value={q} onInput={(e) => setQ(e.target.value)} />
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
         <select style={{ ...inp, flex: 1 }} value={fContent} onChange={(e) => setFContent(e.target.value)}>
           <option value="">모든 타입</option>
           {contentTypes.map((c) => <option value={c} key={c}>{c}</option>)}
@@ -621,13 +943,36 @@ function CatalogTab({ flash }) {
           {styles.map((s) => <option value={s} key={s}>{s}</option>)}
         </select>
       </div>
+      {/* 분류(group-by) 셀렉터 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '8px' }}>
+        <span style={{ fontSize: '10px', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>분류</span>
+        <select style={{ ...inp, flex: 1 }} value={groupBy} onChange={(e) => { setGroupBy(e.target.value); setCollapsed({}); }}>
+          <option value="none">없음(평면)</option>
+          <option value="source">출처</option>
+          <option value="contentType">종류</option>
+          <option value="style">스타일</option>
+        </select>
+      </div>
       {packs === null && <div style={{ color: 'var(--text-dim)', fontSize: '11px' }}>카탈로그 로딩 중…</div>}
       {packs && (
         <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '6px' }}>{filtered.length} / {packs.length}개 팩</div>
       )}
-      <div style={catGrid}>
-        {filtered.map((p) => <CatalogCard key={p.id} pack={p} onOpen={setDetail} />)}
-      </div>
+      {/* 분류 없음(평면): 단일 그리드. 분류 있음: 접이식 섹션. */}
+      {groupBy === 'none'
+        ? <div style={catGrid}>{filtered.map((p) => <CatalogCard key={p.id} pack={p} onOpen={setDetail} />)}</div>
+        : grouped.map((g) => {
+            const isCol = !!collapsed[g.key];
+            return (
+              <div key={g.key} style={{ marginBottom: '10px' }}>
+                <div style={catGroupHead} onClick={() => toggleGroup(g.key)}>
+                  <span style={{ fontSize: '10px', width: '12px' }}>{isCol ? '▸' : '▾'}</span>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.label || '(미분류)'}</span>
+                  <span style={{ color: 'var(--text-dim)', fontWeight: 400 }}>({g.packs.length})</span>
+                </div>
+                {!isCol && <div style={catGrid}>{g.packs.map((p) => <CatalogCard key={g.key + '/' + p.id} pack={p} onOpen={setDetail} />)}</div>}
+              </div>
+            );
+          })}
       {detail && <CatalogDetail pack={detail} onClose={() => setDetail(null)} onDownloaded={() => { setDetail(null); flash('다운로드 완료 — 라이브러리 탭에서 확인하세요'); reload(); }} />}
     </div>
   );
@@ -727,7 +1072,18 @@ const frameGrid = { display: 'flex', flexWrap: 'wrap', gap: '6px', maxHeight: '2
 const frameIdx = { fontSize: '8px', color: 'var(--text-dim)', maxWidth: '48px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
 const miniAction = { background: 'var(--panel2)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '3px', padding: '4px 8px', cursor: 'pointer', fontSize: '10px' };
 const miniActionOn = { ...miniAction, background: 'var(--accent)', color: '#08121a', fontWeight: 600 };
+const miniBtn2 = { background: 'var(--panel2)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '3px', padding: '2px 6px', cursor: 'pointer', fontSize: '10px' };
+const subHead = { fontSize: '11px', fontWeight: 600, color: 'var(--accent)' };
+const animMuted = { fontSize: '10px', color: 'var(--text-dim)', margin: '2px 0' };
+const animModal = { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: '8px', maxWidth: '760px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 12px 40px rgba(0,0,0,.5)' };
+const animBody = { display: 'flex', gap: '12px', padding: '12px 14px', overflow: 'auto', minHeight: 0 };
+const animCtrl = { flex: '0 0 300px', display: 'flex', flexDirection: 'column', gap: '6px', overflowY: 'auto', maxHeight: '70vh' };
+const clipBox = { border: '1px solid var(--border)', borderRadius: '4px', padding: '6px', background: 'var(--panel2)' };
+const animOrderBadge = { position: 'absolute', top: '-3px', left: '-3px', fontSize: '8px', minWidth: '12px', textAlign: 'center', padding: '0 3px', borderRadius: '8px', background: 'var(--accent)', color: '#08121a', fontWeight: 700, lineHeight: '13px' };
+const dragHandle = { fontSize: '13px', cursor: 'grab', padding: '0 2px', userSelect: 'none' };
+const dragHandleOff = { ...dragHandle, opacity: 0.3, cursor: 'not-allowed' };
 const catGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '8px' };
+const catGroupHead = { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: 'var(--accent)', padding: '4px 2px', marginBottom: '6px', borderBottom: '1px solid var(--border)', cursor: 'pointer' };
 const catCard = { border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden', cursor: 'pointer', background: 'var(--panel2)' };
 const catThumbWrap = { position: 'relative', width: '100%', aspectRatio: '1 / 1', background: '#0e1016' };
 const catThumb = { width: '100%', height: '100%', objectFit: 'contain', display: 'block' };

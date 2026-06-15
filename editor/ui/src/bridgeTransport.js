@@ -51,6 +51,12 @@ export function createLocalTransport() {
     async runSkill() { return { ok: false, error: '브리지 없음(local 모드) — 스킬 실행은 /wgf-editor 브리지에서만 동작' }; },
     async addAsset() { return { ok: false, error: '브리지 없음(local 모드) — 에셋 추가는 브리지에서만 동작' }; },
     async listAssets() { return { sprites: [] }; },
+    // local(멀티씬): 씬 관리는 브리지 권위 전용 → 안전 비활성 반환(컨트롤러가 안내 표시).
+    async sceneList() { return { ok: false, error: '브리지 없음(local 모드) — 멀티씬은 브리지에서만 동작', scenes: [], activeSceneId: null }; },
+    async sceneAdd() { return { ok: false, error: '브리지 없음(local 모드) — 멀티씬은 브리지에서만 동작' }; },
+    async sceneRename() { return { ok: false, error: '브리지 없음(local 모드) — 멀티씬은 브리지에서만 동작' }; },
+    async sceneRemove() { return { ok: false, error: '브리지 없음(local 모드) — 멀티씬은 브리지에서만 동작' }; },
+    async sceneSwitch() { return { ok: false, error: '브리지 없음(local 모드) — 멀티씬은 브리지에서만 동작' }; },
     // (스프라이트 브라우저 API 는 UI 가 sprite/spriteApi.js 를 직접 fetch — transport 노출 불필요.)
     stop() {}
   };
@@ -155,6 +161,8 @@ export function createRemoteTransport(config) {
     if (delta.type === 'mode') { if (modeCb) modeCb(delta.mode); return; }
     if (delta.type === 'chat') { if (chatCb) chatCb(delta); return; }   // 챗 델타는 씬 미러 미반영
     if (delta.type === 'asset') { if (assetCb) assetCb(delta); return; }  // 에셋 델타(P4) — assets 미러 동기
+    // scene 델타(멀티씬 add/rename/remove/switch)는 별도 가공 없이 deltaCb 로 통과 → 컨트롤러가
+    // delta.type==='scene' 분기에서 권위 스냅샷 재요청·재로드로 동기(command/undo 미러 경로와 무관).
     if (deltaCb) deltaCb(delta);
   }
 
@@ -257,6 +265,50 @@ export function createRemoteTransport(config) {
         return { ok: false, error: (json && json.error) || ('임포트 실패 status=' + status) };
       }
       return { ok: true, added: json.added || [], rejected: json.rejected || [], seq: json.seq };
+    },
+    // ── 멀티씬 관리(브리지 권위) ─────────────────────────────────────────────
+    // 응답 모양(계약): list→{ok,scenes,activeSceneId,seq}, add→{ok,scene,scenes,activeSceneId,seq},
+    // rename→{ok,scenes,seq}, remove→{ok,scenes,activeSceneId,seq}, switch→{ok,activeSceneId,seq}
+    //   + SSE scene 델타 발행. 실패/오프라인은 {ok:false,error} 안전반환.
+    async sceneList() {
+      const { status, json, offline } = await apiFetch('GET', '/api/scene/list');
+      if (offline) return { ok: false, error: '브리지 미연결(local 모드)', scenes: [], activeSceneId: null };
+      if (status !== 200 || !json || json.ok !== true) {
+        return { ok: false, error: (json && json.error) || ('씬 목록 조회 실패 status=' + status), scenes: [], activeSceneId: null };
+      }
+      return { ok: true, scenes: json.scenes || [], activeSceneId: json.activeSceneId, seq: json.seq };
+    },
+    async sceneAdd(name) {
+      const { status, json, offline } = await apiFetch('POST', '/api/scene/add', { name });
+      if (offline) return { ok: false, error: '브리지 미연결(local 모드)' };
+      if (status !== 200 || !json || json.ok !== true) {
+        return { ok: false, error: (json && json.error) || ('씬 추가 실패 status=' + status) };
+      }
+      return { ok: true, scene: json.scene, scenes: json.scenes || [], activeSceneId: json.activeSceneId, seq: json.seq };
+    },
+    async sceneRename(id, name) {
+      const { status, json, offline } = await apiFetch('POST', '/api/scene/rename', { id, name });
+      if (offline) return { ok: false, error: '브리지 미연결(local 모드)' };
+      if (status !== 200 || !json || json.ok !== true) {
+        return { ok: false, error: (json && json.error) || ('씬 이름변경 실패 status=' + status) };
+      }
+      return { ok: true, scenes: json.scenes || [], seq: json.seq };
+    },
+    async sceneRemove(id) {
+      const { status, json, offline } = await apiFetch('POST', '/api/scene/remove', { id });
+      if (offline) return { ok: false, error: '브리지 미연결(local 모드)' };
+      if (status !== 200 || !json || json.ok !== true) {
+        return { ok: false, error: (json && json.error) || ('씬 삭제 실패 status=' + status) };
+      }
+      return { ok: true, scenes: json.scenes || [], activeSceneId: json.activeSceneId, seq: json.seq };
+    },
+    async sceneSwitch(id) {
+      const { status, json, offline } = await apiFetch('POST', '/api/scene/switch', { id });
+      if (offline) return { ok: false, error: '브리지 미연결(local 모드)' };
+      if (status !== 200 || !json || json.ok !== true) {
+        return { ok: false, error: (json && json.error) || ('씬 전환 실패 status=' + status) };
+      }
+      return { ok: true, activeSceneId: json.activeSceneId, seq: json.seq };
     },
     async sendCommand(cmd) {
       const { status, json } = await apiFetch('POST', '/api/command', { command: cmd });

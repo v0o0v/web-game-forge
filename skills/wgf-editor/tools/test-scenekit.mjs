@@ -1083,6 +1083,124 @@ function ScenekitStep(w) { SceneKit.step(w, 1 / 60); }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// G27  인게임 씬 전환 — requestScene 헬퍼 + SceneTrigger(timer/overlap) + 1회 발동 + 결정성
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  // G27-A: SceneKit.requestScene(world, id) 가 world._sceneRequest 설정.
+  const wReq = SceneKit.load(SCENE_DOC, { mode: 'play', seed: 1 });
+  ok('G27-A0 load 직후 _sceneRequest=null', wReq._sceneRequest === null,
+    `_sceneRequest=${wReq._sceneRequest}`);
+  SceneKit.requestScene(wReq, 'x');
+  ok('G27-A requestScene → _sceneRequest="x"', wReq._sceneRequest === 'x',
+    `_sceneRequest=${wReq._sceneRequest}`);
+  // 가벼운 유효성: null/빈 문자열은 무시(기존 값 유지, 덮어쓰지 않음).
+  SceneKit.requestScene(wReq, '');
+  ok('G27-A2 requestScene("") 무시(기존 유지)', wReq._sceneRequest === 'x',
+    `_sceneRequest=${wReq._sceneRequest}`);
+  SceneKit.requestScene(wReq, null);
+  ok('G27-A3 requestScene(null) 무시(기존 유지)', wReq._sceneRequest === 'x',
+    `_sceneRequest=${wReq._sceneRequest}`);
+  // 숫자 id 는 문자열로 정규화.
+  SceneKit.requestScene(wReq, 42);
+  ok('G27-A4 requestScene(42) → "42"(문자열 정규화)', wReq._sceneRequest === '42',
+    `_sceneRequest=${wReq._sceneRequest}`);
+
+  // G27-B: SceneTrigger(timer, delay:0.5) — 누적 0.5s 후 발동, 그 전엔 null.
+  const docTimer = {
+    walls: [],
+    entities: [{ id: 'trig', name: '전환트리거', transform: { x: 0, y: 0 },
+      components: [{ type: 'SceneTrigger', on: 'timer', delay: 0.5, target: 'lvl2' }] }]
+  };
+  const wT = loadRaw(docTimer);
+  ok('G27-B0 SceneTrigger load 직후 _sceneRequest=null', wT._sceneRequest === null,
+    `_sceneRequest=${wT._sceneRequest}`);
+  // 29프레임(0.4833s) — 아직 발동 전.
+  stepN(wT, 29);
+  ok('G27-B1 delay 전(0.483s) _sceneRequest=null', wT._sceneRequest === null,
+    `_sceneRequest=${wT._sceneRequest} t=${wT.time.toFixed(4)}`);
+  // 2프레임 더(0.5167s) — delay(0.5) 도달 → 발동.
+  stepN(wT, 2);
+  ok('G27-B2 delay 도달 후 _sceneRequest="lvl2"', wT._sceneRequest === 'lvl2',
+    `_sceneRequest=${wT._sceneRequest} t=${wT.time.toFixed(4)}`);
+
+  // G27-C: 1회만 발동(_fired). 외부에서 _sceneRequest 를 null 로 비워도 다시 안 채움.
+  const trigComp = SceneKit.getComponentOn(SceneKit.findEntity(wT, 'trig'), 'SceneTrigger');
+  ok('G27-C0 SceneTrigger _fired=true', trigComp._fired === true, `_fired=${trigComp._fired}`);
+  wT._sceneRequest = null;          // 어댑터가 소비한 상황 모사.
+  stepN(wT, 60);                     // delay 한참 초과해도
+  ok('G27-C1 발동 후 _sceneRequest 재설정 안 함(null 유지)', wT._sceneRequest === null,
+    `_sceneRequest=${wT._sceneRequest}`);
+
+  // G27-D: SceneTrigger(overlap) — 대상과 겹칠 때 발동.
+  const docOverlap = {
+    walls: [],
+    entities: [
+      // 트리거: targetSelector='goal' 와 겹칠 때 발동. 초기엔 떨어져 있음.
+      { id: 'mover', name: '이동체', transform: { x: 0, y: 0 },
+        components: [
+          { type: 'Body', shape: 'aabb', w: 10, h: 10 },
+          { type: 'Projectile', vx: 60, vy: 0, lifetime: 100 },   // +x 로 이동
+          { type: 'SceneTrigger', on: 'overlap', target: 'win', targetSelector: 'goal' }
+        ] },
+      { id: 'goal', name: '도착지', transform: { x: 60, y: 0 },
+        components: [{ type: 'Body', shape: 'aabb', w: 20, h: 20, isStatic: true }] }
+    ]
+  };
+  const wO = loadRaw(docOverlap);
+  // 초기엔 떨어져 있어(0 vs 60) 발동 안 함.
+  SceneKit.step(wO, 1 / 60);
+  ok('G27-D0 overlap 전 _sceneRequest=null', wO._sceneRequest === null,
+    `_sceneRequest=${wO._sceneRequest}`);
+  // 1초(60프레임) 이동 → mover x≈60+ 으로 goal 과 겹침 → 발동.
+  stepN(wO, 60);
+  ok('G27-D1 overlap 발동 → _sceneRequest="win"', wO._sceneRequest === 'win',
+    `_sceneRequest=${wO._sceneRequest} moverX=${SceneKit.findEntity(wO, 'mover') && SceneKit.findEntity(wO, 'mover').transform.x.toFixed(2)}`);
+
+  // G27-D2: overlap 임의 Body(targetSelector 비움) — 겹치는 다른 Body 면 발동.
+  const docAnyOverlap = {
+    walls: [],
+    entities: [
+      { id: 'tA', name: '트리거A', transform: { x: 5, y: 0 },
+        components: [
+          { type: 'Body', shape: 'aabb', w: 16, h: 16 },
+          { type: 'SceneTrigger', on: 'overlap', target: 'next' }   // targetSelector 없음
+        ] },
+      { id: 'other', name: '다른바디', transform: { x: 0, y: 0 },
+        components: [{ type: 'Body', shape: 'aabb', w: 16, h: 16 }] }
+    ]
+  };
+  const wAny = loadRaw(docAnyOverlap);
+  SceneKit.step(wAny, 1 / 60);   // 초기부터 겹침(중심거리 5 < 16) → 첫 step 발동.
+  ok('G27-D2 overlap 임의 Body 겹침 → _sceneRequest="next"', wAny._sceneRequest === 'next',
+    `_sceneRequest=${wAny._sceneRequest}`);
+
+  // G27-E: 컴포넌트 step 의 ctx.requestScene 경로가 hashState 결정성을 깨지 않음(2회 동일).
+  function buildSceneTrigDoc() {
+    return {
+      walls: [],
+      entities: [
+        { id: 'trig', name: '트리거', transform: { x: 0, y: 0 },
+          components: [{ type: 'SceneTrigger', on: 'timer', delay: 0.5, target: 'lvl2' }] },
+        // 함께 돌릴 다른 컴포넌트(결정성 폭 확인) — EnemyAI patrol.
+        { id: 'pat', name: '순찰', transform: { x: 0, y: 0 },
+          components: [{ type: 'EnemyAI', mode: 'patrol', speed: 40, patrolAxis: 'x', patrolRange: 16 }] }
+      ]
+    };
+  }
+  const SEED = 99;
+  const wd1 = loadRaw(buildSceneTrigDoc(), SEED);
+  for (let i = 0; i < 120; i++) SceneKit.step(wd1, 1 / 60);
+  const hd1 = SceneKit.hashState(wd1);
+  const wd2 = loadRaw(buildSceneTrigDoc(), SEED);
+  for (let i = 0; i < 120; i++) SceneKit.step(wd2, 1 / 60);
+  const hd2 = SceneKit.hashState(wd2);
+  ok('G27-E requestScene 경로 결정성(2회 hashState 일치)', hd1 === hd2, `hd1=${hd1} hd2=${hd2}`);
+  // 실제로 발동했는지(trivial pass 방지) — _sceneRequest 가 설정돼 있어야.
+  ok('G27-E2 결정성 케이스에서 실제 발동(_sceneRequest="lvl2")', wd1._sceneRequest === 'lvl2',
+    `_sceneRequest=${wd1._sceneRequest}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 결과 출력
 // ─────────────────────────────────────────────────────────────────────────────
 console.log(`\n— pass ${pass} · fail ${fail} · total ${pass + fail}`);

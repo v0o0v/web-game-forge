@@ -27,6 +27,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { deriveAnims } from './sprite-library.mjs';
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SERVER_DIR, '..', '..');
@@ -302,6 +303,102 @@ async function main() {
       ok('S4c-4 동일 frames 재적용 reused=true(같은 id)',
         r3.status === 200 && b3.ok === true && b3.reused === true && b3.asset && b3.asset.id === b2.asset.id,
         `reused=${b3.reused} id=${b3.asset && b3.asset.id}`);
+    }
+
+    // ── S7 analyze(동작별 의미 분석 — D1) ────────────────────────────────────────
+    //  /api/sprite/analyze 는 저장 안 함. 그리드(클라 w/h/frameConfig) + 사이드카 frames 경로 모두 검증.
+    {
+      // (1) 그리드 분석: 클라가 w/h/frameConfig 전달(프론트가 이미지 로드 후 픽셀 크기 안다).
+      //     4 cols x 3 rows → anims 3개, 의미 라벨(idle/walk/run), frames 인덱스가 올바른 행 셀.
+      const r1 = await api(info, 'POST', '/api/sprite/analyze', {
+        relPath: LIB_TILE_REL,
+        w: 64, h: 48,
+        frameConfig: { frameWidth: 16, frameHeight: 16 }
+      });
+      const b1 = JSON.parse(r1.body);
+      ok('S7-1 grid analyze 200 + ok', r1.status === 200 && b1.ok === true, `status=${r1.status}`);
+      ok('S7-2 anims 길이>0(행 단위 클립 3개)', Array.isArray(b1.anims) && b1.anims.length === 3, `len=${b1.anims && b1.anims.length}`);
+      ok('S7-3 의미 라벨(idle/walk/run)',
+        b1.anims && b1.anims[0].key === 'idle' && b1.anims[1].key === 'walk' && b1.anims[2].key === 'run',
+        `keys=${b1.anims && b1.anims.map((a) => a.key).join(',')}`);
+      ok('S7-4 frames 인덱스가 올바른 행 셀(row-major)',
+        b1.anims && JSON.stringify(b1.anims[0].frames) === '[0,1,2,3]' &&
+        JSON.stringify(b1.anims[1].frames) === '[4,5,6,7]' && JSON.stringify(b1.anims[2].frames) === '[8,9,10,11]',
+        `row0=${b1.anims && JSON.stringify(b1.anims[0].frames)}`);
+      ok('S7-5 클립 기본값(fps=8, loop=true)',
+        b1.anims && b1.anims[0].fps === 8 && b1.anims[0].loop === true, `fps=${b1.anims && b1.anims[0].fps}`);
+      ok('S7-6 frameConfig 에코(저장 안 함)', b1.frameConfig && b1.frameConfig.frameWidth === 16, `fc=${JSON.stringify(b1.frameConfig)}`);
+
+      // (2) 사이드카 frames[] 경로: slice 로 명명 영역 저장 후 analyze 가 그걸 조회해 prefix 그룹핑.
+      //     walk_0/walk_1/idle_0 → 'walk'(2프레임), 'idle_pose'(1프레임).
+      await api(info, 'POST', '/api/sprite/slice', {
+        relPath: LIB_TILE_REL,
+        patch: { frames: [
+          { name: 'walk_0', x: 0, y: 0, w: 8, h: 8 },
+          { name: 'walk_1', x: 8, y: 0, w: 8, h: 8 },
+          { name: 'idle_0', x: 0, y: 8, w: 8, h: 8 }
+        ] }
+      });
+      const r2 = await api(info, 'POST', '/api/sprite/analyze', { relPath: LIB_TILE_REL });
+      const b2 = JSON.parse(r2.body);
+      ok('S7-7 사이드카 frames analyze 200 + ok', r2.status === 200 && b2.ok === true, `status=${r2.status}`);
+      ok('S7-8 frames 조회(영역 3개)', Array.isArray(b2.frames) && b2.frames.length === 3, `frames=${b2.frames && b2.frames.length}`);
+      const walk = (b2.anims || []).find((a) => a.key === 'walk');
+      const idle = (b2.anims || []).find((a) => a.key === 'idle_pose');
+      ok('S7-9 prefix 그룹핑 클립(walk=2프레임, idle_pose=1프레임)',
+        walk && JSON.stringify(walk.frames) === '[0,1]' && walk.loop === true &&
+        idle && JSON.stringify(idle.frames) === '[2]' && idle.loop === false,
+        `anims=${JSON.stringify(b2.anims && b2.anims.map((a) => a.key + ':' + JSON.stringify(a.frames)))}`);
+
+      // (3) 경로 가드: traversal·범위밖·dotfile → 4xx.
+      const g1 = await api(info, 'POST', '/api/sprite/analyze', { relPath: 'assets-library/../../etc/passwd' });
+      ok('S7-10 analyze traversal 거부(4xx)', g1.status >= 400 && g1.status < 500, `status=${g1.status}`);
+      const g2 = await api(info, 'POST', '/api/sprite/analyze', { relPath: 'skills/wgf-sprite-picker/catalog/packs.json' });
+      ok('S7-11 analyze 범위 밖 거부(4xx)', g2.status >= 400 && g2.status < 500, `status=${g2.status}`);
+      const g3 = await api(info, 'POST', '/api/sprite/analyze', { relPath: 'assets-library/.git/config' });
+      ok('S7-12 analyze dotfile 거부(4xx)', g3.status >= 400 && g3.status < 500, `status=${g3.status}`);
+
+      // (4) 거대입력 OOM 방어(보안 HIGH): w 가 거대 + frameWidth 1 이면 cols*rows 가 수십억이 되어
+      //     nested loop 가 힙을 소진할 수 있다. analyze 엔드포인트는 크래시 없이 200 이어야 한다
+      //     (사이드카 frames 가 있으면 그쪽으로 fallthrough 할 수 있으나, 그리드 자재화는 안 함).
+      const huge = await api(info, 'POST', '/api/sprite/analyze', {
+        relPath: LIB_TILE_REL,
+        w: 1e9, h: 1e9,
+        frameConfig: { frameWidth: 1, frameHeight: 1 }
+      });
+      let hugeBody = null;
+      try { hugeBody = JSON.parse(huge.body); } catch (e) {}
+      ok('S7-13 거대입력 크래시 없이 응답(200/4xx)',
+        (huge.status === 200 || (huge.status >= 400 && huge.status < 500)) && hugeBody !== null,
+        `status=${huge.status}`);
+      // 순수 함수 deriveAnims 단위 검증: 그리드 경로에서 거대 입력은 루프 없이 자재화 거부해야 한다.
+      //  (사이드카 frames 가 없는 순수 grid 입력 — 거대 시트 한 변 > MAX_SHEET_DIM 또는 셀 총수 초과.)
+      const d1 = deriveAnims({ frameConfig: { frameWidth: 1, frameHeight: 1 }, w: 1e9, h: 1e9 });
+      ok('S7-14 거대입력 deriveAnims bounded(anims=[] — 그리드 자재화 거부)',
+        Array.isArray(d1.anims) && d1.anims.length === 0,
+        `anims=${d1.anims && d1.anims.length} truncated=${d1.truncated}`);
+      // 셀 총수만 초과(한 변은 정상)해도 루프 없이 truncated=true 로 거부.
+      const d2 = deriveAnims({ frameConfig: { frameWidth: 1, frameHeight: 1 }, w: 16000, h: 16000 });
+      ok('S7-14b 셀 총수 초과 → truncated=true(루프 없이 거부)',
+        Array.isArray(d2.anims) && d2.anims.length === 0 && d2.truncated === true,
+        `anims=${d2.anims && d2.anims.length} truncated=${d2.truncated}`);
+
+      // (5) margin>0 그리드가 어댑터(scenekit-phaser.js, margin 1배) 공식과 일치하는 cols/frame 인덱스 산출.
+      //     w=64,h=48,frameWidth=16,margin=10,spacing=0 → 어댑터 1배: cols=floor((64-10)/16)=3, rows=floor((48-10)/16)=2.
+      //     (구 2배 공식이면 cols=floor((64-20)/16)=2 로 어긋남 — 1배여야 row0=[0,1,2].)
+      const mg = await api(info, 'POST', '/api/sprite/analyze', {
+        relPath: LIB_TILE_REL,
+        w: 64, h: 48,
+        frameConfig: { frameWidth: 16, frameHeight: 16, margin: 10, spacing: 0 }
+      });
+      const mgb = JSON.parse(mg.body);
+      ok('S7-15 margin>0 analyze 200 + ok', mg.status === 200 && mgb.ok === true, `status=${mg.status}`);
+      // rows=2 → 클립 2개(idle/walk). cols=3 → 각 행 셀 3개(row-major: row0=[0,1,2], row1=[3,4,5]).
+      ok('S7-16 margin 어댑터 공식 일치(cols=3, rows=2)',
+        Array.isArray(mgb.anims) && mgb.anims.length === 2 &&
+        JSON.stringify(mgb.anims[0].frames) === '[0,1,2]' &&
+        JSON.stringify(mgb.anims[1].frames) === '[3,4,5]',
+        `anims=${mgb.anims && JSON.stringify(mgb.anims.map((a) => a.frames))}`);
     }
 
     // ── S5 경로 traversal 거부 ────────────────────────────────────────────────────

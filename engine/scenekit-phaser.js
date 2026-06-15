@@ -318,11 +318,17 @@
     // seed/rng 를 SceneKit.load 에 전달 → ?seed=N QA 가능성 계약 완전 배선.
     // applyModeChange(play 진입)도 이 함수를 거치므로 play world 도 동일 시드 사용.
     // ※ bakedTextures 는 reloadScene 에서만 리셋(applyModeChange 는 의도적으로 유지).
-    function loadWorld(doc, mode) {
+    // opts.sceneId: 멀티씬 문서에서 활성 씬을 명시 선택(인게임 씬 전환에 사용 — 최우선).
+    // 미지정이면 문서의 activeSceneId 를 따른다(에디터가 씬 전환 후 스냅샷을 reload 할 때
+    // 뷰포트가 활성 씬을 렌더하도록 — 안 그러면 항상 scenes[0] 만 보여 멀티씬 편집이 깨진다).
+    // 둘 다 없으면 SceneKit.load 가 scenes[0] 을 고른다(단일 씬 기존 동작 유지).
+    function loadWorld(doc, mode, opts) {
       state.sceneDoc = doc;
       var loadOpts = { mode: mode };
       if (state.seed !== undefined) loadOpts.seed = state.seed;
       if (state.rng) loadOpts.rng = state.rng;
+      if (opts && opts.sceneId != null) loadOpts.sceneId = opts.sceneId;
+      else if (doc && doc.activeSceneId != null) loadOpts.sceneId = doc.activeSceneId;
       state.world = SceneKit.load(doc, loadOpts);
     }
 
@@ -1062,6 +1068,12 @@
         var dt = deltaMs / 1000;
         if (dt > 0 && dt < 0.1) {           // dt 가드(탭 비활성 큰 점프 방지)
           SceneKit.step(state.world, dt);
+
+          // 인게임 씬 전환 소비(Unity LoadScene 의미). SceneTrigger/requestScene 가
+          // step 중 world._sceneRequest 를 설정했으면 대상 씬을 t=0 으로 새로 로드한다.
+          // 전환이 일어나면 이 프레임의 후속 렌더 동기화는 건너뛴다(다음 프레임부터 새 씬).
+          if (consumeSceneRequest()) return;
+
           var ents = state.world.entities;
           for (var i = 0; i < ents.length; i++) {
             if (!spriteByEntity[ents[i].id]) buildEntity(ents[i]);
@@ -1072,11 +1084,57 @@
           var live = {};
           for (i = 0; i < ents.length; i++) live[ents[i].id] = true;
           for (var k in spriteByEntity) {
-            if (!live[k]) { spriteByEntity[k].destroy(); delete spriteByEntity[k]; }
+            if (!live[k]) {
+              spriteByEntity[k].destroy(); delete spriteByEntity[k];
+              // 대응 선택 아웃라인도 함께 파기(잔류 방지, syncFromWorld 정리 패턴과 정합).
+              if (outlineByEntity[k]) { outlineByEntity[k].destroy(); delete outlineByEntity[k]; }
+            }
           }
         }
       }
     };
+
+    // ── 인게임 씬 전환 소비 ─────────────────────────────────────────────────────
+    // world._sceneRequest 가 설정돼 있으면 대상 씬을 새 world(t=0 초기상태)로 로드한다.
+    // Unity LoadScene 처럼 대상 씬을 처음부터 새로 시작하는 의미 — 현재 씬 상태는 폐기.
+    // chrome=true(에디터 미리보기)·chrome=false(내보낸 게임) 양쪽에서 동작한다.
+    // 내보낸 게임은 SCENE_DOC 에 모든 scenes[] 가 들어있다는 전제(브리지/익스포트 lane 보장).
+    // 반환: 전환 수행 true / 요청 없거나 대상 없음 false.
+    function consumeSceneRequest() {
+      var req = state.world && state.world._sceneRequest;
+      if (req == null) return false;
+      // 요청은 1회성 — 소비 후 즉시 비운다(중복 전환 방지).
+      state.world._sceneRequest = null;
+
+      var target = String(req);
+      // 1) 대상 씬 id 를 sceneDoc.scenes 에서 찾는다(없으면 무시 + 콘솔 경고).
+      var scenes = (state.sceneDoc && Array.isArray(state.sceneDoc.scenes)) ? state.sceneDoc.scenes : null;
+      var found = null;
+      if (scenes) {
+        for (var s = 0; s < scenes.length; s++) {
+          if (scenes[s] && String(scenes[s].id) === target) { found = scenes[s]; break; }
+        }
+      }
+      if (!found) {
+        if (typeof console !== 'undefined') {
+          console.warn('[scenekit-phaser] requestScene: 대상 씬 "' + target + '" 을 sceneDoc.scenes 에서 찾을 수 없습니다 — 전환 무시.');
+        }
+        return false;
+      }
+
+      // 2) 대상 씬을 새 world 로 로드(loadWorld 가 sceneId 를 SceneKit.load 에 전달 → 활성 씬 선택).
+      loadWorld(state.sceneDoc, 'play', { sceneId: target });
+
+      // 새 씬엔 이전 씬 엔티티가 없으므로 선택을 비운다(stale id 방지 — 다음 edit 복귀 안전).
+      state.selection = [];
+      // 3) 기존 Phaser 게임오브젝트 전부 파기 후 재빌드(엔티티 맵 spriteByEntity 초기화).
+      //    벽/그리드도 새 씬 기준으로 갱신.
+      buildAllEntities();
+      drawWalls();
+      if (state.chrome) drawGrid();
+      refreshGizmo();
+      return true;
+    }
 
     // ── GAME_INPUT 키보드 브리지 ────────────────────────────────────────────────
     function installInputBridge() {
@@ -1085,12 +1143,28 @@
       var GI = window.GAME_INPUT;
       var keys = scene.input.keyboard;
       if (!keys) return;
+      // 전역 키 캡처(enableCapture) 토글:
+      //   - 에디터 셸(chrome=true, viewport 미리보기)에선 캡처를 끈다. Phaser 기본
+      //     enableCapture=true 는 페이지 전역 keydown 에서 W/A/S/D·화살표의 preventDefault
+      //     를 호출해, 에디터의 카탈로그 검색창 등 <input> 에 'a','w','s','d' 타이핑이
+      //     막힌다(에디터 입력창 타이핑 보존을 위해 캡처 OFF).
+      //   - 내보낸 독립 게임(chrome=false)에선 캡처를 켠다. 화살표가 페이지를 스크롤하는
+      //     기본 동작을 막아야 게임 조작이 자연스럽다.
+      //   ※ 캡처만 끄는 것이지 키 등록은 그대로 — play 모드의 isDown 읽기(WASD 이동)는
+      //      양쪽 모두 정상 동작한다.
+      var enableCapture = (state.chrome === false);
       var map = scene.input.keyboard.addKeys({
         up: Phaser.Input.Keyboard.KeyCodes.W, down: Phaser.Input.Keyboard.KeyCodes.S,
         left: Phaser.Input.Keyboard.KeyCodes.A, right: Phaser.Input.Keyboard.KeyCodes.D,
         upArrow: Phaser.Input.Keyboard.KeyCodes.UP, downArrow: Phaser.Input.Keyboard.KeyCodes.DOWN,
         leftArrow: Phaser.Input.Keyboard.KeyCodes.LEFT, rightArrow: Phaser.Input.Keyboard.KeyCodes.RIGHT
-      });
+      }, enableCapture);
+      // 방어적 잔여 캡처 제거: 에디터(chrome=true)에선 이전 등록·Phaser 내부 기본 캡처가
+      // 남아 있을 수 있으므로 clearCaptures 로 전역 preventDefault 대상을 비운다.
+      if (!enableCapture && scene.input.keyboard.clearCaptures &&
+          typeof scene.input.keyboard.clearCaptures === 'function') {
+        scene.input.keyboard.clearCaptures();
+      }
       scene.events.on('update', function () {
         // edit 모드에선 GAME_INPUT 을 false 로 유지(코어 step 안 하므로 무영향이지만 정합).
         GI.up = !!(map.up.isDown || map.upArrow.isDown) && state.mode === 'play';

@@ -1,5 +1,6 @@
-/* Hierarchy — 엔티티 트리(선택·다중선택 연동). */
+/* Hierarchy — 엔티티 트리(선택·다중선택 연동). 최상단에 멀티씬 셀렉터 바(ScenePanel) 통합. */
 import { spriteApi } from './sprite/spriteApi.js';
+import { ScenePanel } from './ScenePanel.jsx';
 
 export function Hierarchy({ controller, world, selection }) {
   const entities = world ? world.entities : [];
@@ -48,7 +49,9 @@ export function Hierarchy({ controller, world, selection }) {
       const frame = payload.frame;
       const as = payload.as;
       try {
-        const r = await spriteApi.use({ relPath: payload.relPath, frame });
+        // frameConfig/frames 를 use 에 전달해 vendored asset 레코드에 보존한다 —
+        //  AnimatedSprite 시트가 셀로 슬라이싱되고(없으면 전체 1장 렌더), 단일 Sprite 도 프레임 인덱스 표시가 정확해진다.
+        const r = await spriteApi.use({ relPath: payload.relPath, frame, frameConfig: payload.frameConfig, frames: payload.frames });
         if (!r || !r.ok) {
           if (r && r.status === 409 && typeof console !== 'undefined') {
             console.warn('[Hierarchy] 스프라이트 적용 실패 — 빈 씬(먼저 게임을 열어주세요)');
@@ -59,7 +62,12 @@ export function Hierarchy({ controller, world, selection }) {
         }
         const assetId = r.asset && r.asset.id;
         if (!assetId) { if (typeof console !== 'undefined') console.warn('[Hierarchy] 적용 실패 — 에셋 id 없음'); return; }
-        await controller.assignAssetToEntity(id, assetId, { frame, as });
+        // AnimatedSprite 페이로드(시트+anims)면 anims·play 동반 전달, 아니면 정적 Sprite(frame).
+        if (as === 'AnimatedSprite') {
+          await controller.assignAssetToEntity(id, assetId, { as: 'AnimatedSprite', anims: payload.anims, play: payload.play });
+        } else {
+          await controller.assignAssetToEntity(id, assetId, { frame, as });
+        }
       } catch (e) {
         if (typeof console !== 'undefined') console.warn('[Hierarchy] 스프라이트 드롭 처리 오류:', e);
       }
@@ -72,6 +80,7 @@ export function Hierarchy({ controller, world, selection }) {
 
   return (
     <div style={panel}>
+      <ScenePanel controller={controller} />
       <div style={header}>계층 (Hierarchy)</div>
       <div style={{ overflowY: 'auto', flex: 1 }}>
         {entities.length === 0 && <div style={empty}>엔티티 없음</div>}
