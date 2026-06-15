@@ -1,4 +1,4 @@
-<!-- Generated: 2026-06-08 | Updated: 2026-06-08 -->
+<!-- Generated: 2026-06-08 | Updated: 2026-06-15 -->
 
 # WebGameForge (plugin id: `web-game-builder`)
 
@@ -22,9 +22,10 @@
 | `commands/` | 슬래시 커맨드 `/web-game-builder:wgf-make-game` (see `commands/AGENTS.md`) |
 | `hooks/` | `UserPromptSubmit` 의도 감지 훅 등록 (see `hooks/AGENTS.md`) |
 | `scripts/` | 한/영 게임 의도 감지 스크립트 3종 (see `scripts/AGENTS.md`) |
-| `engine/` | 재사용 엔진 라이브러리 12종 + vendored Phaser/Tone.js (see `engine/AGENTS.md`) |
-| `skills/` | 29종 스킬 체계 — 장르·제작요소·품질·고급 킷 (see `skills/AGENTS.md`) |
-| `games/` | 데모 게임 8종 (엔진·스킬 실증) (see `games/AGENTS.md`) |
+| `engine/` | 재사용 엔진 라이브러리 + vendored Phaser/Tone.js (see `engine/AGENTS.md`) |
+| `editor/` | WGF Studio 비주얼 게임 에디터 — 브리지(단일 진실)+Preact UI+MCP+무빌드 export (see `editor/AGENTS.md`) |
+| `skills/` | 30종 스킬 체계 — 장르·제작요소·품질·고급 킷 (see `skills/AGENTS.md`) |
+| `games/` | 데모 게임 10종 + 에디터 트랙(scene.json) (see `games/AGENTS.md`) |
 | `assets-library/` | 이전 사용 스프라이트 로컬 보관 (사용자 자산) (see `assets-library/AGENTS.md`) |
 | `docs/` | 아키텍처 설계 명세 + 스크린샷 (see `docs/AGENTS.md`) |
 
