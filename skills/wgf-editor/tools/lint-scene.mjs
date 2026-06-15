@@ -124,11 +124,34 @@ function lintScene(doc, report) {
           'assets.sprites[' + i + '].id');
       }
       spriteIds.add(s.id);
-      // source 검증
-      if (s.source !== 'procedural' && s.source !== 'cc0') {
+      // source 검증 — procedural(절차)·cc0(외부 라이브러리)·local(vendored) 허용.
+      if (s.source !== 'procedural' && s.source !== 'cc0' && s.source !== 'local') {
         add('warn', 'UNKNOWN_ASSET_SOURCE',
-          'sprite "' + s.id + '" 의 source 가 "procedural"|"cc0" 이 아닙니다: ' + JSON.stringify(s.source),
+          'sprite "' + s.id + '" 의 source 가 "procedural"|"cc0"|"local" 이 아닙니다: ' + JSON.stringify(s.source),
           'assets.sprites[' + i + '].source');
+      }
+      // 스프라이트시트 프레임 메타 검증(선택). frameConfig 있으면 frameWidth/Height 양수,
+      // margin/spacing 음수 불가. frame 은 0 이상 정수. (frame 범위초과는 이미지 크기 미상이라
+      // lint 불가 — 렌더러가 결정적으로 클램프.)
+      if (s.frameConfig !== undefined) {
+        const fc = s.frameConfig;
+        if (!fc || typeof fc !== 'object' ||
+            typeof fc.frameWidth !== 'number' || fc.frameWidth <= 0 ||
+            typeof fc.frameHeight !== 'number' || fc.frameHeight <= 0) {
+          add('error', 'INVALID_FRAME_CONFIG',
+            'sprite "' + s.id + '" 의 frameConfig 는 frameWidth>0·frameHeight>0 가 필요합니다',
+            'assets.sprites[' + i + '].frameConfig');
+        } else if ((typeof fc.margin === 'number' && fc.margin < 0) ||
+                   (typeof fc.spacing === 'number' && fc.spacing < 0)) {
+          add('error', 'INVALID_FRAME_CONFIG',
+            'sprite "' + s.id + '" 의 frameConfig.margin/spacing 은 음수일 수 없습니다',
+            'assets.sprites[' + i + '].frameConfig');
+        }
+      }
+      if (s.frame !== undefined && (typeof s.frame !== 'number' || s.frame < 0 || (s.frame | 0) !== s.frame)) {
+        add('error', 'INVALID_FRAME_INDEX',
+          'sprite "' + s.id + '" 의 frame 은 0 이상 정수여야 합니다: ' + JSON.stringify(s.frame),
+          'assets.sprites[' + i + '].frame');
       }
     }
   }

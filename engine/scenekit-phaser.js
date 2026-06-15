@@ -119,7 +119,11 @@
       rng: (typeof opts.rng === 'function') ? opts.rng : null,         // 단일 rng — export game.js 가 주입한 RngForge 인스턴스
       onCommandCb: (typeof opts.onCommand === 'function') ? opts.onCommand : null,
       onReadyCb: (typeof opts.onReady === 'function') ? opts.onReady : null,
-      selectionListeners: []
+      selectionListeners: [],
+      // 비동기 이미지 에셋 로드 게이트(계약 H′ 검증·QA 가 텍스처 준비 후 bakeHash 호출용).
+      pendingAssetLoads: 0,           // 진행 중 이미지 로드 수
+      assetsReady: true,             // 대기 로드 0 이면 true(이미지 에셋 없으면 즉시 true)
+      onAssetsReadyCb: null          // 모든 이미지 로드 완료 시 1회 콜백
     };
     if (typeof opts.onSelectionChange === 'function') state.selectionListeners.push(opts.onSelectionChange);
 
@@ -196,6 +200,15 @@
       bakeHash: function () {
         return sceneRef.scene ? sceneRef.scene.bakeHash() : null;
       },
+      // 모든 비동기 이미지 에셋 로드가 끝났는지(계약 H′ bakeHash 비교는 이 신호 후에).
+      assetsReady: function () { return !!state.assetsReady; },
+      // 이미지 로드 완료 콜백 등록. 이미 완료면 즉시 1회 호출. QA·리드가 텍스처 준비 후
+      // 스크린샷/__bakeHash 비교를 트리거하는 데 쓴다.
+      onAssetsReady: function (cb) {
+        if (typeof cb !== 'function') return;
+        state.onAssetsReadyCb = cb;
+        if (state.assetsReady) { try { cb(); } catch (e) { /* 격리 */ } }
+      },
       destroy: function () {
         try { game.destroy(true); } catch (e) { /* 무시 */ }
         sceneRef.scene = null;
@@ -219,7 +232,9 @@
       applyCommand: err, applyUndo: err,
       setSnap: function () {}, setGizmoMode: function () {}, getGizmoMode: function () { return 'move'; },
       setMode: function () {}, getMode: function () { return 'edit'; },
-      reload: function () {}, refresh: function () {}, bakeHash: function () { return null; }, destroy: function () {}
+      reload: function () {}, refresh: function () {}, bakeHash: function () { return null; },
+      assetsReady: function () { return true; }, onAssetsReady: function (cb) { if (typeof cb === 'function') { try { cb(); } catch (e) {} } },
+      destroy: function () {}
     };
   }
 
@@ -355,6 +370,17 @@
       var h = def && num(def.h, 0) > 0 ? num(def.h, 16) : 16;
       var texKey = 'wgf_asset_' + spriteId;
 
+      // 이미지 에셋(cc0/local): url 이 비트맵 이미지면 비동기 로드 → frame crop → 진짜 텍스처.
+      // 동기 계약 유지를 위해 즉시 placeholder 를 캐시·반환하고, 로드 완료 시 commitBaked 가
+      // 참조 엔티티만 setTexture 로 교체한다. itch 페이지 등 비이미지 url·로드 실패는 placeholder 유지.
+      if (def && (def.source === 'cc0' || def.source === 'local') &&
+          typeof def.url === 'string' && looksLikeImage(def.url)) {
+        var phKey = placeholderTexture(spriteId, frameDimW(def, w), frameDimH(def, h));
+        bakedTextures[spriteId] = phKey;
+        startImageBake(spriteId, def);
+        return phKey;
+      }
+
       // 절차 자산: PixelForge/VectorForge 의 결정적 플레이스홀더 도형으로 bake.
       // (스프라이트 데이터(frames/그리드)는 아직 scene.json 에 없으므로 결정적 도형.)
       var baked = false;
@@ -369,6 +395,92 @@
       }
       bakedTextures[spriteId] = texKey;
       return texKey;
+    }
+
+    // ── 이미지 에셋 비동기 로드 + 스프라이트시트 프레임 crop ─────────────────────
+    // url 이 비트맵 이미지로 보이는지(itch 페이지 등 비이미지 url 제외 → placeholder).
+    function looksLikeImage(url) {
+      return /\.(png|jpe?g|gif|webp)(\?|#|$)/i.test(String(url || ''));
+    }
+    // frame 텍스처 크기 — frameConfig 있으면 그 셀 크기, 없으면 def.w/h(또는 기본).
+    function frameDimW(def, fallback) {
+      return (def && def.frameConfig && def.frameConfig.frameWidth > 0) ? (def.frameConfig.frameWidth | 0) : fallback;
+    }
+    function frameDimH(def, fallback) {
+      return (def && def.frameConfig && def.frameConfig.frameHeight > 0) ? (def.frameConfig.frameHeight | 0) : fallback;
+    }
+    // 에셋 url → 실제 로드 경로. 에디터(chrome)=repo-root 절대('/'+url), export 게임=game-root
+    // 상대(그대로), http(s)=그대로. same-origin 이어야 bakeHash getPixel(계약 H′)이 동작.
+    function resolveAssetUrl(url) {
+      url = String(url || '');
+      if (/^https?:\/\//i.test(url)) return url;
+      if (state.chrome) return '/' + url.replace(/^\/+/, '');
+      return url;
+    }
+    // 시트에서 frame 1칸을 오프스크린 canvas 로 crop. frameConfig 없으면 전체 이미지.
+    // 좌표는 frameConfig·frame 로만 계산(Math.random 미사용 — 결정성 규약). 범위초과는 마지막 칸 클램프.
+    function cropFrameToCanvas(img, def) {
+      var iw = img.width | 0, ih = img.height | 0;
+      var fc = def && def.frameConfig;
+      var fw = (fc && fc.frameWidth > 0) ? (fc.frameWidth | 0) : iw;
+      var fh = (fc && fc.frameHeight > 0) ? (fc.frameHeight | 0) : ih;
+      var margin = (fc && fc.margin > 0) ? (fc.margin | 0) : 0;
+      var spacing = (fc && fc.spacing > 0) ? (fc.spacing | 0) : 0;
+      var cols = fc ? Math.max(1, Math.floor((iw - margin + spacing) / (fw + spacing))) : 1;
+      var rows = fc ? Math.max(1, Math.floor((ih - margin + spacing) / (fh + spacing))) : 1;
+      var total = Math.max(1, cols * rows);
+      var idx = (def && def.frame > 0) ? (def.frame | 0) : 0;
+      if (idx >= total) idx = total - 1;
+      if (idx < 0) idx = 0;
+      var sx = margin + (idx % cols) * (fw + spacing);
+      var sy = margin + Math.floor(idx / cols) * (fh + spacing);
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, fw); canvas.height = Math.max(1, fh);
+      var cx = canvas.getContext('2d');
+      cx.imageSmoothingEnabled = !metaPixelArt(state.sceneDoc);
+      cx.drawImage(img, sx, sy, fw, fh, 0, 0, fw, fh);
+      return canvas;
+    }
+    // 이미지 비동기 로드 → crop → addCanvas 텍스처 → 참조 엔티티 setTexture(commitBaked).
+    function startImageBake(spriteId, def) {
+      var texKey = 'wgf_asset_' + spriteId;
+      if (scene.textures.exists(texKey)) { commitBaked(spriteId, texKey); return; }
+      noteAssetLoadStart();
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var canvas = cropFrameToCanvas(img, def);
+          if (scene.textures.exists(texKey)) scene.textures.remove(texKey);
+          scene.textures.addCanvas(texKey, canvas);   // same-origin canvas → getPixel/bakeHash 동작
+          commitBaked(spriteId, texKey);
+        } catch (e) { /* crop/등록 실패 → placeholder 유지 */ }
+        noteAssetLoaded();
+      };
+      img.onerror = function () { noteAssetLoaded(); /* 로드 실패 → placeholder 유지 */ };
+      img.src = resolveAssetUrl(def.url);
+    }
+    // placeholder → 진짜 텍스처 교체 + 그 에셋 id 를 참조하는 엔티티만 setTexture.
+    function commitBaked(spriteId, texKey) {
+      bakedTextures[spriteId] = texKey;
+      var ents = (state.world && state.world.entities) || [];
+      for (var i = 0; i < ents.length; i++) {
+        var sc = SceneKit.getComponentOn(ents[i], 'Sprite') || SceneKit.getComponentOn(ents[i], 'AnimatedSprite');
+        if (sc && String(sc.sprite) === String(spriteId)) {
+          var go = spriteByEntity[ents[i].id];
+          if (go && go.setTexture) { try { go.setTexture(texKey, 0); } catch (e) { /* 무시 */ } }
+        }
+      }
+      if (state.chrome) refreshOutlines();
+    }
+    // ── 이미지 로드 ready 게이트(계약 H′ bakeHash 는 이 신호 후) ─────────────────
+    function noteAssetLoadStart() { state.pendingAssetLoads++; state.assetsReady = false; }
+    function noteAssetLoaded() {
+      if (state.pendingAssetLoads > 0) state.pendingAssetLoads--;
+      if (state.pendingAssetLoads <= 0) {
+        state.pendingAssetLoads = 0;
+        state.assetsReady = true;
+        if (state.onAssetsReadyCb) { try { state.onAssetsReadyCb(); } catch (e) { /* 격리 */ } }
+      }
     }
 
     // 절차 자산 bake: pixelArt 면 PixelForge 패턴, 아니면 VectorForge 의 부드러운 도형.
@@ -932,6 +1044,13 @@
       var src = tex && tex.getSourceImage ? tex.getSourceImage() : null;
       var w = (src && src.width) || 0, hh = (src && src.height) || 0;
       h = fnvStr(h, ':wh:' + w + 'x' + hh);
+      // cross-origin(원격 이미지) 캔버스는 getPixel 이 SecurityError 를 던진다 → 전체 픽셀을
+      // 스킵하고 결정적 :tainted: 마커만 누적한다(원격 cc0 는 H′ 비교에서 제외, local same-origin
+      // 만 외형 동형 보장). 한 번 프로브해 taint 면 w*h 번 throw 하는 비용도 피한다.
+      if (w > 0 && hh > 0) {
+        try { scene.textures.getPixel(0, 0, texKey); }
+        catch (e) { return fnvStr(h, ':tainted:'); }
+      }
       for (var y = 0; y < hh; y++) {
         for (var x = 0; x < w; x++) {
           var c = null;

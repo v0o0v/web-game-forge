@@ -428,16 +428,19 @@ const TOOLS = {
   },
 
   asset_add_cc0: {
-    description: 'CC0 라이브러리 스프라이트(url+license+credit)를 assets.sprites 에 추가한다. id·url 필수. license(기본 CC0-1.0)·credit·desc·w·h 선택. sprite-picker 가 고른 CC0 에셋을 여기로 주입한다.',
+    description: 'CC0 라이브러리 스프라이트(url+license+credit)를 assets.sprites 에 추가한다. id·url 필수. license(기본 CC0-1.0)·credit·desc·w·h 선택. 스프라이트시트면 frameConfig{frameWidth,frameHeight,margin?,spacing?}+frame(셀 인덱스)으로 개별 프레임 1칸을 렌더한다. sprite-picker 가 고른 CC0 에셋을 여기로 주입한다.',
     inputSchema: OBJ({
       id: { type: 'string' }, url: { type: 'string' },
       license: { type: 'string' }, credit: { type: 'string' }, desc: { type: 'string' },
-      w: { type: 'number' }, h: { type: 'number' }
+      w: { type: 'number' }, h: { type: 'number' },
+      frameConfig: { type: 'object' }, frame: { type: 'number' }
     }, ['id', 'url']),
     async handler(args) {
       if (!args || typeof args.id !== 'string') return toolError('id 필수');
       if (typeof args.url !== 'string') return toolError('url 필수');
       const asset = { id: args.id, url: args.url, license: args.license, credit: args.credit, desc: args.desc, w: args.w, h: args.h };
+      if (args.frameConfig && typeof args.frameConfig === 'object') asset.frameConfig = args.frameConfig;
+      if (typeof args.frame === 'number') asset.frame = args.frame;
       const r = await bridgeRequest('POST', '/api/asset/add', { kind: 'cc0', asset });
       if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError((r.json && r.json.error) || '에셋 추가 실패', { status: r.status });
       return toolText({ ok: true, asset: r.json.asset, seq: r.json.seq });

@@ -689,7 +689,23 @@ function listAssets() {
   return { sprites: Array.isArray(a.sprites) ? a.sprites : [] };
 }
 
-// 에셋 1건 추가. kind: 'procedural'|'cc0'. 검증 후 sprites 에 push.
+// 스프라이트시트 프레임 메타(frameConfig/frame) 위생화 — cc0·local 에셋에만 적용.
+//  frameWidth/frameHeight 가 양수일 때만 frameConfig 채택, margin/spacing 은 음수 아닐 때만.
+//  frame 은 0 이상 정수만. 전부 정수로 강제(| 0) → 인젝션 표면 0. 시트가 아니면 미설정(전체 이미지).
+function sanitizeFrameMeta(asset, raw) {
+  const fc = raw && raw.frameConfig;
+  if (fc && typeof fc === 'object' &&
+      typeof fc.frameWidth === 'number' && fc.frameWidth > 0 &&
+      typeof fc.frameHeight === 'number' && fc.frameHeight > 0) {
+    const out = { frameWidth: fc.frameWidth | 0, frameHeight: fc.frameHeight | 0 };
+    if (typeof fc.margin === 'number' && fc.margin >= 0) out.margin = fc.margin | 0;
+    if (typeof fc.spacing === 'number' && fc.spacing >= 0) out.spacing = fc.spacing | 0;
+    asset.frameConfig = out;
+  }
+  if (typeof raw.frame === 'number' && raw.frame >= 0) asset.frame = raw.frame | 0;
+}
+
+// 에셋 1건 추가. kind: 'procedural'|'cc0'|'local'. 검증 후 sprites 에 push.
 // 반환 {ok, asset} 또는 {ok:false, code, error}.
 function addAsset(kind, raw) {
   if (!raw || typeof raw !== 'object') return { ok: false, code: 400, error: 'asset 객체 필요' };
@@ -737,6 +753,7 @@ function addAsset(kind, raw) {
     };
     if (typeof raw.w === 'number' && raw.w > 0) asset.w = raw.w | 0;
     if (typeof raw.h === 'number' && raw.h > 0) asset.h = raw.h | 0;
+    sanitizeFrameMeta(asset, raw);
   } else if (kind === 'local') {
     // 로컬 vendored 에셋(설계 §2). url 은 repo-root 상대경로(games/ 하위)만 허용.
     // resolveScopedPath('games') 로 이중검증 + 실제 파일 존재 확인.
@@ -771,6 +788,7 @@ function addAsset(kind, raw) {
     };
     if (typeof raw.w === 'number' && raw.w > 0) asset.w = raw.w | 0;
     if (typeof raw.h === 'number' && raw.h > 0) asset.h = raw.h | 0;
+    sanitizeFrameMeta(asset, raw);
     if (typeof raw.sha256 === 'string' && /^[a-f0-9]{64}$/i.test(raw.sha256)) asset.sha256 = raw.sha256.toLowerCase();
     // origin: 원본 Unity 폴더(절대경로 표시용) + 폴더내 상대경로(메타데이터, 표시 전용).
     if (raw.origin && typeof raw.origin === 'object') {
