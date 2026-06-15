@@ -145,8 +145,10 @@ async function main() {
         tinyD && typeof tinyD.preview === 'string' && tinyD.preview.startsWith('/skills/wgf-sprite-picker/catalog/thumbnails/'),
         `preview=${tinyD && tinyD.preview}`);
       ok('S1-5 downloaded 판정(tiny-dungeon=true)', tinyD && tinyD.downloaded === true, `downloaded=${tinyD && tinyD.downloaded}`);
-      const notDl = b.packs.find((p) => p.id === 'kenney-pixel-platformer');
-      ok('S1-6 downloaded 판정(미다운로드 팩=false)', notDl && notDl.downloaded === false, `downloaded=${notDl && notDl.downloaded}`);
+      // 미다운로드 팩: assets-library/<id>/ 디렉터리가 없는 catalog 팩.
+      // (kenney-pixel-platformer 는 이제 임포트돼 downloaded=true 이므로 디스크에 없는 다른 팩을 픽스처로 쓴다.)
+      const notDl = b.packs.find((p) => p.id === 'kenney-roguelike-rpg-pack');
+      ok('S1-6 downloaded 판정(미다운로드 팩=false)', notDl && notDl.downloaded === false, `id=${notDl && notDl.id} downloaded=${notDl && notDl.downloaded}`);
     }
 
     // ── S2 library ─────────────────────────────────────────────────────────────
