@@ -220,6 +220,37 @@
                 "sprite": "td_floor"
               }
             ]
+          },
+          {
+            "id": "anim_01",
+            "name": "애니메이션showcase",
+            "transform": {
+              "x": 160,
+              "y": 120,
+              "rotation": 0,
+              "scaleX": 3,
+              "scaleY": 3,
+              "depth": 8
+            },
+            "components": [
+              {
+                "type": "AnimatedSprite",
+                "sprite": "td_player",
+                "anims": [
+                  {
+                    "key": "cycle",
+                    "frames": [
+                      84,
+                      108,
+                      116
+                    ],
+                    "fps": 3,
+                    "loop": true
+                  }
+                ],
+                "play": "cycle"
+              }
+            ]
           }
         ]
       }
