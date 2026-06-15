@@ -1,15 +1,18 @@
 /* ============================================================================
- * WGF Studio — 에디터 셸 진입점 (Preact + esbuild) / P1
+ * WGF Studio — 에디터 셸 진입점 (Preact + esbuild) / P1 → P7(도킹·메뉴바)
  * ----------------------------------------------------------------------------
- * 레이아웃: [툴바] / [Hierarchy | Viewport | Inspector].
+ * 레이아웃: [메뉴바] / [툴바] / [DockLayout — Unity 식 도킹(스플릿·탭·리다킹)].
+ * 각 섹션(Hierarchy·Viewport·Inspector·Assets·Skills·Chat)은 사용자가 자유롭게
+ * 배치(드래그 리다킹)·리사이즈·탭화·표시/숨김 할 수 있고, 배치는 localStorage 에
+ * 영속된다. 상단 메뉴바는 일반 에디터 기능(폰트 크기·테마·밀도·레이아웃 리셋)과
+ * 플러그인 기능(스킬 2트랙·에셋·컴포넌트 15종·Play/Export 등)을 모두 노출한다.
+ *
  * 기본 씬 = topdown-min(dev 서버 /games/_editor-samples/topdown-min/scene.json).
  *
- * window.WGFEditor 프로그래매틱 API(e2e 게이트 검증용):
+ * window.WGFEditor 프로그래매틱 API(e2e 게이트 검증용) — 시그니처 불변:
  *   loadScene(doc) serialize() hash() addEntity(partial) setTransform(id,patch)
- *   select(ids) getSelection() undo() redo() undoDepth() save() reloadFromSaved()
- *   entityCount()
- * 이 API 만으로 "10엔티티 추가→save→reload→hash/좌표 동일", "10커맨드→undo×10→
- * redo×10 hash 일치" 를 콘솔에서 구동 가능.
+ *   select(ids) getSelection() undo() redo() undoDepth() redoDepth() save()
+ *   reloadFromSaved() entityCount() …
  * ==========================================================================*/
 import { render } from 'preact';
 import { useState, useEffect, useRef } from 'preact/hooks';
@@ -22,6 +25,13 @@ import { Inspector } from './Inspector.jsx';
 import { ChatPanel } from './ChatPanel.jsx';
 import { SkillMenu } from './SkillMenu.jsx';
 import { AssetBrowser } from './AssetBrowser.jsx';
+import {
+  DockLayout, DEFAULT_LAYOUT, normalizeLayout, serializeLayout,
+  isPanelVisible, addPanelToLayout, removePanelFromLayout
+} from './dock/DockLayout.jsx';
+import { MenuBar } from './menu/MenuBar.jsx';
+import { buildMenus } from './menu/menuModel.js';
+import { createEditorSettings } from './editorSettings.js';
 
 // 기본 자동 로드 씬 경로(dev 서버 루트 기준).
 const DEFAULT_SCENE_URL = '/games/_editor-samples/topdown-min/scene.json';
@@ -34,16 +44,39 @@ const FALLBACK_SCENE = {
   scenes: [{ id: 'main', systems: {}, entities: [] }], dataLayers: {}
 };
 
-function App({ controller }) {
+// 도킹 가능한 패널 id 집합(panels 레지스트리 키 = layout 트리 panelId).
+const PANEL_IDS = ['hierarchy', 'viewport', 'inspector', 'assets', 'skills', 'chat'];
+// 레이아웃 영속 키(설정과 분리 — 배치 트리만 보관).
+const LAYOUT_KEY = 'wgf-studio-layout';
+
+// 저장된 도킹 레이아웃 로드(없거나 손상 시 null → DockLayout 이 DEFAULT 로 정규화).
+function loadSavedLayout() {
+  try {
+    const raw = (typeof localStorage !== 'undefined') ? localStorage.getItem(LAYOUT_KEY) : null;
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* 사적 모드/파싱 오류 → null */ }
+  return null;
+}
+function persistLayout(layout) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(LAYOUT_KEY, JSON.stringify(serializeLayout(layout)));
+    }
+  } catch (e) { /* 무시 */ }
+}
+
+function App({ controller, settings }) {
   const [world, setWorld] = useState(null);
   const [selection, setSelection] = useState([]);
   const [gizmoMode, setGizmoMode] = useState('move');
-  const [snap, setSnap] = useState(false);
-  const [snapSize, setSnapSize] = useState(16);
   const [mode, setMode] = useState('edit');
   const [undoDepth, setUndoDepth] = useState(0);
   const [redoDepth, setRedoDepth] = useState(0);
   const [docState, setDocState] = useState(null);
+  // 도킹 레이아웃 트리(저장본 → 정규화). 패널 집합과 불일치하면 자동 흡수.
+  const [layout, setLayout] = useState(() => normalizeLayout(loadSavedLayout(), PANEL_IDS));
+  // 환경설정 미러(폰트·테마·밀도·스냅) — 메뉴 체크 상태·툴바 스냅 동기용.
+  const [settingsState, setSettingsState] = useState(() => settings.get());
 
   // syncState 가 강제 재렌더를 트리거하기 위한 카운터. useRef 가 아니라 useState 여야
   // 한다 — getWorld() 는 어댑터의 안정적(in-place 변형) 참조라 setWorld(sameRef) 만으로는
@@ -67,9 +100,34 @@ function App({ controller }) {
     return () => { offChange(); offSel(); };
   }, []);
 
+  // 환경설정 변경 → 미러 갱신(재렌더로 메뉴 체크/툴바 스냅 동기). CSS 반영은 settings 가 직접.
+  useEffect(() => {
+    const off = settings.subscribe((s) => setSettingsState(s));
+    return off;
+  }, []);
+
+  // 전역 키보드 단축키 — 메뉴에 표시된 단축키를 실제 바인딩. 입력 위젯(INPUT/TEXTAREA/
+  // SELECT/contentEditable) 포커스 시엔 가로채지 않는다(텍스트 편집·네이티브 undo 보존).
+  useEffect(() => {
+    function onKey(e) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const el = e.target;
+      const tag = (el && el.tagName) ? el.tagName.toUpperCase() : '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
+      const k = e.key;
+      if (k === 's' || k === 'S') { e.preventDefault(); e.shiftKey ? controller.reloadFromSaved() : controller.save(true); }
+      else if (k === 'z' || k === 'Z') { e.preventDefault(); e.shiftKey ? controller.redo() : controller.undo(); }
+      else if (k === 'y' || k === 'Y') { e.preventDefault(); controller.redo(); }
+      else if (k === '=' || k === '+') { e.preventDefault(); settings.increaseFont(); }
+      else if (k === '-' || k === '_') { e.preventDefault(); settings.decreaseFont(); }
+      else if (k === '0') { e.preventDefault(); settings.resetFont(); }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // 초기 씬 로드. 마운트는 Viewport 가 담당.
-  //  - remote(브리지): /api/scene 스냅샷으로 부트(브리지 = 단일 진실). Viewport 마운트 후
-  //    startRemote() 가 SSE 연결 + 재동기. setDocState 로 어댑터 초기 마운트 문서 제공.
+  //  - remote(브리지): /api/scene 스냅샷으로 부트(브리지 = 단일 진실).
   //  - local: P1 처럼 topdown-min fetch.
   useEffect(() => {
     if (controller.isRemote) {
@@ -84,42 +142,67 @@ function App({ controller }) {
     }
   }, []);
 
+  // 저장된 스냅 기본값을 어댑터 마운트 후(=docState 준비 후) 코어에 1회 반영.
+  useEffect(() => {
+    if (docState && settings.get().snapDefault) {
+      controller.setSnap(true, settings.get().snapSize);
+    }
+  }, [docState]);
+
+  // 스냅은 settings 단일 진실에서 파생 — 툴바·메뉴 토글이 같은 상태를 공유.
   function onSnapChange(on, size) {
-    setSnap(on); setSnapSize(size);
+    settings.set({ snapDefault: on, snapSize: size });
     controller.setSnap(on, size);
+  }
+
+  // 레이아웃 갱신 + 영속(항상 정규화 — 패널 집합 불일치/손상 흡수).
+  function updateLayout(next) {
+    const norm = normalizeLayout(next, PANEL_IDS);
+    setLayout(norm);
+    persistLayout(norm);
   }
 
   if (!docState) {
     return <div style={{ padding: '20px', color: '#8a93a8' }}>씬 로딩 중…</div>;
   }
 
+  const snap = settingsState.snapDefault;
+  const snapSize = settingsState.snapSize;
+
+  // 메뉴바 "보기" 메뉴가 쓰는 레이아웃 API — 현재 layout 클로저로 매 렌더 생성.
+  const layoutApi = {
+    isVisible: (id) => isPanelVisible(layout, id),
+    showPanel: (id) => updateLayout(addPanelToLayout(layout, id)),
+    hidePanel: (id) => updateLayout(removePanelFromLayout(layout, id)),
+    togglePanel: (id) => updateLayout(
+      isPanelVisible(layout, id) ? removePanelFromLayout(layout, id) : addPanelToLayout(layout, id)
+    ),
+    resetLayout: () => updateLayout(serializeLayout(DEFAULT_LAYOUT))
+  };
+
+  // 패널 레지스트리 — 매 렌더 최신 props 클로저(prop 구동). DockLayout 이 render() 호출.
+  const panels = {
+    hierarchy: { title: '계층', icon: '🗂', render: () => <Hierarchy controller={controller} world={world} selection={selection} /> },
+    viewport: { title: '뷰포트', icon: '🎬', render: () => <Viewport controller={controller} sceneDoc={docState} /> },
+    inspector: { title: '속성', icon: '🔧', render: () => <Inspector controller={controller} world={world} selection={selection} /> },
+    assets: { title: '에셋', icon: '🖼', render: () => <AssetBrowser controller={controller} selection={selection} /> },
+    skills: { title: '스킬', icon: '✨', render: () => <SkillMenu controller={controller} /> },
+    chat: { title: 'Claude 챗', icon: '💬', render: () => <ChatPanel controller={controller} /> }
+  };
+
+  // 메뉴는 순수 빌더 — 매 렌더 재호출해 최신 상태(selection·mode·undo·settings) 반영.
+  const menus = buildMenus({
+    controller, settings, layoutApi, selection,
+    undoDepth, redoDepth, mode, panelIds: PANEL_IDS
+  });
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <MenuBar menus={menus} />
       <Toolbar controller={controller} gizmoMode={gizmoMode} snap={snap} snapSize={snapSize}
                mode={mode} undoDepth={undoDepth} redoDepth={redoDepth} onSnapChange={onSnapChange} />
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        {/* 좌측: Hierarchy + AssetBrowser 스택 */}
-        <div style={{ width: '230px', flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div style={{ flex: '1 1 50%', minHeight: 0 }}>
-            <Hierarchy controller={controller} world={world} selection={selection} />
-          </div>
-          <div style={{ flex: '1 1 50%', minHeight: 0 }}>
-            <AssetBrowser controller={controller} selection={selection} />
-          </div>
-        </div>
-        <Viewport controller={controller} sceneDoc={docState} />
-        {/* 우측: Inspector + SkillMenu 스택 */}
-        <div style={{ width: '290px', flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div style={{ flex: '1 1 60%', minHeight: 0 }}>
-            <Inspector controller={controller} world={world} selection={selection} />
-          </div>
-          <div style={{ flex: '1 1 40%', minHeight: 0 }}>
-            <SkillMenu controller={controller} />
-          </div>
-        </div>
-        <div style={{ width: '250px', flexShrink: 0 }}>
-          <ChatPanel controller={controller} />
-        </div>
+        <DockLayout panels={panels} layout={layout} onLayoutChange={updateLayout} />
       </div>
     </div>
   );
@@ -137,6 +220,8 @@ function boot() {
   // transport 선택: window.__WGF_BRIDGE__ 주입 시 remote(브리지 구독자), 없으면 local(P1).
   const transport = createTransport();
   const controller = createController({ transport });
+  // 환경설정 스토어(생성 시 저장된 CSS 변수 즉시 반영 — applyToDocument 자동 호출).
+  const settings = createEditorSettings();
 
   // window.WGFEditor — e2e 프로그래매틱 API(편집 인스턴스 래핑).
   // local·remote 둘 다에서 동일 시그니처. remote 에선 명령이 브리지를 거쳐 Promise 반환.
@@ -144,6 +229,7 @@ function boot() {
     _controller: controller,
     _transport: transport,
     _bridge: getBridgeConfig(),
+    _settings: settings,
     isRemote: controller.isRemote,
     loadScene: (doc) => controller.loadScene(doc),
     serialize: () => controller.serialize(),
@@ -172,7 +258,7 @@ function boot() {
     assignAssetToEntity: (id, spriteId) => controller.assignAssetToEntity(id, spriteId)
   };
 
-  render(<App controller={controller} />, document.getElementById('app'));
+  render(<App controller={controller} settings={settings} />, document.getElementById('app'));
 }
 
 boot();
