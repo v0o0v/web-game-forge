@@ -13,7 +13,7 @@ export function Viewport({ controller, sceneDoc }) {
 
   return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: '#0e1016', overflow: 'auto', padding: '12px' }}>
+                  background: 'var(--viewport-bg, #0e1016)', overflow: 'auto', padding: '12px' }}>
       <div ref={hostRef} id="wgf-viewport"
            style={{ boxShadow: '0 0 0 1px #2c3346', lineHeight: 0 }} />
     </div>

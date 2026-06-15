@@ -18,12 +18,17 @@
     --bg: #14171f; --panel: #1b1f2a; --panel2: #222838; --border: #2c3346;
     --text: #d7def0; --text-dim: #8a93a8; --accent: #4fd0ff; --accent2: #ffd23f;
     --danger: #ff6b6b; --ok: #9bff8f;
+    /* 환경설정(editorSettings.js)이 런타임에 오버라이드하는 변수 — 기본값 */
+    --font-size: 13px; --pad: 8px; --viewport-bg: #0e1016;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
-    font-family: -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 13px; }
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif; font-size: var(--font-size, 13px); }
   #app { height: 100vh; }
   button { font: inherit; }
+  /* 도킹 리사이저/탭 닫기 hover — 인라인 스타일을 덮어야 하므로 !important */
+  .wgf-dock-resizer:hover { background: var(--accent) !important; }
+  .wgf-dock-tabclose:hover { background: var(--danger); color: #fff !important; }
 </style>
 </head>
 <body>
