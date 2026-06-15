@@ -21,8 +21,9 @@
  *   node editor/server/bridge.mjs [port]          # 기본 5180
  *   WGF_BRIDGE_PORT=5200 node editor/server/bridge.mjs
  *   WGF_BRIDGE_SCENE=games/<slug>/scene.json node editor/server/bridge.mjs
- *   WGF_BRIDGE_PORT=0 ...                           # 임의 빈 포트(테스트 하니스)
- * 그 다음 브라우저: http://127.0.0.1:<port>/editor/ui/
+ *   WGF_BRIDGE_PORT=0 ...                           # 임의 빈 포트(테스트 하니스) — 자동열기 생략
+ *   WGF_NO_OPEN=1 ...                               # 브라우저 자동 실행 끄기(명시 옵트아웃)
+ * 기동 완료 시 기본 브라우저로 http://127.0.0.1:<port>/editor/ui/ 를 자동으로 연다.
  *
  * 보안(설계서 §6):
  *   - 127.0.0.1 전용 바인딩(0.0.0.0 금지 — LAN 비노출).
@@ -1234,6 +1235,28 @@ process.on('exit', removeEndpointFile);
 process.on('SIGINT', () => { removeEndpointFile(); process.exit(0); });
 process.on('SIGTERM', () => { removeEndpointFile(); process.exit(0); });
 
+// ── 브라우저 자동 실행 ─────────────────────────────────────────────────────────
+// 기동 완료 시 기본 브라우저로 에디터 URL 을 연다. execFile(배열 인자, 셸 미경유)라
+// URL 의 메타문자가 셸로 해석되지 않는다. 생략 조건:
+//   - WGF_NO_OPEN 설정         : 명시 옵트아웃
+//   - WGF_BRIDGE_PORT=0        : 테스트 하니스/임의 포트(모든 test-*.mjs 가 쓰는 신호)
+// 실패는 비치명적 — 브라우저가 없거나 헤드리스여도 서버는 계속 뜬다.
+function maybeOpenBrowser(url) {
+  if (process.env.WGF_NO_OPEN) return;
+  if (process.env.WGF_BRIDGE_PORT === '0') return;
+  let cmd, args;
+  if (process.platform === 'win32')       { cmd = process.env.ComSpec || 'cmd.exe'; args = ['/c', 'start', '', url]; }
+  else if (process.platform === 'darwin') { cmd = 'open';                            args = [url]; }
+  else                                    { cmd = 'xdg-open';                        args = [url]; }
+  try {
+    execFile(cmd, args, { windowsHide: true }, (err) => {
+      if (err) process.stderr.write(`[wgf-bridge] 브라우저 자동 실행 실패(무시) — 수동으로 ${url} 여세요\n`);
+    });
+  } catch (e) {
+    process.stderr.write(`[wgf-bridge] 브라우저 자동 실행 예외(무시): ${String(e)}\n`);
+  }
+}
+
 server.listen(PORT, HOST, () => {
   const actual = server.address().port;
   const url = `http://${HOST}:${actual}/editor/ui/`;
@@ -1243,6 +1266,7 @@ server.listen(PORT, HOST, () => {
   process.stderr.write(`[wgf-bridge] 브리지 기동 → ${url}\n`);
   process.stderr.write(`[wgf-bridge] 서빙 루트: ${REPO_ROOT}\n`);
   process.stderr.write(`[wgf-bridge] 씬: ${SCENE_REL}  entities=${state.world.entities.length}\n`);
+  maybeOpenBrowser(url);
 });
 
 server.on('error', (e) => {
