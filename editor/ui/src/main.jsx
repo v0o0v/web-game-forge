@@ -255,7 +255,14 @@ function boot() {
     getAssets: () => controller.getAssets(),
     addProceduralAsset: (p) => controller.addProceduralAsset(p),
     addCc0Asset: (p) => controller.addCc0Asset(p),
-    assignAssetToEntity: (id, spriteId) => controller.assignAssetToEntity(id, spriteId)
+    assignAssetToEntity: (id, spriteId) => controller.assignAssetToEntity(id, spriteId),
+    // 멀티씬 + 뷰포트 드롭(기능 C/E — e2e 검증용)
+    createEntityAtFromAsset: (payload, assetId, x, y) => controller.createEntityAtFromAsset(payload, assetId, x, y),
+    listScenes: () => controller.listScenes(),
+    addScene: (name) => controller.addScene(name),
+    renameScene: (id, name) => controller.renameScene(id, name),
+    removeScene: (id) => controller.removeScene(id),
+    switchScene: (id) => controller.switchScene(id)
   };
 
   render(<App controller={controller} settings={settings} />, document.getElementById('app'));

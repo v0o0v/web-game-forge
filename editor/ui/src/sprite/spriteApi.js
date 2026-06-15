@@ -9,6 +9,7 @@
  *   catalog()              → { ok, packs:[...], sources:[...] }
  *   library()              → { ok, items:[...] }
  *   slice(relPath, patch)  → { ok, item }
+ *   analyze(body)          → { ok, frames, frameConfig, anims }  (도출만, 저장 X)
  *   use(body)              → { ok, asset, reused, seq }   (409 = 빈 씬)
  *   download(packId)       → { ok, packId, stdout } | { ok:false, error }
  *   isRemote()             → 브리지 연결 여부(local 이면 안내 비활성)
@@ -95,6 +96,18 @@ export const spriteApi = {
       return { ok: false, error: (json && json.error) || ('슬라이스 저장 실패 status=' + status) };
     }
     return { ok: true, item: json.item };
+  },
+
+  // 시트를 "동작별 애니메이션"으로 분석(D1). 저장은 안 함 — 도출된 anims 만 반환(프론트가 검토 후 slice 저장).
+  //  body = { relPath, w?, h?, frameConfig? }. w/h 는 프론트가 이미 로드한 이미지의 naturalWidth/Height.
+  //  성공 { ok:true, frames, frameConfig, anims }. 오프라인/실패는 { ok:false, error, anims:[] } 안전반환.
+  async analyze(body) {
+    const { status, json, offline } = await apiFetch('POST', '/api/sprite/analyze', body || {});
+    if (offline) return { ok: false, error: '브리지 미연결(local 모드)', anims: [] };
+    if (status !== 200 || !json || json.ok !== true) {
+      return { ok: false, error: (json && json.error) || ('동작 분석 실패 status=' + status), anims: [] };
+    }
+    return { ok: true, frames: json.frames || null, frameConfig: json.frameConfig || null, anims: json.anims || [] };
   },
 
   async use(body) {

@@ -297,16 +297,144 @@ try {
   };
 }
 
+// ── 멀티 씬 정규화(E1) ─────────────────────────────────────────────────────────
+// baseDoc.scenes[] 가 모든 씬의 권위 저장소다. 부트 시 최소 1개 씬을 보장하고,
+// 각 씬 id 를 위생화·유니크화한다(이후 add/rename 과 동일 규칙). raw 픽스처(scenes 미존재,
+// 최상위 entities)도 단일 'main' 씬으로 승격해 멀티씬 경로로 일원화한다.
+const SCENE_NAME_MAX = 128;            // 씬 name 길이 상한
+const MAX_SCENES = 256;                // 씬 개수 상한(과다 생성 DoS 방어)
+
+// 씬 id 위생화: 영숫자._- 만 남기고 64자 상한. 비면 fallback.
+function sanitizeSceneId(raw, fallback) {
+  const s = String(raw == null ? '' : raw).replace(/[^A-Za-z0-9._\-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
+  return s.length ? s : fallback;
+}
+// 씬 name 위생화: 제어문자(C0 + DEL) 제거 + 길이 상한. 비면 fallback.
+//  공백/하이픈 등 일반 문자는 보존(표시용 이름) — 제어문자만 제거(인젝션 표면 0).
+function sanitizeSceneName(raw, fallback) {
+  const src = String(raw == null ? '' : raw);
+  let s = '';
+  for (let i = 0; i < src.length; i++) {
+    const c = src.charCodeAt(i);
+    if (c < 0x20 || c === 0x7f) continue;   // C0 제어문자 + DEL 제거
+    s += src[i];
+  }
+  s = s.slice(0, SCENE_NAME_MAX).trim();
+  return s.length ? s : fallback;
+}
+// 중복 방지 유니크 id 발급(used Set 기준 -2,-3 접미).
+function uniqueSceneId(base, used) {
+  let id = base;
+  let n = 2;
+  while (used.has(id)) { id = base + '-' + n; n++; }
+  return id;
+}
+
+// baseDoc 을 멀티씬 권위 형태로 정규화(scenes[] 보장 + id/name 위생화). 반환 baseDoc(동일 참조 변형).
+function normalizeBaseDoc(doc) {
+  const d = (doc && typeof doc === 'object') ? doc : {};
+  let scenes = Array.isArray(d.scenes) ? d.scenes.filter((s) => s && typeof s === 'object') : [];
+  if (scenes.length === 0) {
+    // raw 픽스처/빈 문서 — 최상위 entities/walls 를 단일 'main' 씬으로 승격.
+    scenes = [{
+      id: 'main',
+      systems: (d.systems && typeof d.systems === 'object') ? d.systems : {},
+      entities: Array.isArray(d.entities) ? d.entities : []
+    }];
+  }
+  const used = new Set();
+  for (let i = 0; i < scenes.length; i++) {
+    const sc = scenes[i];
+    const base = sanitizeSceneId(sc.id, 'scene-' + (i + 1));
+    const id = uniqueSceneId(base, used);
+    used.add(id);
+    sc.id = id;
+    sc.name = sanitizeSceneName(sc.name, '씬 ' + (i + 1));
+    if (!Array.isArray(sc.entities)) sc.entities = [];
+  }
+  d.scenes = scenes;
+  return d;
+}
+
+sceneDoc = normalizeBaseDoc(sceneDoc);
+
 // ── 라이브 상태(단일 진실) ────────────────────────────────────────────────────
 const state = {
-  baseDoc: sceneDoc,             // wgf-scene@1 래퍼(serialize 결과를 다시 감쌀 때 기준)
-  world: SceneKit.load(sceneDoc, { mode: 'edit' }),
+  baseDoc: sceneDoc,             // wgf-scene@1 래퍼 + 모든 scenes[] 권위 저장소(E1)
+  activeSceneId: sceneDoc.scenes[0].id,   // 활성 씬 id(state.world 가 로드한 씬)
+  world: SceneKit.load(sceneDoc, { mode: 'edit', sceneId: sceneDoc.scenes[0].id }),
   mode: 'edit',                  // 'edit' | 'play' (권위 모드, §4.9)
   seq: 0,                        // 현재 시퀀스(마지막으로 적용된 델타의 id)
   log: [],                       // 커맨드 로그 [{seq, kind, command, undoDelta}] — SSE 복구용
   undoStack: [],                 // [{cmd, undoDelta}]
   redoStack: []
 };
+
+// 활성 씬 슬롯(baseDoc.scenes 중 activeSceneId) 반환. 없으면 첫 씬으로 폴백.
+function activeSceneSlot() {
+  const scenes = state.baseDoc.scenes;
+  for (let i = 0; i < scenes.length; i++) {
+    if (String(scenes[i].id) === String(state.activeSceneId)) return scenes[i];
+  }
+  return scenes[0];
+}
+
+// 현재 live world 의 serialize 결과(entities/walls/assets)를 활성 씬 슬롯에 써넣는다.
+// 다른 씬 슬롯은 그대로 보존(멀티씬 권위 유지). 커맨드 적용·스냅샷·씬전환 직전 동기화 지점.
+//  - entities/walls 는 활성 씬에, assets 는 최상위 baseDoc.assets 에 보존(현 구조: 최상위 공유 우선).
+//  - scene.systems 는 보존(live world.meta.systems 가 있으면 갱신, 없으면 기존 슬롯 값 유지).
+function flushWorldToActiveScene() {
+  const serialized = SceneKit.serialize(state.world);
+  const slot = activeSceneSlot();
+  slot.entities = serialized.entities || [];
+  if (serialized.walls && serialized.walls.length) slot.walls = serialized.walls;
+  else if ('walls' in slot) delete slot.walls;
+  // systems: world.meta.systems(load 시 scene.systems 를 meta.systems 로 보존) 우선.
+  if (state.world.meta && state.world.meta.systems && typeof state.world.meta.systems === 'object') {
+    slot.systems = state.world.meta.systems;
+  }
+  // assets 는 최상위 공유 슬롯에 보존(scene.assets 보다 우선 — 기존 동작 유지).
+  if (serialized.assets && typeof serialized.assets === 'object') state.baseDoc.assets = serialized.assets;
+  // meta 도 최상위에 보존(viewport 등 — 활성 씬 편집 중 갱신분 반영).
+  if (serialized.meta && Object.keys(serialized.meta).length) {
+    // systems 키는 scene 단위라 최상위 meta 에서 제외(슬롯에 이미 반영).
+    const m = Object.assign({}, serialized.meta);
+    delete m.systems;
+    state.baseDoc.meta = m;
+  }
+}
+
+// 활성 씬을 SceneKit.load 로 다시 적재(state.world 교체). 씬전환·삭제 후 호출.
+//  undo/redo 스택은 씬 경계를 넘지 않으므로 초기화(문서화된 동작).
+function reloadActiveWorld() {
+  state.world = SceneKit.load(state.baseDoc, { mode: state.mode, sceneId: state.activeSceneId });
+  state.undoStack.length = 0;
+  state.redoStack.length = 0;
+}
+
+// 씬 목록 요약 [{id,name,entityCount}] — 활성 씬은 라이브 world, 비활성은 baseDoc 슬롯 기준.
+function sceneSummaries() {
+  return state.baseDoc.scenes.map((s) => {
+    const isActive = String(s.id) === String(state.activeSceneId);
+    const entityCount = isActive
+      ? state.world.entities.length
+      : (Array.isArray(s.entities) ? s.entities.length : 0);
+    return { id: String(s.id), name: typeof s.name === 'string' ? s.name : String(s.id), entityCount };
+  });
+}
+
+// 'scene' 델타 발행(씬 목록/활성 변경) — seq 부여 + 로그 적재 + SSE 브로드캐스트.
+//  씬 커맨드(엔티티 적용)가 아니라 구조 변경 신호이므로 'scene' 타입으로 따로 보낸다.
+//  에디터는 이 델타를 받으면 /api/scene·/api/scene/list 를 재요청해 동기화한다.
+function broadcastScene(op, payload) {
+  state.seq += 1;
+  const command = Object.assign({ op }, payload || {});
+  const entry = { seq: state.seq, kind: 'scene', command, undoDelta: null };
+  state.log.push(entry);
+  if (state.log.length > UNDO_LIMIT) state.log.shift();
+  broadcast(Object.assign({ type: 'scene', seq: state.seq }, command));
+  return state.seq;
+}
 
 // ── SSE 구독자 ────────────────────────────────────────────────────────────────
 // 각 구독자: {res, buffer:[], alive}. buffer 는 백프레셔 상한 초과 시 비우고 resync 발행.
@@ -551,6 +679,10 @@ function replayMissed(sub, lastId) {
       // [P4] 에셋 델타는 'asset' 타입으로 재전송 — 라이브 브로드캐스트와 동일(씬 커맨드 아님).
       const c = entry.command || {};
       evt = { type: 'asset', seq: entry.seq, op: c.op, asset: c.asset };
+    } else if (entry.kind === 'scene') {
+      // [E1] 씬 구조 델타(add/rename/remove/switch)는 'scene' 타입으로 재전송 — 라이브와 동일.
+      //  에디터는 이 델타를 받으면 /api/scene·/api/scene/list 를 재요청해 동기화한다.
+      evt = Object.assign({ type: 'scene', seq: entry.seq }, entry.command || {});
     } else {
       evt = { type: 'command', seq: entry.seq, command: entry.command };
     }
@@ -662,19 +794,49 @@ function sceneSnapshot() {
   return { scene: wrapForSnapshot(serialized), seq: state.seq, mode: state.mode };
 }
 
+// 스냅샷 래핑(E1 멀티씬): baseDoc 의 모든 scenes[] 를 보존하고, 활성 씬 슬롯만 live world
+// 의 serialize 결과로 갱신한다. 비활성 씬은 baseDoc 의 기존 내용(entities/systems/walls) 그대로.
+//  - 활성 씬 슬롯 = activeSceneId 와 id 일치 슬롯(없으면 첫 슬롯).
+//  - 활성 슬롯 entities/walls/systems 는 serialized(라이브) 기준으로 갱신, 비활성은 보존.
+//  - assets 는 최상위 공유(scene.assets 보다 우선) — 기존 동작 보존.
+//  - 최상위 activeSceneId 필드 포함(에디터 UI 가 읽음).
+//  - 단일 씬이면 기존과 동일 모양(scenes:[{id,systems,entities}]) 유지 → export/round-trip 호환.
 function wrapForSnapshot(serialized) {
   const base = (state.baseDoc && typeof state.baseDoc === 'object') ? state.baseDoc : {};
+  const baseScenes = Array.isArray(base.scenes) && base.scenes.length ? base.scenes : [{ id: 'main', systems: {}, entities: [] }];
+  const activeId = String(state.activeSceneId != null ? state.activeSceneId : (baseScenes[0] && baseScenes[0].id));
+
+  const scenes = baseScenes.map((sc) => {
+    const s = (sc && typeof sc === 'object') ? sc : {};
+    const isActive = String(s.id) === activeId;
+    const out = {
+      id: s.id != null ? String(s.id) : 'main',
+      // systems: 활성 씬은 live world.meta.systems 우선(편집 중 갱신분), 비활성은 보존.
+      systems: isActive
+        ? ((state.world.meta && state.world.meta.systems && typeof state.world.meta.systems === 'object')
+            ? state.world.meta.systems
+            : (s.systems || {}))
+        : (s.systems || {}),
+      // entities: 활성 씬은 live serialized, 비활성은 baseDoc 보존.
+      entities: isActive ? (serialized.entities || []) : (Array.isArray(s.entities) ? s.entities : [])
+    };
+    // walls: 활성 씬은 live(있을 때만), 비활성은 보존(있을 때만).
+    if (isActive) {
+      if (serialized.walls && serialized.walls.length) out.walls = serialized.walls;
+    } else if (Array.isArray(s.walls) && s.walls.length) {
+      out.walls = s.walls;
+    }
+    return out;
+  });
+
   return {
     format: base.format || 'wgf-scene@1',
     slug: base.slug || 'scene',
+    activeSceneId: activeId,
     meta: serialized.meta && Object.keys(serialized.meta).length ? serialized.meta : (base.meta || {}),
     assets: serialized.assets || base.assets || {},
-    walls: serialized.walls || base.walls || [],
-    scenes: [{
-      id: (base.scenes && base.scenes[0] && base.scenes[0].id) || 'main',
-      systems: (base.scenes && base.scenes[0] && base.scenes[0].systems) || {},
-      entities: serialized.entities || []
-    }],
+    walls: base.walls || [],
+    scenes,
     dataLayers: base.dataLayers || {}
   };
 }
@@ -999,6 +1161,107 @@ function handleApi(req, res, u, p) {
     return;
   }
 
+  // ── E1 멀티 씬(추가/전환/삭제/이름변경) ──────────────────────────────────────
+  //  baseDoc.scenes[] 가 권위 저장소. 활성 씬만 state.world 로 로드돼 커맨드가 적용된다.
+
+  // GET /api/scene/list — 모든 씬 요약 {id,name,entityCount} + activeSceneId + seq.
+  //  read-only: 권위 문서를 변이하지 않는다. sceneSummaries() 가 활성 씬은 라이브 world,
+  //  비활성 씬은 baseDoc 슬롯 entities 길이로 entityCount 를 계산하므로 flush 불필요.
+  //  (특히 Play 중 list 호출이 play world 를 슬롯에 flush 하는 부작용을 제거.)
+  if (req.method === 'GET' && p === '/api/scene/list') {
+    sendJSON(res, 200, { ok: true, scenes: sceneSummaries(), activeSceneId: state.activeSceneId, seq: state.seq });
+    return;
+  }
+
+  // POST /api/scene/add {name?} — 새 빈 씬 생성(고유 id·기본 name "Scene N"). 전환은 안 함.
+  //  Play 중엔 씬 구조 read-only(§4.9 불변식). 씬 개수 상한(MAX_SCENES) 초과 시 400.
+  if (req.method === 'POST' && p === '/api/scene/add') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body || '{}'); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      if (state.mode === 'play') { sendJSON(res, 409, { ok: false, error: 'Play 모드 — 씬 구조 read-only(§4.9)' }); return; }
+      if (state.baseDoc.scenes.length >= MAX_SCENES) { sendJSON(res, 400, { ok: false, error: '씬 수 상한 초과(최대 256)' }); return; }
+      const used = new Set(state.baseDoc.scenes.map((s) => String(s.id)));
+      const n = state.baseDoc.scenes.length + 1;
+      const id = uniqueSceneId(sanitizeSceneId('scene-' + n, 'scene-' + n), used);
+      const name = sanitizeSceneName(parsed && parsed.name, 'Scene ' + n);
+      const scene = { id, name, systems: {}, entities: [] };
+      state.baseDoc.scenes.push(scene);
+      // 'scene' 델타 발행(목록 변경 — 에디터가 list 재요청). 씬 추가는 활성 씬 상태 무변경.
+      const seq = broadcastScene('add', { id, name });
+      sendJSON(res, 200, { ok: true, scene: { id, name }, scenes: sceneSummaries(), activeSceneId: state.activeSceneId, seq });
+    });
+    return;
+  }
+
+  // POST /api/scene/rename {id, name} — 위생화된 name 설정. Play 중엔 씬 구조 read-only(§4.9).
+  if (req.method === 'POST' && p === '/api/scene/rename') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      if (state.mode === 'play') { sendJSON(res, 409, { ok: false, error: 'Play 모드 — 씬 구조 read-only(§4.9)' }); return; }
+      const id = String((parsed && parsed.id) != null ? parsed.id : '');
+      const slot = state.baseDoc.scenes.find((s) => String(s.id) === id);
+      if (!slot) { sendJSON(res, 404, { ok: false, error: '씬 없음: ' + id }); return; }
+      slot.name = sanitizeSceneName(parsed && parsed.name, slot.name || id);
+      const seq = broadcastScene('rename', { id, name: slot.name });
+      sendJSON(res, 200, { ok: true, scenes: sceneSummaries(), seq });
+    });
+    return;
+  }
+
+  // POST /api/scene/remove {id} — 씬 제거. 마지막 1개는 거부(400). 활성 씬 제거 시
+  //  activeSceneId 를 남은 첫 씬으로 이동 + world 재로드. Play 모드 중엔 거부(409).
+  if (req.method === 'POST' && p === '/api/scene/remove') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      if (state.mode === 'play') { sendJSON(res, 409, { ok: false, error: 'Play 모드 — 씬 구조 read-only(§4.9)' }); return; }
+      const id = String((parsed && parsed.id) != null ? parsed.id : '');
+      const idx = state.baseDoc.scenes.findIndex((s) => String(s.id) === id);
+      if (idx < 0) { sendJSON(res, 404, { ok: false, error: '씬 없음: ' + id }); return; }
+      if (state.baseDoc.scenes.length <= 1) { sendJSON(res, 400, { ok: false, error: '마지막 씬은 삭제할 수 없습니다.' }); return; }
+      const wasActive = (String(state.activeSceneId) === id);
+      // 활성 씬을 지우는 경우, 지우기 전에 라이브 상태를 슬롯에 flush 할 필요 없음(어차피 제거).
+      state.baseDoc.scenes.splice(idx, 1);
+      if (wasActive) {
+        // 활성 씬 제거 → 남은 첫 씬으로 이동 + world 재로드.
+        state.activeSceneId = state.baseDoc.scenes[0].id;
+        reloadActiveWorld();
+      }
+      const seq = broadcastScene('remove', { id, activeSceneId: state.activeSceneId });
+      sendJSON(res, 200, { ok: true, scenes: sceneSummaries(), activeSceneId: state.activeSceneId, seq });
+    });
+    return;
+  }
+
+  // POST /api/scene/switch {id} — 활성 씬 전환. flushWorldToActiveScene() 후
+  //  activeSceneId=id, state.world=SceneKit.load(baseDoc,{mode,sceneId:id}). seq 증가.
+  //  SSE 로 'scene' 델타(op=switch) 발행 → 에디터가 /api/scene 재요청. Play 모드 중엔 거부(409).
+  if (req.method === 'POST' && p === '/api/scene/switch') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      if (state.mode === 'play') { sendJSON(res, 409, { ok: false, error: 'Play 모드 — 씬 전환 불가(§4.9)' }); return; }
+      const id = String((parsed && parsed.id) != null ? parsed.id : '');
+      const slot = state.baseDoc.scenes.find((s) => String(s.id) === id);
+      if (!slot) { sendJSON(res, 404, { ok: false, error: '씬 없음: ' + id }); return; }
+      if (String(state.activeSceneId) === id) {
+        // 이미 활성 — 무변경(멱등). seq 증가 없이 현재 상태 반환.
+        sendJSON(res, 200, { ok: true, activeSceneId: state.activeSceneId, seq: state.seq });
+        return;
+      }
+      // 현재 활성 씬의 라이브 상태를 슬롯에 flush(편집분 보존) 후 대상 씬 로드.
+      flushWorldToActiveScene();
+      state.activeSceneId = id;
+      reloadActiveWorld();
+      // 'scene' 델타(op=switch) 발행 — 에디터가 스냅샷 재요청(world 전체 교체이므로 resync 의미).
+      const seq = broadcastScene('switch', { activeSceneId: id });
+      sendJSON(res, 200, { ok: true, activeSceneId: state.activeSceneId, seq });
+    });
+    return;
+  }
+
   // GET /api/events — SSE 델타 스트림.
   if (req.method === 'GET' && p === '/api/events') {
     res.writeHead(200, {
@@ -1295,6 +1558,35 @@ function handleApi(req, res, u, p) {
       catch (e) { sendJSON(res, 500, { ok: false, error: '슬라이스 저장 실패: ' + String(e && e.message || e) }); return; }
       if (!r.ok) { sendJSON(res, r.code || 400, { ok: false, error: r.error }); return; }
       sendJSON(res, 200, { ok: true, item: r.item });
+    });
+    return;
+  }
+
+  // POST /api/sprite/analyze {relPath, w?, h?, frameConfig?} —
+  //  가져온 시트를 "동작별 애니메이션"으로 분석(D1). 저장은 안 함(프론트가 검토 후 /api/sprite/slice).
+  //  - 서버는 사이드카·analysis.json 에서 frameConfig/frames 를 조회(getSheetMeta).
+  //  - 클라가 frameConfig·w·h 를 보내면 그걸 우선(프론트가 이미지 로드 후 픽셀 크기를 안다 — grid 분석).
+  //  - deriveAnims 로 행 단위 의미 클립 도출. 반환 { ok, frames, frameConfig, anims }.
+  //  경로 가드: getSheetMeta 가 resolveLibraryPath 로 traversal/dotfile/범위밖 거부(4xx).
+  if (req.method === 'POST' && p === '/api/sprite/analyze') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      const relPath = parsed && parsed.relPath;
+      let meta;
+      try { meta = SpriteLibrary.getSheetMeta(REPO_ROOT, relPath); }
+      catch (e) { sendJSON(res, 500, { ok: false, error: '시트 조회 실패: ' + String(e && e.message || e) }); return; }
+      if (!meta.ok) { sendJSON(res, meta.code || 400, { ok: false, error: meta.error }); return; }
+
+      // 클라 override: frameConfig·w·h(프론트가 이미지 로드 후 안다). 위생화 후 우선 채택.
+      const clientFc = SpriteLibrary.sanitizeFrameConfig(parsed && parsed.frameConfig);
+      const frameConfig = clientFc || meta.frameConfig || null;
+      const frames = meta.frames || null;
+      const w = (typeof (parsed && parsed.w) === 'number' && parsed.w > 0) ? (parsed.w | 0) : undefined;
+      const h = (typeof (parsed && parsed.h) === 'number' && parsed.h > 0) ? (parsed.h | 0) : undefined;
+
+      const derived = SpriteLibrary.deriveAnims({ frameConfig, frames, w, h });
+      sendJSON(res, 200, { ok: true, relPath: meta.relPath, frames: frames || null, frameConfig: frameConfig || null, anims: derived.anims });
     });
     return;
   }

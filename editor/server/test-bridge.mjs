@@ -20,6 +20,7 @@
  * ==========================================================================*/
 import http from 'node:http';
 import path from 'node:path';
+import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -554,6 +555,133 @@ async function main() {
 
       sse.close();
       await sleep(50);
+    }
+
+    // ── G8 멀티 씬(추가/전환/삭제/이름변경 + 모든 scenes 직렬화 보존) ─────────────
+    //  전용 브리지를 띄워(앞 게이트 상태와 분리) E1 멀티씬 권위를 실제 실행 검증한다.
+    {
+      let bms;
+      try { bms = await startBridge(); } catch (e) { bms = null; }
+      if (!bms) {
+        ok('G8 멀티씬 브리지 기동', false, '기동 실패');
+      } else {
+        const im = bms.info;
+        const sseS = await openSSE(im);
+
+        // 초기: 단일 씬('main') — 단일 씬이면 기존 모양 유지(scenes 길이 1).
+        const snap0 = JSON.parse((await api(im, 'GET', '/api/scene')).body);
+        ok('G8-0 초기 단일 씬(scenes 길이 1 + activeSceneId)',
+          snap0.scene.scenes.length === 1 && snap0.scene.activeSceneId === 'main',
+          `len=${snap0.scene.scenes.length} active=${snap0.scene.activeSceneId}`);
+
+        // list — 1개 + activeSceneId.
+        const list0 = JSON.parse((await api(im, 'GET', '/api/scene/list')).body);
+        ok('G8-1 list 1개 + activeSceneId',
+          list0.ok === true && Array.isArray(list0.scenes) && list0.scenes.length === 1 &&
+          list0.activeSceneId === 'main' && typeof list0.scenes[0].entityCount === 'number',
+          `scenes=${JSON.stringify(list0.scenes)}`);
+        const baseId = list0.scenes[0].id;
+
+        // list 는 read-only(보안 MED): 권위 문서를 변이하지 않는다.
+        //  list 호출 전후 /api/scene 스냅샷이 동일해야 한다(특히 seq 불변 — flush 부작용 0).
+        const before = JSON.parse((await api(im, 'GET', '/api/scene')).body);
+        await api(im, 'GET', '/api/scene/list');
+        await api(im, 'GET', '/api/scene/list');
+        const after = JSON.parse((await api(im, 'GET', '/api/scene')).body);
+        ok('G8-1b list 호출이 상태 변이 안 함(seq·스냅샷 동일)',
+          before.seq === after.seq && JSON.stringify(before.scene) === JSON.stringify(after.scene),
+          `seqBefore=${before.seq} seqAfter=${after.seq}`);
+
+        // 활성 씬(main)에 엔티티 1개 추가(이후 전환 시 보존 검증용).
+        await api(im, 'POST', '/api/command', { command: { type: 'addEntity', entity: { name: 'main-mark', transform: { x: 7, y: 7 }, components: [] } } });
+
+        // add — list +1, 전환 안 함(active 그대로).
+        const add = JSON.parse((await api(im, 'POST', '/api/scene/add', { name: '레벨 2' })).body);
+        ok('G8-2 add → scenes +1, 전환 안 함',
+          add.ok === true && add.scenes.length === 2 && add.activeSceneId === baseId &&
+          add.scene && typeof add.scene.id === 'string' && add.scene.id !== baseId,
+          `scenes=${add.scenes.length} active=${add.activeSceneId} newId=${add.scene && add.scene.id}`);
+        const newId = add.scene.id;
+        ok('G8-2b add name 위생화 반영', add.scene.name === '레벨 2', `name=${add.scene.name}`);
+
+        // add 가 SSE 'scene' 델타(op=add) 발행.
+        const gotSceneDelta = await waitFor(() => sseS.events.some((e) => e.type === 'scene' && e.op === 'add'), 2000);
+        ok('G8-2c SSE scene 델타(op=add) 발행', gotSceneDelta,
+          `events=${JSON.stringify(sseS.events.filter((e) => e.type === 'scene').map((e) => e.op))}`);
+
+        // switch → activeSceneId 변경 + 비활성(main) 씬 엔티티 보존 + 활성(newId) 빈 씬.
+        const sw = JSON.parse((await api(im, 'POST', '/api/scene/switch', { id: newId })).body);
+        ok('G8-3 switch → activeSceneId 변경', sw.ok === true && sw.activeSceneId === newId, `active=${sw.activeSceneId}`);
+
+        const snapSw = JSON.parse((await api(im, 'GET', '/api/scene')).body);
+        ok('G8-3b 스냅샷 scenes 길이 보존(2)', snapSw.scene.scenes.length === 2, `len=${snapSw.scene.scenes.length}`);
+        const mainSceneAfter = snapSw.scene.scenes.find((s) => s.id === baseId);
+        const newSceneAfter = snapSw.scene.scenes.find((s) => s.id === newId);
+        // main = 초기 2(topdown-min) + 추가 1 = 3, 비활성이지만 보존.
+        ok('G8-3c 비활성 씬(main) 엔티티 보존(3)', mainSceneAfter && mainSceneAfter.entities.length === 3,
+          `main=${mainSceneAfter && mainSceneAfter.entities.length}`);
+        ok('G8-3d 활성 씬(level2) 빈 씬(0)', newSceneAfter && newSceneAfter.entities.length === 0,
+          `new=${newSceneAfter && newSceneAfter.entities.length}`);
+        ok('G8-3e 스냅샷 activeSceneId=level2', snapSw.scene.activeSceneId === newId, `active=${snapSw.scene.activeSceneId}`);
+
+        // 새 활성 씬에 엔티티 추가 → 그 씬에만 반영(다른 씬 무영향).
+        await api(im, 'POST', '/api/command', { command: { type: 'addEntity', entity: { name: 'lvl2-ent', transform: { x: 3, y: 3 }, components: [] } } });
+        const snapAdd = JSON.parse((await api(im, 'GET', '/api/scene')).body);
+        const newSceneAdded = snapAdd.scene.scenes.find((s) => s.id === newId);
+        const mainStillThree = snapAdd.scene.scenes.find((s) => s.id === baseId);
+        ok('G8-4 활성 씬 커맨드 격리(level2=1, main=3 불변)',
+          newSceneAdded && newSceneAdded.entities.length === 1 && mainStillThree && mainStillThree.entities.length === 3,
+          `level2=${newSceneAdded && newSceneAdded.entities.length} main=${mainStillThree && mainStillThree.entities.length}`);
+
+        // rename.
+        const rn = JSON.parse((await api(im, 'POST', '/api/scene/rename', { id: newId, name: '리네임됨' })).body);
+        const renamed = rn.scenes.find((s) => s.id === newId);
+        ok('G8-5 rename 반영', rn.ok === true && renamed && renamed.name === '리네임됨', `name=${renamed && renamed.name}`);
+
+        // 다시 main 으로 전환 후 level2 의 추가분 보존 확인(왕복 무손실).
+        await api(im, 'POST', '/api/scene/switch', { id: baseId });
+        const snapBack = JSON.parse((await api(im, 'GET', '/api/scene')).body);
+        const lvl2Back = snapBack.scene.scenes.find((s) => s.id === newId);
+        ok('G8-6 왕복 후 level2 추가분 보존(1)', lvl2Back && lvl2Back.entities.length === 1,
+          `level2=${lvl2Back && lvl2Back.entities.length} active=${snapBack.scene.activeSceneId}`);
+
+        // remove(비활성 level2) → scenes -1.
+        const rm = JSON.parse((await api(im, 'POST', '/api/scene/remove', { id: newId })).body);
+        ok('G8-7 remove → scenes -1', rm.ok === true && rm.scenes.length === 1 && rm.activeSceneId === baseId,
+          `scenes=${rm.scenes.length} active=${rm.activeSceneId}`);
+
+        // 마지막 1개 씬 삭제 거부(400).
+        const rmLast = await api(im, 'POST', '/api/scene/remove', { id: baseId });
+        ok('G8-8 마지막 1개 씬 삭제 거부(400)', rmLast.status === 400, `status=${rmLast.status}`);
+
+        // 없는 씬 전환/이름변경/삭제 → 404.
+        const swMissing = await api(im, 'POST', '/api/scene/switch', { id: 'no-such-scene' });
+        ok('G8-9 없는 씬 switch → 404', swMissing.status === 404, `status=${swMissing.status}`);
+
+        // Play 모드 중 switch 거부(409).
+        await api(im, 'POST', '/api/mode', { mode: 'play' });
+        const swPlay = await api(im, 'POST', '/api/scene/switch', { id: baseId });
+        ok('G8-10 Play 중 switch → 409', swPlay.status === 409, `status=${swPlay.status}`);
+        // Play 중 add·rename 도 씬 구조 read-only(§4.9 불변식 정합) → 409.
+        const addPlay = await api(im, 'POST', '/api/scene/add', { name: 'play-add' });
+        ok('G8-11 Play 중 add → 409', addPlay.status === 409, `status=${addPlay.status}`);
+        const renPlay = await api(im, 'POST', '/api/scene/rename', { id: baseId, name: 'play-rename' });
+        ok('G8-12 Play 중 rename → 409', renPlay.status === 409, `status=${renPlay.status}`);
+        await api(im, 'POST', '/api/mode', { mode: 'edit' });
+
+        // MAX_SCENES 가드(보안 MED): 256회 호출은 과하므로 상수 존재만 정적 확인.
+        //  add 핸들러가 MAX_SCENES 로 상한·400 '씬 수 상한 초과' 를 반환하도록 배선됐는지 소스 확인.
+        const bridgeSrc = fs.readFileSync(BRIDGE, 'utf8');
+        ok('G8-13 MAX_SCENES 상한 가드 존재(소스)',
+          /MAX_SCENES\s*=\s*256/.test(bridgeSrc) &&
+          bridgeSrc.includes('scenes.length >= MAX_SCENES') &&
+          bridgeSrc.includes('씬 수 상한 초과'),
+          'MAX_SCENES guard');
+
+        sseS.close();
+        try { bms.child.kill(); } catch (e) {}
+        await sleep(50);
+      }
     }
 
   } catch (e) {

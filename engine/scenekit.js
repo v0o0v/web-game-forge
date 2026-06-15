@@ -225,8 +225,23 @@
       entity: entity,
       world: world,
       rng: world.rng,
-      getComponent: function (type) { return getComponentOn(entity, type); }
+      getComponent: function (type) { return getComponentOn(entity, type); },
+      // 인게임 씬 전환 요청(Unity LoadScene 의미). 컴포넌트 step 에서 ctx.requestScene(id)
+      // 로 대상 씬 id 를 설정한다(공개 SceneKit.requestScene 과 동일 동작 — world._sceneRequest 설정).
+      requestScene: function (sceneId) { return requestScene(world, sceneId); }
     };
+  }
+
+  // 인게임 씬 전환 요청 — world._sceneRequest 에 대상 씬 id(문자열)를 설정.
+  // 어댑터가 step 직후 소비해 대상 씬을 새 world(t=0)로 로드한다(Unity LoadScene 의미).
+  // 가벼운 유효성: sceneId 가 null/undefined/빈 문자열이면 요청 무시(기존 요청 유지하지 않고 그대로).
+  // 결정론: 무작위·시간 함수 미사용 — 호출 시점은 컴포넌트 step(주입 dt·input 의존)이 결정.
+  function requestScene(world, sceneId) {
+    if (!isObj(world)) return;
+    if (sceneId == null) return;
+    var id = String(sceneId);
+    if (id === '') return;
+    world._sceneRequest = id;
   }
 
   // 한 엔티티의 등록된 컴포넌트들을 init(컴포넌트 선언 순서). 미등록 타입은 건너뜀.
@@ -301,7 +316,12 @@
       rng: rng,
       time: 0,
       meta: meta,
-      _idSeq: 0
+      _idSeq: 0,
+      // 인게임 씬 전환 요청(Unity LoadScene 의미). 컴포넌트(SceneTrigger 등)나
+      // requestScene 헬퍼가 대상 씬 id 를 문자열로 설정하면, 어댑터가 step 직후
+      // 소비해 대상 씬을 t=0 초기상태로 새로 로드한다. null = 전환 요청 없음.
+      // 결정론 불변식: 이 필드는 step 입력(dt·input)에만 의존(Math.random/Date.now 미사용).
+      _sceneRequest: null
     };
 
     // 정적 벽(AABB 배열). {x,y,w,h} 정규화 — x,y=좌상단, w,h=폭/높이.
@@ -799,6 +819,7 @@
     world.walls = fresh.walls;
     world.time = 0;
     world._idSeq = fresh._idSeq;
+    world._sceneRequest = null;   // 재시작 시 잔여 전환 요청 폐기(t=0 일관성)
     if (opts && opts.rng) world.rng = opts.rng; else world.rng = fresh.rng;
     return world;
   }
@@ -817,6 +838,9 @@
     load: load,
     step: step,
     reset: reset,
+
+    // 인게임 씬 전환(Unity LoadScene 의미) — 어댑터가 step 직후 world._sceneRequest 소비.
+    requestScene: requestScene,
 
     // 직렬화·해시
     serialize: serialize,

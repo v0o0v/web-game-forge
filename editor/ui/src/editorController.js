@@ -113,6 +113,14 @@ export function createController(opts) {
     if (!isRemote || !transport) return;
     transport.onDelta((delta) => {
       if (!adapter || !delta) return;
+      // 멀티씬 델타(add/rename/remove/switch): 미러 커맨드 경로가 아니라 권위 스냅샷 전체
+      // 재로드로 동기한다. switch 는 활성 world 가 통째로 바뀌므로 command 재적용으로는 부족 —
+      // 브리지 스냅샷(/api/scene: 활성 씬 = live world, scenes[]·activeSceneId 포함)을 재요청해
+      // currentDoc 교체 + adapter.reload. (mirrorGuard 무관 — applyCommand 미러 경로와 분리.)
+      if (delta.type === 'scene') {
+        resyncFromBridge();
+        return;
+      }
       mirrorGuard = true;            // 미러 재적용 중 — onCommand 가 브리지로 에코 안 하게.
       try {
         if (delta.type === 'undo') {
@@ -163,6 +171,22 @@ export function createController(opts) {
   function applyRemoteMode(m) {
     remoteMode = (m === 'play') ? 'play' : 'edit';
     if (adapter && adapter.setMode) adapter.setMode(remoteMode);
+  }
+
+  // 브리지 권위 스냅샷으로 미러(어댑터 world) 전체 재구성. scene 델타(멀티씬 전환/추가/삭제)·
+  // 명시적 씬전환 후 활성 world 가 통째로 바뀌었을 때 사용. onResync 와 동일 형태로 정렬.
+  function resyncFromBridge() {
+    if (!isRemote || !transport || !transport.snapshot) return Promise.resolve(false);
+    return Promise.resolve(transport.snapshot()).then((snap) => {
+      if (!snap || !snap.scene) return false;
+      currentDoc = snap.scene;
+      if (typeof snap.mode === 'string') applyRemoteMode(snap.mode);
+      if (adapter) adapter.reload(snap.scene);
+      else if (parentEl) mount(parentEl, snap.scene);
+      notifyChange();
+      notifySelection(getSelection());
+      return true;
+    }).catch(() => false);
   }
 
   // remote: 어댑터 내부에서 사용자 입력(기즈모 드래그 등)으로 발생한 커맨드를 브리지에 전달.
@@ -299,6 +323,10 @@ export function createController(opts) {
 
   // ── Save / Load ─────────────────────────────────────────────────────────────
   // Save = serialize → localStorage 영속 + 파일 다운로드(P1; 디스크 저장은 P2).
+  // 반환은 동기(직렬화된 wgf-scene@1 — e2e WGFEditor.save() 호환). wrapForSave 가 멀티씬
+  // scenes[] 를 보존(활성 씬만 live world 로 갱신)하므로 동기 경로도 다른 씬을 유실하지 않는다.
+  // remote + downloadFile 시엔 한층 더 안전하게 브리지 권위 스냅샷(모든 scenes)을 비동기로
+  // 재요청해 그 문서를 다운로드한다(동기 반환값과 별개 — 파일만 최신 권위 반영).
   function save(downloadFile) {
     const doc = serialize();
     if (!doc) return null;
@@ -311,27 +339,77 @@ export function createController(opts) {
       }
     } catch (e) { /* 사적 모드 등 localStorage 불가 — 무시 */ }
     if (downloadFile && typeof document !== 'undefined') {
-      downloadJSON(out, (out.slug || 'scene') + '.json');
+      if (isRemote && transport && transport.snapshot) {
+        // 비동기: 브리지 권위 스냅샷(모든 scenes 보존)을 받아 다운로드. 실패 시 동기 out 폴백.
+        Promise.resolve(transport.snapshot()).then((snap) => {
+          const authoritative = (snap && snap.scene) ? buildSaveDoc(snap.scene) : out;
+          downloadJSON(authoritative, (authoritative.slug || out.slug || 'scene') + '.json');
+        }).catch(() => {
+          downloadJSON(out, (out.slug || 'scene') + '.json');
+        });
+      } else {
+        downloadJSON(out, (out.slug || 'scene') + '.json');
+      }
     }
     return out;
   }
 
+  // 브리지 권위 스냅샷(scene 문서 — 모든 scenes[]·activeSceneId 포함)을 저장 가능한
+  // wgf-scene@1 모양으로 정규화. 스냅샷은 활성 씬이 live world 모양이라 그대로 보존하면 된다.
+  function buildSaveDoc(sceneDoc) {
+    const d = (sceneDoc && typeof sceneDoc === 'object') ? sceneDoc : {};
+    const out = {
+      format: d.format || 'wgf-scene@1',
+      slug: d.slug || (currentDoc && currentDoc.slug) || 'scene',
+      meta: d.meta || {},
+      assets: d.assets || {},
+      walls: d.walls || [],
+      scenes: Array.isArray(d.scenes) ? d.scenes : [{ id: 'main', systems: {}, entities: [] }],
+      dataLayers: d.dataLayers || {}
+    };
+    if (d.activeSceneId != null) out.activeSceneId = d.activeSceneId;
+    return out;
+  }
+
   // serialize 결과(평면 entities)를 currentDoc 의 wgf-scene@1 래퍼에 채워 넣는다.
+  // 멀티씬 보정: serialize 는 활성 live world(엔티티 평면)만 돌려준다. currentDoc.scenes 가
+  // 여러 개면 그 슬롯들을 보존하고, 활성 씬(activeSceneId|첫 슬롯)만 serialize 결과로 갱신한다.
+  // activeSceneId 보존. 단일 씬이면 기존 라운드트립과 동일 모양(scenes[0] 갱신).
   function wrapForSave(serialized) {
     const base = currentDoc && typeof currentDoc === 'object' ? currentDoc : {};
+    const baseScenes = Array.isArray(base.scenes) && base.scenes.length ? base.scenes : null;
+    const activeId = base.activeSceneId;
+    // 활성 씬 슬롯 인덱스: activeSceneId 매칭 → 없으면 0(첫 슬롯).
+    let activeIdx = 0;
+    if (baseScenes && activeId != null) {
+      const found = baseScenes.findIndex((s) => s && s.id === activeId);
+      if (found >= 0) activeIdx = found;
+    }
+    let scenes;
+    if (baseScenes) {
+      // 모든 슬롯 보존, 활성 슬롯만 entities 를 live serialize 로 교체(systems/id 보존).
+      scenes = baseScenes.map((s, i) => {
+        if (i !== activeIdx) return s;
+        return {
+          id: (s && s.id) || 'main',
+          systems: (s && s.systems) || {},
+          entities: serialized.entities || []
+        };
+      });
+    } else {
+      // 래퍼에 scenes 가 없던 경우 — 단일 씬 신규 생성(기존 동작).
+      scenes = [{ id: 'main', systems: {}, entities: serialized.entities || [] }];
+    }
     const out = {
       format: base.format || 'wgf-scene@1',
       slug: base.slug || 'scene',
       meta: serialized.meta && Object.keys(serialized.meta).length ? serialized.meta : (base.meta || {}),
       assets: serialized.assets || base.assets || {},
       walls: serialized.walls || base.walls || [],
-      scenes: [{
-        id: (base.scenes && base.scenes[0] && base.scenes[0].id) || 'main',
-        systems: (base.scenes && base.scenes[0] && base.scenes[0].systems) || {},
-        entities: serialized.entities || []
-      }],
+      scenes: scenes,
       dataLayers: base.dataLayers || {}
     };
+    if (activeId != null) out.activeSceneId = activeId;
     return out;
   }
 
@@ -532,6 +610,68 @@ export function createController(opts) {
     return () => { const i = assetListeners.indexOf(cb); if (i >= 0) assetListeners.splice(i, 1); };
   }
 
+  // 드롭 위치(월드 좌표)에 에셋을 단 새 엔티티 생성(기능 C — 뷰포트 드롭).
+  //  payload = 드래그 페이로드(application/wgf-asset): { as:'Sprite'|'AnimatedSprite', frame?, anims?, play?, relPath? }.
+  //  assetId = 이미 use()/등록으로 회수한 자산 id(spriteId). worldX/worldY = 변환된 월드 좌표.
+  //  결정론/단일경로: addEntity → applyCommand(addEntity) 경유. remote 면 Promise<newId> 반환·select.
+  function createEntityAtFromAsset(payload, assetId, worldX, worldY) {
+    payload = payload || {};
+    if (!assetId) return isRemote ? Promise.resolve(null) : null;
+    var component;
+    if (payload.as === 'AnimatedSprite') {
+      var anims = Array.isArray(payload.anims) ? payload.anims : [];
+      var play = (payload.play != null) ? payload.play
+        : (anims[0] && anims[0].key != null ? anims[0].key : undefined);
+      component = { type: 'AnimatedSprite', sprite: assetId, anims: anims };
+      if (play != null) component.play = play;
+    } else {
+      component = { type: 'Sprite', sprite: assetId };
+      if (typeof payload.frame === 'number' && isFinite(payload.frame) && payload.frame >= 0) {
+        component.frame = Math.floor(payload.frame);
+      }
+    }
+    var name = (payload.as === 'AnimatedSprite') ? 'animated' : 'sprite';
+    var x = (typeof worldX === 'number' && isFinite(worldX)) ? worldX : 160;
+    var y = (typeof worldY === 'number' && isFinite(worldY)) ? worldY : 120;
+    // addEntity 는 transform/components 를 받아 applyCommand(addEntity) 로 새 엔티티를 만들고
+    // remote 면 Promise<newId>(select 포함), local 이면 newId(select 포함) 를 반환한다.
+    return addEntity({ name: name, transform: { x: x, y: y }, components: [component] });
+  }
+
+  // ── 멀티씬 관리(브리지 권위 위임) ─────────────────────────────────────────────
+  // local 모드는 브리지 없음 → 안내 반환. remote 는 transport 의 /api/scene/* 호출에 위임.
+  // 전환/추가/삭제 후 UI 동기화는 SSE 'scene' 델타 → resyncFromBridge() 가 담당(여기서 강제 X).
+  function listScenes() {
+    if (!isRemote || !transport || !transport.sceneList) {
+      return Promise.resolve({ ok: false, error: '브리지 필요 — local 모드에서는 멀티씬이 동작하지 않습니다', scenes: [], activeSceneId: null });
+    }
+    return Promise.resolve(transport.sceneList());
+  }
+  function addScene(name) {
+    if (!isRemote || !transport || !transport.sceneAdd) {
+      return Promise.resolve({ ok: false, error: '브리지 필요 — local 모드에서는 멀티씬이 동작하지 않습니다' });
+    }
+    return Promise.resolve(transport.sceneAdd(name));
+  }
+  function renameScene(id, name) {
+    if (!isRemote || !transport || !transport.sceneRename) {
+      return Promise.resolve({ ok: false, error: '브리지 필요 — local 모드에서는 멀티씬이 동작하지 않습니다' });
+    }
+    return Promise.resolve(transport.sceneRename(id, name));
+  }
+  function removeScene(id) {
+    if (!isRemote || !transport || !transport.sceneRemove) {
+      return Promise.resolve({ ok: false, error: '브리지 필요 — local 모드에서는 멀티씬이 동작하지 않습니다' });
+    }
+    return Promise.resolve(transport.sceneRemove(id));
+  }
+  function switchScene(id) {
+    if (!isRemote || !transport || !transport.sceneSwitch) {
+      return Promise.resolve({ ok: false, error: '브리지 필요 — local 모드에서는 멀티씬이 동작하지 않습니다' });
+    }
+    return Promise.resolve(transport.sceneSwitch(id));
+  }
+
   // 컴포넌트 레지스트리에서 inspectorFields 조회(Inspector UI 구동).
   function getComponentDef(type) {
     return SceneKit && SceneKit.getComponentDef ? SceneKit.getComponentDef(type) : null;
@@ -554,6 +694,9 @@ export function createController(opts) {
     runSkill, dispatchCreative, sceneContextSummary,
     getAssets, addProceduralAsset, addCc0Asset, assignAssetToEntity, onAssetChange,
     scanUnityFolder, importUnityAssets,
+    // 멀티씬 + 뷰포트 드롭(기능 C/E)
+    createEntityAtFromAsset,
+    listScenes, addScene, renameScene, removeScene, switchScene,
     STORAGE_KEY
   };
 }
