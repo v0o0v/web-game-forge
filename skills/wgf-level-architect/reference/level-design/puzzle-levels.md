@@ -10,7 +10,7 @@
 | (A) 매치·머지 보드 | 스왑→소거→낙하→리필 캐스케이드 | `runeburst` | `LD-CURVE` `LD-BUDGET` `LD-SOLVABLE` `LD-FAIR` `LD-VARIETY` | moves · colors · goal/target · board shape · 블로커 |
 | (B) 규칙조작·소코반 | 'X IS Y' 규칙을 밀어 다시 쓰기 / 박스 밀기 | `is-rule` | `LD-ONE-IDEA` `LD-SOLVABLE` `LD-BUDGET`(par) `LD-FAIR` `LD-4BEAT` | par · 신규 규칙 1개 · 통로 길이 · 규칙 상호작용 수 |
 
-퍼즐은 액션과 달리 **'강도(intensity)'가 아니라 '통찰(insight)의 깊이'로 난이도가 매겨진다.** 톱니형 곡선(`LD-CURVE`)의 단위는 '더 빠른 적'이 아니라 '한 레벨 한 새 아이디어'(`LD-ONE-IDEA`)다. 두 축 모두 우리 엔진 제약(2D·단일플레이·모바일웹뷰·CC0/절차생성·Arcade 우선·서버 메타 ❌→localStorage/시드)을 그대로 따른다.
+퍼즐은 액션과 달리 **'강도(intensity)'가 아니라 '통찰(insight)의 깊이'로 난이도가 매겨진다.** 톱니형 곡선(`LD-CURVE`)의 단위는 '더 빠른 적'이 아니라 '한 레벨 한 새 아이디어'(`LD-ONE-IDEA`)다. 두 축 모두 우리 엔진 제약(2D·단일플레이·모바일웹뷰·라이선스 안전·절차·Arcade 우선·서버 메타 ❌→localStorage/시드)을 그대로 따른다.
 
 ---
 

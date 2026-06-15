@@ -13,7 +13,7 @@ $stylePattern = '아트\s*스타일|아트\s*디렉션|비주얼\s*톤|스타일
 
 $parts = @()
 if ($prompt -imatch $gamePattern) {
-  $parts += '사용자가 브라우저/웹 게임 제작을 요청하고 있습니다. 응답 전에 web-game-builder 스킬을 호출하고 그 워크플로(Phaser 4 + 모바일 웹뷰 하니스 + CC0/절차적 에셋)를 따르세요. 단순 바닐라 JS 가 아니라 스킬 reference 템플릿으로 스프라이트 애니메이션·HUD·터치 컨트롤·오디오 언락까지 포함해 완성도 높게 만드세요. (The user is requesting a browser/web game — invoke the web-game-builder skill.)'
+  $parts += '사용자가 브라우저/웹 게임 제작을 요청하고 있습니다. 응답 전에 web-game-builder 스킬을 호출하고 그 워크플로(Phaser 4 + 모바일 웹뷰 하니스 + 라이선스 안전·절차 에셋)를 따르세요. 단순 바닐라 JS 가 아니라 스킬 reference 템플릿으로 스프라이트 애니메이션·HUD·터치 컨트롤·오디오 언락까지 포함해 완성도 높게 만드세요. (The user is requesting a browser/web game — invoke the web-game-builder skill.)'
 }
 if ($prompt -imatch $assetPattern) {
   $parts += '사용자가 게임 스프라이트/스프라이트시트/에셋을 고르거나 적용·교체하려 합니다. 응답 전에 sprite-picker 스킬을 호출해 먼저 "실제 에셋 소싱 vs 절차 생성"을 묻고, 캐싱된 CC0 카탈로그·로컬 파일·이전 사용분을 브라우저 갤러리 피커로 시각 선택하게 하세요(절차 생성은 sprite-forge/vector-graphics 위임). (The user wants to choose/apply game sprite assets — invoke the sprite-picker skill.)'

@@ -82,9 +82,10 @@ ChipAudio + MobileHarness)** 과 템플릿 구조를 사용한다.
    `roundPixels` 기본값 등)는 INDEX 의 'v3→v4 핵심 차이' 치트시트로 교정한다.
    **렌더 스타일은 게임당 하나** — 픽셀(`PixelForge` + `pixelArt:true`) 또는 미려한 스무스
    (`VectorForge` + `pixelArt:false, antialias:true`). 사용자 취향에 맞춰 택1, 섞지 않는다.
-2. **에셋 = CC0 / IP-safe:** 외부 저작물(닌텐도 마리오 스프라이트·이름 'Mario'·시그니처
-   조합 등) 절대 금지. 기본은 `PixelForge` 절차적 픽셀아트(코드 생성). CC0 팩(Kenney 등)을
-   쓸 땐 `assets.json` 라이선스 게이트로 CC0 만 허용하고 `CREDITS.txt` 를 남긴다.
+2. **에셋 = 라이선스 안전 / IP-safe:** 닌텐도 마리오 스프라이트·이름 'Mario'·시그니처
+   조합 등 상용 IP 는 절대 금지. 라이선스 안전한 외부 에셋은 적극 받아들인다 — CC0·허용
+   라이선스(MIT·BSD·Apache·Zlib)는 자유, CC-BY 등 표기형은 `CREDITS.txt` 표기 시. CC0 팩(Kenney 등)도
+   `assets.json` 라이선스 게이트(`policy.allow`)로 통과시키며, 절차 생성(`PixelForge`/`VectorForge`)도 동등한 1급 옵션이다.
 3. **모바일 웹뷰 필수 요소:** `MobileHarness` 의 Scale.FIT, 'Tap to start' 오디오 언락,
    멀티터치 가상 컨트롤, 뷰포트/CSS 리셋을 항상 포함.
 4. **완성도:** 스프라이트 애니메이션, HUD/UI, 사운드, 적/아이템/골인까지 갖춘다.
@@ -229,7 +230,7 @@ python -m http.server 8766
   전진시킬 수 있다(WebGL preserveDrawingBuffer 한계로 라이브 캡처는 불안정할 수 있음).
 
 ## IP/라이선스 안전 체크리스트
-- [ ] 닌텐도 등 타사 스프라이트/사운드/폰트/레벨 미사용 (전부 CC0 또는 절차적 생성).
+- [ ] 닌텐도 등 상용 IP 스프라이트/사운드/폰트/레벨 미사용 (라이선스 안전한 외부 에셋 또는 절차적 생성).
 - [ ] 보호된 이름('Mario' 등)·시그니처 조합(빨간모자+콧수염+파란멜빵+배관공+이탈리안) 미사용.
       마리오 '느낌'은 색 단서 1개만 남기고 나머지를 바꿔서 표현(예: 빨간 모자 + 다른 의상).
 - [ ] 메카닉/장르(옆스크롤·점프·밟기·코인·깃발 골)는 자유롭게 구현 가능.

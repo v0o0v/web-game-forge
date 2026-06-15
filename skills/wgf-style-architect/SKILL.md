@@ -152,4 +152,4 @@ style-architect의 `style.json` / `assets/palette.master.json`은 **게임 전�
 ## IP 안전
 - 시각 스타일 **기법·구조**(제한 팔레트·hue-shift 셰이딩·셀셰이딩·NW 광원·치비 비율·라이팅/포스트FX 무드 등)는 저작권 대상이 아니므로 자유롭게 차용한다.
 - 단, **특정 상용 게임의 고유 에셋·캐릭터 외형·시그니처 룩 조합**(예: 특정 게임의 캐릭터 스프라이트·시그니처 색조합·로고)을 그대로 복제하지 않는다 — 스타일/무드/기법만 가져와 **오리지널로 재구성**한다. 레퍼런스 이미지를 받아도 팔레트 무드·기법만 추출한다.
-- 무드 id·고유명사는 STYLE.md 와 STORY.md `## 8. Glossary`에 오리지널로 정의한다. 모든 에셋은 CC0/절차생성(PixelForge·VectorForge) 또는 CC0(sprite-picker). `style.json` `lintConfig.ip_redwords`로 상용 IP 이름이 mood/slug에 누출되지 않는지 기계 점검한다. 상세는 [`ip-license-guard`](../wgf-ip-license-guard/SKILL.md).
+- 무드 id·고유명사는 STYLE.md 와 STORY.md `## 8. Glossary`에 오리지널로 정의한다. 모든 에셋은 절차 생성(PixelForge·VectorForge) 또는 라이선스 안전한 외부 에셋(sprite-picker). `style.json` `lintConfig.ip_redwords`로 상용 IP 이름이 mood/slug에 누출되지 않는지 기계 점검한다. 상세는 [`ip-license-guard`](../wgf-ip-license-guard/SKILL.md).

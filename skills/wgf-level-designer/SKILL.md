@@ -191,7 +191,7 @@ node skills/wgf-level-designer/examples/pcg-cave-cellular.mjs --test
 
 ## 연계 / 원칙
 - 설계 의도·난이도 곡선·재미는 [`level-architect`](../wgf-level-architect/SKILL.md)가 결정 → 이 스킬이 빌드. 레벨이 "재미없다/단조롭다" 진단·리밸런싱도 level-architect 소관.
-- web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(CC0/절차적).
+- web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(라이선스 안전·절차).
 - `cx(col)`, `cy(row)` 헬퍼: `col * TILE + TILE/2` — 타일 중심 픽셀 좌표.
 - staticGroup 생성 후 반드시 `.refreshBody()` 호출.
 - 레벨 폭 카운팅 실수를 줄이려면 피처를 열 번호 오름차순으로 정렬해 작성한다.

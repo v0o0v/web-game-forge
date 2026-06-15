@@ -169,4 +169,4 @@ node skills/wgf-ability-architect/tools/sim-abilities.mjs games/<slug>/abilities
 ## IP 안전
 - 능력 **메카닉·구조·기법**(쿨다운·자원·스킬트리·특성·enabler/payoff·콤보 캔슬·능력 게이트·진화 등)은 저작권 대상이 아니므로 자유롭게 차용한다.
 - 단, **특정 상용 게임의 고유 능력 이름·외형·시그니처 조합**(예: 특정 게임의 궁극기 이름·아이콘·이펙트)을 그대로 복제하지 않는다 — 메카닉만 가져와 **오리지널로 재구성**한다.
-- 이름·고유명사는 ABILITIES.md 와 STORY.md `## 8. Glossary`에 오리지널로 정의한다. 아이콘 아트는 전부 CC0/절차생성(PixelForge·VectorForge) 또는 CC0(sprite-picker). 무과금 단일플레이라 능력 해금에 도박형 가챠·페이월은 차용하지 않는다. 상세는 [`ip-license-guard`](../wgf-ip-license-guard/SKILL.md).
+- 이름·고유명사는 ABILITIES.md 와 STORY.md `## 8. Glossary`에 오리지널로 정의한다. 아이콘 아트는 절차 생성(PixelForge·VectorForge) 또는 라이선스 안전한 외부 에셋(sprite-picker). 무과금 단일플레이라 능력 해금에 도박형 가챠·페이월은 차용하지 않는다. 상세는 [`ip-license-guard`](../wgf-ip-license-guard/SKILL.md).

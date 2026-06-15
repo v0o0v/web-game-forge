@@ -129,4 +129,4 @@ Read** 해 탑다운 1문1답 인터뷰를 수행한다(M1 분석확인 → M2 �
   자유롭게 차용한다.
 - 단, **특정 상용 게임의 고유 맵 레이아웃**(예: Candy Crush 특정 사가맵 배치, Mario 특정 오버월드)을 그대로
   복제하지 않는다 — 구조·기법만 가져와 절차생성/오리지널 배치로 재구성한다.
-- 에셋은 전부 CC0/절차생성. 상세는 [`ip-license-guard`](../wgf-ip-license-guard/SKILL.md).
+- 에셋은 라이선스 안전한 외부 에셋 또는 절차 생성. 상세는 [`ip-license-guard`](../wgf-ip-license-guard/SKILL.md).

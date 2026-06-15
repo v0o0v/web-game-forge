@@ -279,6 +279,6 @@ Canvas 렌더러에서 `enableFilters()`는 조용히 무시되고 ScreenFX는 `
 
 ## web-game-builder 연결
 
-web-game-builder 워크플로의 일부. 외부 이미지 없이 VectorForge 절차 텍스처와 조합 가능. IP-safe(CC0/절차적).
+web-game-builder 워크플로의 일부. 외부 이미지 없이 VectorForge 절차 텍스처와 조합 가능. IP-safe(라이선스 안전·절차).
 - 엔진 전체 API: `reference/engine-api.md`
 - 데모: `games/nocturne/` — 야간 씬에 bloom + vignette + colorGrade 실전 적용

@@ -72,7 +72,7 @@ process.stdin.on('end', () => {
   if (gamePattern.test(prompt)) {
     parts.push([
       '사용자가 브라우저/웹 게임 제작을 요청하고 있습니다.',
-      '응답 전에 web-game-builder 스킬을 호출하고 그 워크플로(Phaser 4 + 모바일 웹뷰 하니스 + CC0/절차적 에셋)를 따르세요.',
+      '응답 전에 web-game-builder 스킬을 호출하고 그 워크플로(Phaser 4 + 모바일 웹뷰 하니스 + 라이선스 안전·절차 에셋)를 따르세요.',
       '단순 바닐라 JS 로 투박하게 만들지 말고, 반드시 스킬의 reference 템플릿을 사용해 스프라이트 애니메이션·HUD·터치 컨트롤·오디오 언락까지 포함된 완성도 높은 결과물을 만드세요.',
       '(The user is requesting a browser/web game — invoke the web-game-builder skill and follow its workflow.)'
     ].join(' '));

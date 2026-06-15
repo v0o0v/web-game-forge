@@ -27,5 +27,7 @@ SOFTWARE.
 - Phaser 3 (v3.90) — MIT License — Copyright (c) 2013-2025 Phaser Studio Inc.
   engine/phaser.min.js / engine/phaser.LICENSE.txt 참고. https://phaser.io
 
-게임에 포함되는 모든 그래픽·사운드는 PixelForge / ChipAudio 로 코드 생성된
-오리지널/CC0 자산이며, 어떤 서드파티 저작물도 포함하지 않습니다.
+게임에 포함되는 그래픽·사운드는 PixelForge / ChipAudio 로 코드 생성된 오리지널/CC0
+자산이거나, 라이선스가 안전한 외부 에셋(CC0·CC-BY 등 표기형·MIT/BSD/Apache/Zlib 등
+허용 라이선스)입니다. 표기형 에셋은 각 게임의 CREDITS.txt 와 루트 assets.json 에 출처·
+라이선스를 기록하며, 상용 IP(닌텐도 등) 저작물은 포함하지 않습니다.

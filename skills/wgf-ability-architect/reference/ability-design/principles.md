@@ -15,7 +15,7 @@
 
 - **단일플레이 · 무서버.** 진행·해금·스킬포인트·자원은 전부 `localStorage`/Phaser `registry`로만 영속한다(`AbilityKit.serialize/restore`). PvP·서버 밸런스 없음 → 카운터플레이는 *적·환경*이 진다(`BAL-COUNTERPLAY`).
 - **모바일 웹뷰 · 짧은 세션.** 한 판 1~3분이 흔하다. **동시 액티브 능력은 버튼 예산(보통 ≤4)** 이 하드 상한(`UX-BUTTON-BUDGET`·`SCOPE-PLATFORM-BUDGET`). 긴 캐스트·복잡한 자원 관리는 즉시성과 충돌.
-- **무과금 · CC0/IP-safe.** 능력 해금에 **loot box·gacha·페이월·시간단축 결제는 차용 금지**. 가변비율의 *추진력*만 + 천장(pity)으로 좌절 흡수. 능력 아이콘 아트는 절차 생성(PixelForge/VectorForge) 또는 CC0(sprite-picker)만.
+- **무과금 · CC0/IP-safe.** 능력 해금에 **loot box·gacha·페이월·시간단축 결제는 차용 금지**. 가변비율의 *추진력*만 + 천장(pity)으로 좌절 흡수. 능력 아이콘 아트는 절차 생성(PixelForge/VectorForge) 또는 라이선스 안전한 외부 에셋(sprite-picker).
 - **산출물 단일 진실:** `games/<slug>/ABILITIES.md`(사람용 바이블) + `games/<slug>/abilities.json`(기계 데이터 = `engine/abilitykit.js` 로드 + `lint-abilities.mjs` 입력). 모든 능력·자원·진행·비주얼은 여기서만 정의한다([consistency-tools.md](./consistency-tools.md)).
 - **런타임 분리:** `AbilityKit`은 **쿨다운·자원·콤보·게이트·해금 타이밍**만 굴린다. 능력의 *효과*(대미지·발사체·이동·CC)는 game.js가 `onActivate(ability, ctx)`에서 `ability.effect`를 읽어 실행한다 — 효과를 코드에 중복 하드코딩하지 않는다(`ABILITIES-SINGLE-SOURCE`).
 - **서사·아이템 형제 바이블.** 톤·고유명사·flavor는 `STORY.md`([`story-architect`](../../../wgf-story-architect/SKILL.md))를 상속하고, 능력을 *부여하는 아이템*은 `ITEMS.md`([`item-architect`](../../../wgf-item-architect/SKILL.md))가 `grantsAbility` id로 교차참조한다 — 능력 정의는 여기, 아이템은 그릇.

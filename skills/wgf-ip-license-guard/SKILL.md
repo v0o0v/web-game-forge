@@ -1,12 +1,12 @@
 ---
 name: wgf-ip-license-guard
-description: "게임의 저작권·라이선스 안전성을 점검합니다 — CC0/절차적 에셋만 허용, 닌텐도 등 IP(스프라이트·이름·시그니처) 미사용 확인, 라이브러리 라이선스 고지. 라이선스/저작권/IP 점검 요청 시 사용. license, copyright, CC0, IP-safe."
+description: "게임의 저작권·라이선스 안전성을 점검합니다 — 라이선스 안전한 에셋(CC0·표기형·허용 라이선스) 허용·절차 생성 가능, 닌텐도 등 상용 IP(스프라이트·이름·시그니처) 미사용 확인, 라이브러리 라이선스 고지. 라이선스/저작권/IP 점검 요청 시 사용. license, copyright, CC0, IP-safe."
 allowed-tools: Read, Grep, Glob
 ---
 
 # ip-license-guard — 저작권·라이선스 안전성 점검 스킬
 
-게임 에셋·코드·캐릭터 이름이 CC0 또는 절차적 생성 기반인지 확인하고,
+게임 에셋·코드·캐릭터 이름이 라이선스 안전(CC0·표기형·허용 라이선스) 또는 절차 생성 기반인지 확인하고,
 닌텐도 등 타사 IP와의 충돌 여부와 라이브러리 라이선스 고지 상태를 점검한다. web-game-builder의 전문 스킬.
 
 ## 언제 사용
@@ -25,7 +25,7 @@ glob: games/**/*.{png,jpg,jpeg,gif,webp,svg}
 glob: games/**/*.{mp3,ogg,wav,flac}
 ```
 
-- 파일이 존재하면 → `assets.json` 에 CC0 라이선스 항목으로 등록됐는지 확인
+- 파일이 존재하면 → `assets.json` 에 라이선스 항목(`policy.allow` 또는 attribution 기록된 표기형)으로 등록됐는지 확인
 - PixelForge(`engine/pixelforge.js`)로 절차적 생성된 스프라이트는 CC0, 외부 파일 불필요
 - ChipAudio(`engine/audio.js`)로 절차적 생성된 사운드는 CC0, 외부 파일 불필요
 
@@ -38,8 +38,8 @@ glob: games/**/*.{mp3,ogg,wav,flac}
   ]
 }
 ```
-- `license` 값이 `"CC0"` 이 아닌 항목 → 즉시 플래그
-- `source: "procedural"` + `license: "CC0"` 조합만 허용 (외부 URL 에셋 금지)
+- `license` 값이 `policy.allow`(CC0·MIT·BSD·Apache·Zlib)에 없고 attribution 기록도 없는 항목 → 플래그
+- 외부 URL/벤더링 에셋도 라이선스만 안전하면 허용 — `policy.allow` 또는 attribution 기록된 CC-BY 류. ARR·정체불명·`denyAlways` 는 차단
 
 ### 3. 보호된 이름·시그니처 조합 점검
 
@@ -81,8 +81,8 @@ glob: engine/phaser.LICENSE.txt
 
 | 항목 | 통과 | 실패 |
 |------|------|------|
-| 외부 에셋 파일 | 없음 또는 CC0 등록 | 라이선스 불명 파일 존재 |
-| assets.json | 모든 항목 license=CC0 | CC0 외 라이선스 항목 존재 |
+| 외부 에셋 파일 | 라이선스 안전(`policy.allow`/표기형) 등록 | 라이선스 불명·`denyAlways` 파일 |
+| assets.json | 모든 항목 `policy.allow` 또는 attribution 기록된 표기형 | `denyAlways`·미상 라이선스 항목 |
 | 보호 이름 | 소스에 미사용 | 타사 캐릭터명 발견 |
 | 시그니처 조합 | 오리지널 디자인 | 닌텐도 등 조합 재현 |
 | 라이선스 고지 | LICENSE + phaser.LICENSE.txt 존재 | 고지 파일 누락 |
@@ -93,7 +93,7 @@ glob: engine/phaser.LICENSE.txt
 - "영감을 받은" 게임플레이와 "침해" 의 경계는 법적 회색지대 — 독자 비주얼+이름으로 명확히 구분할 것
 
 ## 연계 / 원칙
-- 정책 매니페스트: `assets.json` (CC0 게이트)
+- 정책 매니페스트: `assets.json` (라이선스 게이트 — `policy.allow`/`denyAlways`)
 - **외부 에셋 소싱:** [`sprite-picker`](../wgf-sprite-picker/SKILL.md)가 가져온 스프라이트의 `safetyTier`
   (`cc0`/`permissive-attribution`/`mixed-per-item`/`avoid`)를 이 게이트로 최종 점검한다 — `cc0`는 통과,
   `permissive-attribution`은 `CREDITS.txt` 표기 확인, `mixed-per-item`/`avoid`는 항목별 확인 또는 차단.

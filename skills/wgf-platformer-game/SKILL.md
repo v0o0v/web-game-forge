@@ -65,7 +65,7 @@ update(time, delta) {
 
 ## 연계 / 원칙
 - 전체 흐름·엔진 API는 `skills/wgf-web-game-builder/SKILL.md` 및 `reference/` 참고.
-- IP-safe(CC0/절차적): 'Mario' 이름·닌텐도 스프라이트 금지. 장르·메카닉은 자유.
+- IP-safe(라이선스 안전·절차): 'Mario' 이름·닌텐도 스프라이트 금지. 장르·메카닉은 자유.
 - 모바일 필수: `MobileHarness.scaleConfig`, `installDomGuards`, `TouchControlsClass` 포함.
 - 동작 예제 전체 코드는 `games/super-runner/game.js` 참조.
 - Phaser 4 API 참고: [physics-arcade](../wgf-web-game-builder/reference/phaser/physics-arcade.md), [sprites-and-images](../wgf-web-game-builder/reference/phaser/sprites-and-images.md), [animations](../wgf-web-game-builder/reference/phaser/animations.md), [cameras](../wgf-web-game-builder/reference/phaser/cameras.md), [tilemaps](../wgf-web-game-builder/reference/phaser/tilemaps.md), [input-keyboard-mouse-touch](../wgf-web-game-builder/reference/phaser/input-keyboard-mouse-touch.md). 전체 색인은 [reference/phaser/INDEX.md](../wgf-web-game-builder/reference/phaser/INDEX.md).

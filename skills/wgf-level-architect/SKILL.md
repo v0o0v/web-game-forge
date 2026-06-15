@@ -97,4 +97,4 @@ allowed-tools: Read, Write, Edit, Bash, AskUserQuestion
 ## IP 안전
 - 레벨디자인 **원칙·메카닉·난이도 기법**(4단 비트·텔레그래프·체크포인트 등)은 저작권 대상이 아니므로 자유롭게 차용한다.
 - 단, **특정 상용 게임의 고유 레벨 레이아웃**(예: 마리오 1-1, 특정 캔디크러시 스테이지 배치)을 그대로 복제하지 않는다 — 기법만 가져와 오리지널 배치로 재구성한다.
-- 에셋은 전부 CC0/절차생성(PixelForge·VectorForge·ChipAudio). 상세는 [`ip-license-guard`](../wgf-ip-license-guard/SKILL.md).
+- 에셋은 라이선스 안전한 외부 에셋 또는 절차 생성(PixelForge·VectorForge·ChipAudio). 상세는 [`ip-license-guard`](../wgf-ip-license-guard/SKILL.md).

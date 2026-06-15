@@ -100,7 +100,7 @@ spawnObstacle() {
 
 ## 연계 / 원칙
 - 전체 흐름·엔진 API는 `skills/wgf-web-game-builder/SKILL.md` 및 `reference/` 참고.
-- IP-safe(CC0/절차적): 'Flappy Bird' 이름·스프라이트·새 캐릭터 외형 직접 복제 금지. 메카닉은 자유.
+- IP-safe(라이선스 안전·절차): 'Flappy Bird' 이름·스프라이트·새 캐릭터 외형 직접 복제 금지. 메카닉은 자유.
 - 모바일 필수: `MobileHarness.scaleConfig`, `installDomGuards`. 점프 입력은 화면 전체 탭으로 단순하게.
 - 난이도 곡선: `speed = baseSpeed + elapsedTime * factor`로 선형 증가가 가장 밸런스 잡기 쉽다.
 - 최고 점수 영속화: `localStorage.setItem('highscore', score)`로 새로고침 후에도 유지.
