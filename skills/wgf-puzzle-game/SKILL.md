@@ -95,7 +95,7 @@ spawnTile() {
 
 ## 연계 / 원칙
 - 전체 흐름·엔진 API는 `skills/wgf-web-game-builder/SKILL.md` 및 `reference/` 참고.
-- IP-safe(CC0/절차적): 'Tetris'·'2048' 이름은 메카닉 설명용, 원작 스프라이트·폰트·상표 미사용.
+- IP-safe(라이선스 안전·절차): 'Tetris'·'2048' 이름은 메카닉 설명용, 원작 스프라이트·폰트·상표 미사용.
 - 모바일 필수: `MobileHarness.scaleConfig`, `installDomGuards`. 스와이프 입력은 `pointerdown`/`pointerup` delta로 방향 판별.
 - 보드 모델과 렌더 분리가 버그 최소화의 핵심 — `update` 루프가 아닌 상태 변경 시점에만 `renderBoard()` 호출.
 - Phaser 4 API 참고: [input-keyboard-mouse-touch](../wgf-web-game-builder/reference/phaser/input-keyboard-mouse-touch.md), [time-and-timers](../wgf-web-game-builder/reference/phaser/time-and-timers.md), [tweens](../wgf-web-game-builder/reference/phaser/tweens.md), [data-manager](../wgf-web-game-builder/reference/phaser/data-manager.md), [groups-and-containers](../wgf-web-game-builder/reference/phaser/groups-and-containers.md). 전체 색인은 [reference/phaser/INDEX.md](../wgf-web-game-builder/reference/phaser/INDEX.md).

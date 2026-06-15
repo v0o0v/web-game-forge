@@ -12,7 +12,7 @@
 우리 게임은 **작은 2D 웹/모바일웹 게임**이다(Phaser 4 + PixelForge/VectorForge + ChipAudio + MobileHarness). AAA RPG·MMO가 아니다.
 
 - **단일플레이 · 무서버.** 진행·인벤토리·통화·해금은 전부 `localStorage`/Phaser `registry`로만 영속한다. 서버 경제·실시간 거래·글로벌 마켓은 없다(`UX-LOCAL-SAVE`).
-- **무과금 · CC0/IP-safe.** 이 플러그인의 아이템은 상거래 대상이 아니다 — **loot box·gacha·듀얼 통화·페이월·시간단축 결제는 차용 금지**. 가변비율의 *추진력*만 취하고 천장(pity)·시드·투명성으로 좌절을 흡수한다(`ECON-VARIABLE-RATIO`). 아이템 아트는 절차 생성(PixelForge/VectorForge) 또는 CC0(sprite-picker)만.
+- **무과금 · CC0/IP-safe.** 이 플러그인의 아이템은 상거래 대상이 아니다 — **loot box·gacha·듀얼 통화·페이월·시간단축 결제는 차용 금지**. 가변비율의 *추진력*만 취하고 천장(pity)·시드·투명성으로 좌절을 흡수한다(`ECON-VARIABLE-RATIO`). 아이템 아트는 절차 생성(PixelForge/VectorForge) 또는 라이선스 안전한 외부 에셋(sprite-picker).
 - **모바일 웹뷰 · 짧은 세션.** 한 판 1~3분이 흔하다. 작은 화면·엄지 조작·세션 길이가 아이템 분량·복잡도·인벤토리 UX의 **하드 상한**이다(`SCOPE-PLATFORM-BUDGET`·`UX-THUMB-ZONE`).
 - **산출물 단일 진실:** `games/<slug>/ITEMS.md`(사람용 설계 바이블) + `games/<slug>/items.json`(기계용 데이터 = 게임 로드 + 린터 입력). 모든 효과·드랍·비주얼은 여기서만 정의한다([consistency-tools.md](./consistency-tools.md)).
 - **서사 형제 바이블.** 톤·고유명사·flavor는 `games/<slug>/STORY.md`([`story-architect`](../../../wgf-story-architect/SKILL.md))를 참조해 상속한다 — 아이템 바이블이 서사를 재발명하지 않는다(`IDENT-CONSISTENT-VOICE`).

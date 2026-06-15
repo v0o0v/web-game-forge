@@ -9,7 +9,7 @@
     {
       "name": "web-game-builder",
       "source": "./",
-      "description": "자동 발동형 2D 웹 게임 빌더 — Phaser 4 기반, 모바일 웹뷰 대응, CC0/절차적 에셋"
+      "description": "자동 발동형 2D 웹 게임 빌더 — Phaser 4 기반, 모바일 웹뷰 대응, 라이선스 안전·절차 에셋"
     }
   ]
 }

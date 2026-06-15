@@ -2,7 +2,7 @@
 
 > 아케이드/단일화면(고정 화면) 게임의 난이도를 **레벨 데이터의 톱니 곡선 + 실시간 가속** 두 층으로 설계하는 처방전. 단일화면은 맵 길이로 난이도를 못 늘리므로 **시간축의 속도·밀도·페이즈·스폰**이 핵심 노브다. 공통 원칙은 [./principles.md](./principles.md), 재미요소(`FE-*`)는 [../../../wgf-web-game-builder/reference/game-dna/fun-elements.md](../../../wgf-web-game-builder/reference/game-dna/fun-elements.md), 빌드 위임은 [`arcade-classic`](#연계). 색인은 [./INDEX.md](./INDEX.md).
 
-이 파일은 [./platformer-levels.md](./platformer-levels.md)·[./puzzle-levels.md](./puzzle-levels.md)와 같은 라이브러리의 장르 파일이다. Space Invaders·Tetris·Pac-Man·Breakout 4대 고전이 각각 다른 노브의 교과서이며, 그 원리를 이 저장소의 `runeburst`·`is-rule`·`super-runner` 스키마에 직접 매핑한다. 우리 엔진은 2D·단일플레이·모바일웹뷰·Arcade 물리·CC0/절차생성 제약을 따른다(서버 메타는 ❌ → 로컬 `localStorage`·시드 대체).
+이 파일은 [./platformer-levels.md](./platformer-levels.md)·[./puzzle-levels.md](./puzzle-levels.md)와 같은 라이브러리의 장르 파일이다. Space Invaders·Tetris·Pac-Man·Breakout 4대 고전이 각각 다른 노브의 교과서이며, 그 원리를 이 저장소의 `runeburst`·`is-rule`·`super-runner` 스키마에 직접 매핑한다. 우리 엔진은 2D·단일플레이·모바일웹뷰·Arcade 물리·라이선스 안전·절차 제약을 따른다(서버 메타는 ❌ → 로컬 `localStorage`·시드 대체).
 
 ---
 

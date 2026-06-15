@@ -188,7 +188,7 @@ onCoin: function (hero, coin) {
 - 오버드로(투명 레이어 중첩)가 많으면 모바일 GPU가 버티지 못한다 — depth 레이어를 최소화한다.
 
 ## 연계 / 원칙
-- web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(CC0/절차적).
+- web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(라이선스 안전·절차).
 - 'spark' 텍스처는 Boot에서 `graphics.generateTexture`로 생성 — 외부 이미지 불필요.
 - Phaser 4 `add.particles()` API: `emitting: false` + `explode()` 패턴이 일회성 burst에 적합.
 - 주스는 '적게, 정확하게' — 모든 이벤트에 다 쓰면 감각이 마비된다.

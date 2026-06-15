@@ -100,7 +100,7 @@ this.tweens.add({ targets: star, y: 72, duration: 800, yoyo: true, repeat: -1, e
 ## 연계 / 원칙
 - **실제 CC0 스프라이트/스프라이트시트를 골라 쓰려면** [`sprite-picker`](../wgf-sprite-picker/SKILL.md)(카탈로그·로컬·이전 사용분
   시각 선택). 이 스킬은 *코드 절차 생성* 담당이고, sprite-picker 가 "절차 생성 vs 실제 에셋"에서 절차 생성을 이쪽에 위임한다.
-- web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(CC0/절차적).
+- web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(라이선스 안전·절차).
 - `PixelForge.buildAll` 내장 키: `hero`, `enemy`, `coin`, `ground`, `dirt`, `brick`, `qblock`, `pipeTop`, `pipeBody`, `mushroom`, `flag`, `pole`, `cloud`, `hill`, `bush`.
 - config에 `pixelArt: true, roundPixels: true` 필수 — 확대 시 또렷한 픽셀.
 - Phaser 4 API 참고: [sprites-and-images](../wgf-web-game-builder/reference/phaser/sprites-and-images.md), [animations](../wgf-web-game-builder/reference/phaser/animations.md), [loading-assets](../wgf-web-game-builder/reference/phaser/loading-assets.md). 전체 색인은 [reference/phaser/INDEX.md](../wgf-web-game-builder/reference/phaser/INDEX.md).

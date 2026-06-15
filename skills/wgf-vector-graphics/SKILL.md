@@ -66,9 +66,9 @@ VectorForge.bake(this, 'orb', {
 - **글래스모피즘**: `VF.glass` (반투명 + 라이트 보더 + 상단 하이라이트). 배경이 화려해야 비침.
 - **카툰 벡터 캐릭터**: `VF.blob` 둥근 몸통 + 그라데이션 + 큰 눈(흰자+동공+하이라이트) + 소프트섀도우.
 
-## 핵심 레시피 — 외부 HD CC0 아트 로딩
+## 핵심 레시피 — 외부 HD 아트 로딩(라이선스 안전)
 
-절차적으로 부족하면 **CC0 HD 아트**를 로딩한다. `assets.json` 라이선스 게이트로 **CC0만 허용**하고
+절차적으로 부족하면 **라이선스 안전한 HD 아트**를 로딩한다. `assets.json` 라이선스 게이트(`policy.allow`)로 허용 라이선스(CC0·MIT·BSD·Apache·Zlib)를 통과시키고, CC-BY 등 표기형은
 `CREDITS.txt`에 출처를 남긴다(자세히는 `ip-license-guard`).
 
 ```js
@@ -93,5 +93,5 @@ Game-icons.net(CC0). 외부 에셋은 `games/<slug>/assets/`에 벤더링하고 
 - **실제 외부 CC0 에셋(HD/벡터/SVG)을 카탈로그에서 시각적으로 골라 쓰려면** [`sprite-picker`](../wgf-sprite-picker/SKILL.md).
   이 스킬은 *절차 생성 + 임시 로딩* 담당이고, sprite-picker 가 큐레이션·시각 선택·로컬 라이브러리·캐싱을 맡는다.
 - 프리뷰: `games/style-preview/index.html` (4가지 스타일 쇼케이스).
-- IP-safe: 절차적 또는 CC0만. 엔진 API는 `reference/engine-api.md`.
+- IP-safe: 절차적 또는 라이선스 안전한 외부 에셋(CC0·표기형·허용 라이선스). 엔진 API는 `reference/engine-api.md`.
 - Phaser 4 API 참고: [graphics-and-shapes](../wgf-web-game-builder/reference/phaser/graphics-and-shapes.md), [render-textures](../wgf-web-game-builder/reference/phaser/render-textures.md), [filters-and-postfx](../wgf-web-game-builder/reference/phaser/filters-and-postfx.md). 전체 색인은 [reference/phaser/INDEX.md](../wgf-web-game-builder/reference/phaser/INDEX.md).

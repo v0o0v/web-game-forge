@@ -75,7 +75,7 @@ update(time, delta) {
 
 ## 연계 / 원칙
 - 전체 흐름·엔진 API는 `skills/wgf-web-game-builder/SKILL.md` 및 `reference/` 참고.
-- IP-safe(CC0/절차적): 게임 이름('Breakout'·'Pong' 등)은 메카닉 설명용, 스프라이트·로고 무단 복제 금지.
+- IP-safe(라이선스 안전·절차): 게임 이름('Breakout'·'Pong' 등)은 메카닉 설명용, 스프라이트·로고 무단 복제 금지.
 - 모바일 필수: `MobileHarness.scaleConfig`, `installDomGuards`. 터치 입력은 장르별로 스와이프·탭·D-패드 적절히 선택.
 - 물리 엔진보다 직접 좌표 이동이 이 장르들에 더 직관적이고 버그가 적다.
 - Phaser 4 API 참고: [physics-arcade](../wgf-web-game-builder/reference/phaser/physics-arcade.md), [input-keyboard-mouse-touch](../wgf-web-game-builder/reference/phaser/input-keyboard-mouse-touch.md), [geometry-and-math](../wgf-web-game-builder/reference/phaser/geometry-and-math.md), [graphics-and-shapes](../wgf-web-game-builder/reference/phaser/graphics-and-shapes.md). 전체 색인은 [reference/phaser/INDEX.md](../wgf-web-game-builder/reference/phaser/INDEX.md).

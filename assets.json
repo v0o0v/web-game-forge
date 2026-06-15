@@ -1,5 +1,5 @@
 {
-  "$comment": "에셋 라이선스 게이트 매니페스트. 생성 게임이 외부 에셋을 쓸 때 여기에 항목을 등록하고, 리졸버는 license=='CC0' 만 기본 허용한다. CC-BY 는 attributionRequired:true 이면 게임 내/CREDITS 에 표기될 때만 허용. 현재 super-runner 데모는 외부 에셋 0(전부 PixelForge 절차적 생성)이라 entries 가 비어있다.",
+  "$comment": "에셋 라이선스 게이트 매니페스트. 라이선스가 안전한 외부 에셋은 적극 받아들인다 — 생성 게임이 외부 에셋을 쓸 때 여기에 항목을 등록하고, 게이트(engine/tiled.js assertPackLicense·editor/server/asset-import.mjs 가 공유)는 policy.allow(CC0·MIT·BSD·Apache·Zlib 등)를 허용한다. CC-BY 류는 ccByRequiresAttribution:true 이면 attribution(게임 내/CREDITS 표기) 있을 때만 통과. ARR·정체불명·상용 IP(닌텐도 등)는 policy.denyAlways 로 항상 차단. 절차 생성(PixelForge 등)도 동등한 1급 옵션이다. (현 super-runner 데모는 전부 절차 생성이라 entries 가 비어있다.)",
   "policy": {
     "allow": [
       "CC0",
@@ -61,7 +61,7 @@
       "url": "https://opengameart.org/"
     }
   ],
-  "renderStyleNote": "픽셀 게임은 PixelForge(pixelArt:true), 미려한 스무스 게임은 VectorForge(pixelArt:false, antialias:true). SVG는 this.load.svg(key,url,{width,height})로 임의 크기 또렷이 래스터화. 외부 에셋은 games/<slug>/assets/에 벤더링 + 아래 entries 에 CC0 로 등록.",
+  "renderStyleNote": "픽셀 게임은 PixelForge(pixelArt:true), 미려한 스무스 게임은 VectorForge(pixelArt:false, antialias:true). SVG는 this.load.svg(key,url,{width,height})로 임의 크기 또렷이 래스터화. 라이선스 안전한 외부 에셋은 games/<slug>/assets/에 벤더링 + 아래 entries 에 라이선스(CC0·표기형·허용 라이선스)와 함께 등록(CC-BY 류는 attribution 필수).",
   "spritePickerCatalog": {
     "note": "실제 스프라이트/시트를 시각적으로 골라 적용하려면 sprite-picker 스킬을 쓴다. 위 recommended* 목록보다 광범위·검증된 CC0 소스 카탈로그가 아래 경로에 캐싱돼 있다. 갱신은 sprite-catalog-refresh 스킬.",
     "sources": "skills/wgf-sprite-picker/catalog/sources.json",

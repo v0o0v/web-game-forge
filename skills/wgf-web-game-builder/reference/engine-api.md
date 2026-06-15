@@ -84,9 +84,9 @@ VectorForge.bake(this, 'orb', { w:24, h:24, draw:function(ctx,w,h,t,VF){
 `glow`(발광) · `shadow`(소프트 드롭섀도우) · `glass`(글래스모피즘 패널).
 전체화면 배경: `VectorForge.gradientBackground(scene, key, w, h, stops)`.
 
-### 외부 HD CC0 아트 로딩
-절차적으로 부족하면 CC0 HD 아트 로딩. SVG는 임의 크기로 또렷: `this.load.svg(key,url,{width,height})`.
-HD 래스터/아틀라스: `this.load.image/atlas`. `assets.json` 게이트로 CC0만 허용, `CREDITS.txt` 고지.
+### 외부 HD 아트 로딩(라이선스 안전)
+절차적으로 부족하면 라이선스 안전한 HD 아트 로딩. SVG는 임의 크기로 또렷: `this.load.svg(key,url,{width,height})`.
+HD 래스터/아틀라스: `this.load.image/atlas`. `assets.json` 게이트(`policy.allow`)로 라이선스 안전한 에셋 허용(CC-BY 류는 attribution), `CREDITS.txt` 고지.
 
 ---
 

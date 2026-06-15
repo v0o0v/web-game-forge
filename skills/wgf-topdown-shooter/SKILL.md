@@ -68,7 +68,7 @@ update() {
 
 ## 연계 / 원칙
 - 전체 흐름·엔진 API는 `skills/wgf-web-game-builder/SKILL.md` 및 `reference/` 참고.
-- IP-safe(CC0/절차적): 외부 스프라이트·상표명 금지.
+- IP-safe(라이선스 안전·절차): 외부 스프라이트·상표명 금지.
 - 모바일 필수: `MobileHarness.scaleConfig`, `installDomGuards`, 터치 조준 처리 포함.
 - 오브젝트 풀(`maxSize` + `get`/`killAndHide`)은 모바일 GC 부담을 줄이는 필수 패턴.
 - Phaser 4 API 참고: [physics-arcade](../wgf-web-game-builder/reference/phaser/physics-arcade.md), [input-keyboard-mouse-touch](../wgf-web-game-builder/reference/phaser/input-keyboard-mouse-touch.md), [groups-and-containers](../wgf-web-game-builder/reference/phaser/groups-and-containers.md), [particles](../wgf-web-game-builder/reference/phaser/particles.md). 전체 색인은 [reference/phaser/INDEX.md](../wgf-web-game-builder/reference/phaser/INDEX.md).

@@ -28,7 +28,7 @@
 
 You don't need to know how to code. You don't need to learn a game engine. Just describe — in English (or Korean) — *what kind of game you want*, and WebGameForge will:
 
-- 🎨 **Generate** the character and background graphics **in code** (zero external files, copyright-safe)
+- 🎨 **Generate** graphics **in code** or bring in license-safe external assets (copyright-safe)
 - 🔊 **Synthesize** sound effects and background music
 - 📱 Attach **mobile touch controls**
 - ✅ Actually run it and **fix the bugs** before handing you a finished product.
@@ -161,13 +161,13 @@ iOS WKWebView, KakaoTalk/Instagram in-app browsers covered. Screen-fit, audio un
 <td width="50%">
 
 **🎨 Graphics generated in code**
-Both pixel art (`PixelForge`) and smooth vectors (`VectorForge`) are generated in code — no external files.
+Both pixel art (`PixelForge`) and smooth vectors (`VectorForge`) are generated in code; license-safe external assets are welcome too.
 
 **🔊 Sound beyond 8-bit**
 From chiptune to synthwave, ambient, and adaptive music — all code-synthesized. Zero audio files.
 
 **⚖️ Copyright-safe (IP-safe)**
-Everything is CC0 or procedurally generated. No Nintendo or third-party assets, names, or signatures.
+Assets are license-safe external works (CC0, attribution, permissive) or procedurally generated. No Nintendo or commercial-IP sprites, names, or signatures.
 
 </td>
 </tr>
@@ -287,7 +287,7 @@ PixelForge.bake(this, 'star', {
 
 <br>
 
-Each game picks one render style — both are zero external downloads, code-generated (CC0/IP-safe).
+Each game picks one render style — both are code-generated (CC0/IP-safe), and license-safe external assets can be used alongside.
 
 - **Pixel art** (`PixelForge`, `pixelArt:true`) — NES-style retro. Demo: `games/super-runner/`.
 - **Smooth / vector** (`VectorForge`, `pixelArt:false`) — gradients, glow, soft shadows,
@@ -392,7 +392,7 @@ Verified by actually running with chrome-devtools MCP (nocturne — 4-in-1 Phase
 
 - **Code**: MIT (`LICENSE`)
 - **Phaser 4.1.0** · **Tone.js v15**: MIT (vendored)
-- **Assets**: all CC0 or procedurally generated (no external copyrighted works)
+- **Assets**: license-safe external works (CC0, attribution, permissive) or procedurally generated (no commercial IP)
 - **No-Nintendo principle**: never uses Mario sprites/sound, the name 'Mario', or the signature
   combo (red cap + mustache + blue overalls + plumber + Italian).
 - **Genres & mechanics are free**: side-scrolling, jumping, stomping, coins, etc. are not copyrightable.

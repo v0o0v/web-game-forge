@@ -190,7 +190,7 @@ body { padding: env(safe-area-inset-top) env(safe-area-inset-right)
 ```
 
 ## 연계 / 원칙
-- web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(CC0/절차적).
+- web-game-builder 워크플로의 일부. 엔진 API는 `reference/engine-api.md`. IP-safe(라이선스 안전·절차).
 - UI Scene은 `setScrollFactor(0)`이 기본(카메라 독립) — 직접 설정 불필요.
 - HUD는 update()에서 매 프레임 setText를 호출해도 동작하지만, 성능상 값 변화 감지 후 갱신 권장. 더 나아가 씬↔HUD 를 완전히 분리하려면 `engine/eventbus.js` 의 EventBus 로 발행-구독한다(레시피 3-b) — 씬이 HUD 를 직접 참조하지 않고 `emit('score', v)` 만, 등록순 동기 디스패치라 헤드리스 검증에서 재현된다.
 - 아이콘은 `PixelForge.buildAll`이 등록한 스프라이트(coin, hero 등) 또는 커스텀 bake 스프라이트를 재활용.
