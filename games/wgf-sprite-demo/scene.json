@@ -1,0 +1,114 @@
+{
+  "format": "wgf-scene@1",
+  "slug": "wgf-sprite-demo",
+  "meta": {
+    "title": "스프라이트 데모 — Tiny Dungeon (CC0)",
+    "genre": "topdown",
+    "viewport": { "w": 320, "h": 240 },
+    "pixelArt": true,
+    "systems": {}
+  },
+  "assets": {
+    "sprites": [
+      {
+        "id": "td_player",
+        "source": "local",
+        "url": "games/wgf-sprite-demo/assets/imported/tiny-dungeon.png",
+        "license": "CC0-1.0",
+        "credit": "Kenney — Tiny Dungeon (CC0-1.0)",
+        "desc": "플레이어 — Tiny Dungeon 시트 프레임",
+        "frameConfig": { "frameWidth": 16, "frameHeight": 16 },
+        "frame": 84,
+        "w": 16,
+        "h": 16
+      },
+      {
+        "id": "td_enemy",
+        "source": "local",
+        "url": "games/wgf-sprite-demo/assets/imported/tiny-dungeon.png",
+        "license": "CC0-1.0",
+        "credit": "Kenney — Tiny Dungeon (CC0-1.0)",
+        "desc": "적 — Tiny Dungeon 시트 프레임",
+        "frameConfig": { "frameWidth": 16, "frameHeight": 16 },
+        "frame": 108,
+        "w": 16,
+        "h": 16
+      },
+      {
+        "id": "td_item",
+        "source": "local",
+        "url": "games/wgf-sprite-demo/assets/imported/tiny-dungeon.png",
+        "license": "CC0-1.0",
+        "credit": "Kenney — Tiny Dungeon (CC0-1.0)",
+        "desc": "아이템 — Tiny Dungeon 시트 프레임",
+        "frameConfig": { "frameWidth": 16, "frameHeight": 16 },
+        "frame": 116,
+        "w": 16,
+        "h": 16
+      },
+      {
+        "id": "td_floor",
+        "source": "local",
+        "url": "games/wgf-sprite-demo/assets/imported/tiny-dungeon.png",
+        "license": "CC0-1.0",
+        "credit": "Kenney — Tiny Dungeon (CC0-1.0)",
+        "desc": "바닥/벽 타일 — Tiny Dungeon 시트 프레임",
+        "frameConfig": { "frameWidth": 16, "frameHeight": 16 },
+        "frame": 1,
+        "w": 16,
+        "h": 16
+      }
+    ]
+  },
+  "walls": [
+    { "x": 0, "y": 0, "w": 320, "h": 8 },
+    { "x": 0, "y": 232, "w": 320, "h": 8 },
+    { "x": 0, "y": 0, "w": 8, "h": 240 },
+    { "x": 312, "y": 0, "w": 8, "h": 240 }
+  ],
+  "scenes": [
+    {
+      "id": "main",
+      "systems": {},
+      "entities": [
+        {
+          "id": "player",
+          "name": "플레이어",
+          "transform": { "x": 80, "y": 120, "rotation": 0, "scaleX": 2, "scaleY": 2, "depth": 10 },
+          "components": [
+            { "type": "Sprite", "sprite": "td_player" },
+            { "type": "Body", "shape": "circle", "radius": 7, "isStatic": false },
+            { "type": "TopDownController", "speed": 80, "input": "wasd" }
+          ]
+        },
+        {
+          "id": "enemy_01",
+          "name": "적01",
+          "transform": { "x": 220, "y": 120, "rotation": 0, "scaleX": 2, "scaleY": 2, "depth": 10 },
+          "components": [
+            { "type": "Sprite", "sprite": "td_enemy" },
+            { "type": "Body", "shape": "circle", "radius": 7, "isStatic": false }
+          ]
+        },
+        {
+          "id": "item_01",
+          "name": "아이템01",
+          "transform": { "x": 160, "y": 70, "rotation": 0, "scaleX": 2, "scaleY": 2, "depth": 5 },
+          "components": [
+            { "type": "Sprite", "sprite": "td_item" },
+            { "type": "Pickup", "kind": "coin", "amount": 1 }
+          ]
+        },
+        {
+          "id": "tile_01",
+          "name": "바닥타일",
+          "transform": { "x": 160, "y": 175, "rotation": 0, "scaleX": 2, "scaleY": 2, "depth": 1 },
+          "components": [
+            { "type": "Sprite", "sprite": "td_floor" }
+          ]
+        }
+      ]
+    }
+  ],
+  "dataLayers": {}
+}

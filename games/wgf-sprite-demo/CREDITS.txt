@@ -1,0 +1,31 @@
+스프라이트 데모 — Tiny Dungeon (CC0) (wgf-sprite-demo) — 크레딧
+================================================
+
+이 게임은 WGF Studio(WebGameForge) 에디터로 제작·내보낸 무빌드 정적 게임입니다.
+엔진: Phaser 4 (MIT) + WebGameForge 엔진 킷(전부 로컬 vendoring, 오프라인 동작).
+
+## 자산 출처·라이선스
+
+## 임포트 자산(로컬/Unity)
+
+- td_player
+    라이선스: CC0-1.0
+    크레딧: Kenney — Tiny Dungeon (CC0-1.0)
+    설명: 플레이어 — Tiny Dungeon 시트 프레임
+- td_enemy
+    라이선스: CC0-1.0
+    크레딧: Kenney — Tiny Dungeon (CC0-1.0)
+    설명: 적 — Tiny Dungeon 시트 프레임
+- td_item
+    라이선스: CC0-1.0
+    크레딧: Kenney — Tiny Dungeon (CC0-1.0)
+    설명: 아이템 — Tiny Dungeon 시트 프레임
+- td_floor
+    라이선스: CC0-1.0
+    크레딧: Kenney — Tiny Dungeon (CC0-1.0)
+    설명: 바닥/벽 타일 — Tiny Dungeon 시트 프레임
+
+## 사운드
+
+- ChipAudio(8비트 절차 합성, CC0) 또는 무음. 외부 음원 미사용(별도 표기 없으면).
+

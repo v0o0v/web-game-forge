@@ -156,10 +156,13 @@ function main() {
   // ── 산출물 생성 ──────────────────────────────────────────────────────────────
   fs.mkdirSync(outDir, { recursive: true });
 
-  // local 자산 url 재작성: repo-root 상대("games/<slug>/assets/imported/x.png") →
-  // game-root 상대("assets/imported/x.png"). index.html 이 games/<slug>/ 에 위치하므로
-  // 런타임 로더가 game-root 기준 상대경로로 해석한다. 원본 doc 은 건드리지 않고 복사본만 수정.
-  const gamePrefix = 'games/' + slug + '/';
+  // local 자산 url 재작성: repo-root 상대("games/<game-dir>/assets/imported/x.png") →
+  // game-root 상대("assets/imported/x.png"). index.html 이 산출 게임 루트에 위치하므로 런타임
+  // 로더가 game-root 기준 상대경로로 해석한다. game-root = scene.json 의 부모 디렉터리이므로
+  // games/<slug>/ 평면뿐 아니라 games/_editor-samples/<x>/ 같은 중첩 샘플도 정확히 벗긴다.
+  // 원본 doc 은 건드리지 않고 복사본만 수정.
+  const gameDirRel = path.relative(REPO_ROOT, path.dirname(sceneFile)).split(path.sep).join('/');
+  const gamePrefix = gameDirRel ? (gameDirRel + '/') : '';
   const docForExport = rewriteLocalUrls(doc, gamePrefix);
 
   const sceneTitle = (doc.meta && doc.meta.title) || slug;
@@ -171,6 +174,8 @@ function main() {
   writeFile(path.join(outDir, 'index.html'), indexHtml, files, outDir);
   writeFile(path.join(outDir, 'game.js'), gameJs, files, outDir);
   writeFile(path.join(outDir, 'CREDITS.txt'), credits, files, outDir);
+  // local 이미지 파일을 산출 게임 폴더로 복사(무빌드 오프라인 보장). 이미 제자리면 스킵.
+  for (const f of vendorAssetFiles(externalAssets, gamePrefix, outDir, warnings)) files.push(f);
 
   // ── 요약 ─────────────────────────────────────────────────────────────────────
   say(`✓ export 완료 — games/${slug}/`);
@@ -434,6 +439,33 @@ function rewriteLocalUrls(doc, gamePrefix) {
     });
   }
   return out;
+}
+
+// local 이미지 파일을 산출 게임 폴더(outDir)로 복사한다(무빌드 오프라인 보장).
+// url 은 repo-root 상대(gamePrefix 하위) → game-root 상대 위치로 복사. 이미 제자리면(in-place) 스킵.
+// 원격 cc0(http(s))는 대상 아님(복사 안 함). 반환: 복사한 파일의 repo-root 상대경로 배열.
+function vendorAssetFiles(externalAssets, gamePrefix, outDir, warnings) {
+  const copied = [];
+  for (const a of externalAssets || []) {
+    if (!a || a.source !== 'local' || typeof a.url !== 'string') continue;
+    const rel = (gamePrefix && a.url.startsWith(gamePrefix)) ? a.url.slice(gamePrefix.length) : a.url;
+    const destAbs = path.resolve(outDir, rel);
+    // traversal 가드: 대상은 outDir 안.
+    if (destAbs !== outDir && !destAbs.startsWith(outDir + path.sep)) {
+      warnings.push(`local 자산 "${a.id}" 대상 경로가 출력 밖이라 복사 생략: ${rel}`);
+      continue;
+    }
+    const srcAbs = path.resolve(REPO_ROOT, a.url);
+    if (srcAbs === destAbs) continue;   // in-place — 이미 제자리
+    try { if (!fs.statSync(srcAbs).isFile()) { warnings.push(`local 자산 "${a.id}" 원본이 파일이 아님: ${a.url}`); continue; } }
+    catch { warnings.push(`local 자산 "${a.id}" 원본 파일 없음(복사 생략): ${a.url}`); continue; }
+    try {
+      fs.mkdirSync(path.dirname(destAbs), { recursive: true });
+      fs.copyFileSync(srcAbs, destAbs);
+      copied.push(path.relative(REPO_ROOT, destAbs).split(path.sep).join('/'));
+    } catch (e) { warnings.push(`local 자산 "${a.id}" 복사 실패: ${e.message}`); }
+  }
+  return copied;
 }
 
 // ── CREDITS.txt 빌더 ──────────────────────────────────────────────────────────
