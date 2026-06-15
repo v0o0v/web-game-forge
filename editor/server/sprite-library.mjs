@@ -314,6 +314,38 @@ function numberSuffix(base) {
   return { prefix: m[1], num: parseInt(m[2], 10) };
 }
 
+// 시트 한 항목의 anims 를 자동 표면화(1B). 우선순위:
+//   ① 사이드카 사용자 편집 anims(sc.anims) — 사용자가 슬라이서로 저장한 클립이 최우선.
+//   ② 팩 analysis.json anims(catalog 가 analyze-pack 으로 emit 한 도출 클립) — assets-library/<pack>/ 하위만.
+//   ③ 위 둘 다 없으면 deriveAnims 즉석 호출(보유한 frameConfig/frames 로). 라이브러리 스캔은 PNG 픽셀
+//      디코드를 안 하므로 w/h 가 없어 그리드 경로는 빈 배열이고, frames(명시 영역) 경로만 클립을 낸다.
+// 입력: repoRoot, relPath(repo-상대), sc(사이드카 항목|null), fc(위생 frameConfig|null), fr(위생 frames|null).
+// 반환: 위생화된 anims 배열(없으면 []). 목표 — 다운로드만 한 시트가 라이브러리 탭에서 즉시 "애니 N개".
+function resolveScanAnims(repoRoot, relPath, sc, fc, fr) {
+  // ① 사이드카 anims(사용자 편집) 우선.
+  if (sc && sc.anims) {
+    const fromSidecar = sanitizeAnims(sc.anims);
+    if (fromSidecar) return fromSidecar;
+  }
+  // ② analysis.json anims fallback(assets-library/<pack>/ 하위 시트만 매칭). getSheetMeta 와 동일 리더 경로.
+  let metaFrameConfig = fc;
+  let metaFrames = fr;
+  const analysis = readAnalysisSheet(repoRoot, relPath);
+  if (analysis) {
+    if (analysis.anims) {
+      const fromAnalysis = sanitizeAnims(analysis.anims);
+      if (fromAnalysis) return fromAnalysis;
+    }
+    // analysis.json 의 frameConfig/frames 도 ③ 즉석 도출 입력으로 보강(사이드카에 없을 때).
+    if (!metaFrameConfig && analysis.frameConfig) metaFrameConfig = sanitizeFrameConfig(analysis.frameConfig);
+    if (!metaFrames && analysis.frames) metaFrames = sanitizeFrames(analysis.frames);
+  }
+  // ③ deriveAnims 즉석 도출(보유한 메타로). w/h 미보유라 frames 경로만 비-빈 결과.
+  const derived = deriveAnims({ frameConfig: metaFrameConfig, frames: metaFrames });
+  const fromDerive = sanitizeAnims(derived && derived.anims);
+  return fromDerive || [];
+}
+
 // 현재 게임 dir(절대) 의 assets/ + assets-library/** 를 스캔해 sheet/collection 항목 배열 반환.
 // gameDir = currentGameDir() 결과(절대경로) 또는 null(빈 씬). 사이드카(1.1) 병합.
 // 반환: { ok:true, items:[...], truncated }.
@@ -401,6 +433,8 @@ export function scanLibrary(repoRoot, gameDir) {
     for (const img of nonNumbered) {
       if (items.length >= budget.limit) { budget.truncated = true; break; }
       const sc = slices[img.rel] && typeof slices[img.rel] === 'object' ? slices[img.rel] : null;
+      const frameConfig = (sc && sc.frameConfig) ? sanitizeFrameConfig(sc.frameConfig) : null;
+      const frames = (sc && sc.frames) ? sanitizeFrames(sc.frames) : null;
       items.push({
         kind: 'sheet',
         id: stableId(img.rel),
@@ -410,9 +444,11 @@ export function scanLibrary(repoRoot, gameDir) {
         relPath: img.rel,
         w: null,
         h: null,
-        frameConfig: (sc && sc.frameConfig) ? sanitizeFrameConfig(sc.frameConfig) : null,
-        frames: (sc && sc.frames) ? sanitizeFrames(sc.frames) : null,
-        anims: (sc && sc.anims) ? (sanitizeAnims(sc.anims) || []) : [],
+        frameConfig,
+        frames,
+        // anims 자동 표면화(1B): 사이드카 > analysis.json > deriveAnims 즉석. 다운로드만 한 시트도
+        //  라이브러리 탭에서 "애니 N개"로 떠 캐릭터 드래그(hasAnims)가 활성화되도록.
+        anims: resolveScanAnims(repoRoot, img.rel, sc, frameConfig, frames),
         excludedFrames: (sc && sc.excludedFrames) ? (sanitizeExcluded(sc.excludedFrames) || []) : []
       });
     }
