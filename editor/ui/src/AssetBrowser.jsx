@@ -1,116 +1,31 @@
 /* ============================================================================
- * AssetBrowser — 에셋 브라우저 패널 (P4)
+ * AssetBrowser — 에셋 패널(통합 스프라이트 브라우저 진입점)
  * ----------------------------------------------------------------------------
- * 설계서 §1(에셋 소스: 절차 + CC0 sprite-picker)·§5 P4·§4.6.
+ * 본문은 SpriteBrowser(탭 3개: 라이브러리/카탈로그/씬에셋)로 교체됐다.
+ * export 이름 AssetBrowser 는 유지(main.jsx panels.assets 가 그대로 렌더).
  *
- *  - 현재 씬 assets.sprites 목록 표시(절차/CC0 배지).
- *  - 절차 스프라이트 디파이너: 간단 def 입력(id·desc·w·h) → controller.addProceduralAsset
- *    (브리지 POST /api/asset/add procedural). PixelForge/VectorForge 베이크 def 는 후속
- *    창작 트랙에서 채운다(여기선 슬롯·메타만).
- *  - CC0 sprite-picker 통합: "CC0 고르기" → 창작 디스패치로 Claude 에게 sprite-picker 실행을
- *    요청(controller.dispatchCreative). Claude 가 skills/wgf-sprite-picker 피커를 띄워 사용자가
- *    고른 선택분을 asset_add_cc0 로 주입한다. URL 직접 추가도 지원(빠른 경로).
- *  - 에셋을 엔티티에 드래그 배정: 에셋 카드를 Hierarchy 의 엔티티로 드래그(HTML5 DnD) 하거나,
- *    선택된 엔티티에 "선택 엔티티에 적용" 버튼 → controller.assignAssetToEntity
- *    (addComponent Sprite{sprite:id}) → scene.json 자산 ref 유효(lint-scene 통과).
+ * 기존 절차/CC0-URL/Unity 임포트 어더(ProceduralDefiner·Cc0Adder·UnityFolderImporter)는
+ * "씬에셋" 탭에 보존하기 위해 SpriteBrowser 에 importers prop 으로 주입한다.
+ * (기존 "CC0 갤러리 열기(Claude 디스패치)" 버튼은 제거 — SpriteBrowser 가 "카탈로그에서
+ *  찾기"로 대체. Cc0Adder 는 URL 직접 추가만 남긴다.)
  *
- * remote(브리지)에서만 활성. local(P1)에선 비활성 안내.
+ * remote(브리지)에서만 활성. local(P1)에선 비활성 안내(SpriteBrowser 내부 처리).
  * ========================================================================== */
-import { useState, useEffect } from 'preact/hooks';
+import { useState } from 'preact/hooks';
+import { SpriteBrowser } from './sprite/SpriteBrowser.jsx';
 
 export function AssetBrowser({ controller, selection }) {
-  const remote = controller.isRemote;
-  const [assets, setAssets] = useState(controller.getAssets ? controller.getAssets() : { sprites: [] });
-  const [showProc, setShowProc] = useState(false);
-  const [showCc0, setShowCc0] = useState(false);
-  const [showUnity, setShowUnity] = useState(false);
-  const [msg, setMsg] = useState('');
-
-  // 에셋 목록 변경 구독(브리지 onAsset 델타 → 미러 동기).
-  useEffect(() => {
-    if (!controller.onAssetChange) return;
-    const off = controller.onAssetChange((a) => setAssets(a || { sprites: [] }));
-    return off;
-  }, []);
-  // change 시에도 동기(엔티티 변경 등으로 재렌더될 때 최신 assets 반영).
-  useEffect(() => {
-    if (!controller.onChange) return;
-    const off = controller.onChange(() => { if (controller.getAssets) setAssets(controller.getAssets()); });
-    return off;
-  }, []);
-
-  function flash(t) { setMsg(t); setTimeout(() => setMsg(''), 2500); }
-
-  async function assignToSelected(spriteId) {
-    if (!selection || selection.length === 0) { flash('엔티티를 먼저 선택하세요'); return; }
-    const id = selection[0];
-    try { await controller.assignAssetToEntity(id, spriteId); flash(`"${spriteId}" → ${id} 적용 ✓`); }
-    catch (e) { flash('적용 실패'); }
-  }
-
+  // 씬에셋 탭에 주입할 기존 어더들.
   return (
-    <div style={panel}>
-      <div style={header}>에셋</div>
-      <div style={{ overflowY: 'auto', flex: 1, padding: '8px 10px' }}>
-        {!remote && (
-          <div style={{ color: 'var(--text-dim)', fontSize: '11px', marginBottom: '8px' }}>
-            브리지 미연결(local) — 에셋 추가는 /wgf-editor 브리지에서만 동작합니다.
-          </div>
-        )}
-
-        {/* 추가 버튼 */}
-        <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
-          <button style={addBtn} disabled={!remote} onClick={() => { setShowProc(!showProc); setShowCc0(false); setShowUnity(false); }}>＋ 절차</button>
-          <button style={addBtn} disabled={!remote} onClick={() => { setShowCc0(!showCc0); setShowProc(false); setShowUnity(false); }}>＋ CC0</button>
-          <button style={addBtn} disabled={!remote} onClick={() => { setShowUnity(!showUnity); setShowProc(false); setShowCc0(false); }}>＋ Unity</button>
-        </div>
-
-        {showProc && <ProceduralDefiner controller={controller} onDone={(t) => { setShowProc(false); flash(t); }} />}
-        {showCc0 && <Cc0Adder controller={controller} onDone={(t) => { setShowCc0(false); flash(t); }} />}
-        {showUnity && <UnityFolderImporter controller={controller} onDone={(t) => { setShowUnity(false); flash(t); }} />}
-        {msg && <div style={{ color: 'var(--accent2)', fontSize: '11px', margin: '4px 0' }}>{msg}</div>}
-
-        {/* 에셋 목록 */}
-        <div style={{ marginTop: '6px' }}>
-          {assets.sprites.length === 0 && <div style={{ color: 'var(--text-dim)', fontSize: '11px' }}>스프라이트 없음</div>}
-          {assets.sprites.map((s) => (
-            <AssetCard key={s.id} asset={s} onAssign={() => assignToSelected(s.id)} />
-          ))}
-        </div>
-      </div>
-    </div>
+    <SpriteBrowser
+      controller={controller}
+      selection={selection}
+      importers={{ ProceduralDefiner, Cc0Adder, UnityFolderImporter }}
+    />
   );
 }
 
-function AssetCard({ asset, onAssign }) {
-  const isCc0 = asset.source === 'cc0';
-  const isLocal = asset.source === 'local';
-  // HTML5 드래그: 에셋 id 를 dataTransfer 에 실어 Hierarchy 엔티티에 드롭하면 배정.
-  function onDragStart(e) {
-    try { e.dataTransfer.setData('application/wgf-asset', asset.id); e.dataTransfer.effectAllowed = 'copy'; } catch (err) {}
-  }
-  // 배지 색상: cc0=accent2(초록), local=accent(청록), 절차=accent(기본)
-  const badgeBg = isCc0 ? 'var(--accent2)' : isLocal ? 'var(--accent)' : 'var(--accent)';
-  const badgeLabel = isCc0 ? 'CC0' : isLocal ? 'Unity' : '절차';
-  return (
-    <div draggable onDragStart={onDragStart} title="엔티티로 드래그하거나 ↓ 버튼으로 선택 엔티티에 적용"
-         style={{ border: '1px solid var(--border)', borderRadius: '4px', padding: '5px 7px', marginBottom: '5px',
-                  display: 'flex', alignItems: 'center', gap: '6px', cursor: 'grab', background: 'var(--panel2)' }}>
-      <span style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '3px',
-        background: badgeBg, color: '#08121a' }}>{badgeLabel}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {asset.id}
-          {isLocal && asset.attested && <span title="사용자 권리 보유 선언" style={{ marginLeft: '4px', fontSize: '9px' }}>⚠️</span>}
-        </div>
-        {asset.desc && <div style={{ fontSize: '10px', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asset.desc}</div>}
-        {isLocal && asset.license && <div style={{ fontSize: '9px', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{asset.license}</div>}
-      </div>
-      <button style={assignBtn} title="선택 엔티티에 Sprite 로 적용" onClick={onAssign}>↓</button>
-    </div>
-  );
-}
-
+// ── 절차 스프라이트 디파이너(기존 보존) ────────────────────────────────────────
 function ProceduralDefiner({ controller, onDone }) {
   const [id, setId] = useState('');
   const [desc, setDesc] = useState('');
@@ -143,25 +58,12 @@ function ProceduralDefiner({ controller, onDone }) {
   );
 }
 
+// ── CC0 URL 직접 추가(기존 Cc0Adder 의 URL 탭만 보존) ──────────────────────────
 function Cc0Adder({ controller, onDone }) {
-  const [tab, setTab] = useState('picker');     // picker(sprite-picker 디스패치) | url(직접)
   const [id, setId] = useState('');
   const [url, setUrl] = useState('');
   const [credit, setCredit] = useState('');
   const [busy, setBusy] = useState(false);
-
-  // sprite-picker 통합: Claude 에게 피커 실행을 요청(창작 디스패치). Claude 가 갤러리를 띄워
-  // 사용자 선택분을 asset_add_cc0 로 주입한다(SKILL.md 워크플로 — serve.mjs + 선택 파일 회수).
-  async function dispatchPicker() {
-    setBusy(true);
-    let r;
-    try {
-      r = await controller.dispatchCreative(
-        'CC0 스프라이트를 골라줘 — skills/wgf-sprite-picker 갤러리를 띄워 내가 고르면 asset_add_cc0 로 현재 씬 에셋에 추가해줘.');
-    } catch (e) { r = { ok: false, error: String(e) }; }
-    setBusy(false);
-    onDone(r && r.ok ? 'sprite-picker 요청 디스패치됨 — Claude 가 갤러리를 띄웁니다 ✓' : ('디스패치 실패: ' + (r && r.error || '')));
-  }
 
   async function addUrl() {
     const sid = id.trim(); const u = url.trim();
@@ -176,38 +78,25 @@ function Cc0Adder({ controller, onDone }) {
 
   return (
     <div style={form}>
-      <div style={formTitle}>CC0 에셋</div>
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
-        <button style={tab === 'picker' ? tabOn : tabOff} onClick={() => setTab('picker')}>sprite-picker</button>
-        <button style={tab === 'url' ? tabOn : tabOff} onClick={() => setTab('url')}>URL 직접</button>
+      <div style={formTitle}>CC0 URL 직접 추가</div>
+      <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '4px' }}>
+        CC0 이미지 URL 을 직접 등록합니다. 팩 탐색·다운로드는 "카탈로그" 탭을 사용하세요.
       </div>
-      {tab === 'picker' ? (
-        <div>
-          <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '4px' }}>
-            CC0 갤러리(Kenney 등)를 Claude 가 띄워 줍니다. 고른 에셋이 자동으로 현재 씬에 추가됩니다.
-          </div>
-          <button style={okBtn} disabled={busy} onClick={dispatchPicker}>CC0 갤러리 열기(Claude 디스패치)</button>
-        </div>
-      ) : (
-        <div>
-          <input style={finp} placeholder="id (예: spr_kenney_coin)" value={id} onInput={(e) => setId(e.target.value)} />
-          <input style={finp} placeholder="CC0 이미지 URL" value={url} onInput={(e) => setUrl(e.target.value)} />
-          <input style={finp} placeholder="출처(credit, 선택)" value={credit} onInput={(e) => setCredit(e.target.value)} />
-          <button style={okBtn} disabled={busy || !id.trim() || !url.trim()} onClick={addUrl}>추가(CC0-1.0)</button>
-        </div>
-      )}
+      <input style={finp} placeholder="id (예: spr_kenney_coin)" value={id} onInput={(e) => setId(e.target.value)} />
+      <input style={finp} placeholder="CC0 이미지 URL" value={url} onInput={(e) => setUrl(e.target.value)} />
+      <input style={finp} placeholder="출처(credit, 선택)" value={credit} onInput={(e) => setCredit(e.target.value)} />
+      <button style={okBtn} disabled={busy || !id.trim() || !url.trim()} onClick={addUrl}>추가(CC0-1.0)</button>
     </div>
   );
 }
 
-// ── Unity 폴더 임포트 위저드 ───────────────────────────────────────────────────
-// Cc0Adder 패턴 재사용. 스텝1(스캔) → 스텝2(검토·선택·attestation) → 가져오기.
+// ── Unity 폴더 임포트 위저드(기존 보존) ────────────────────────────────────────
+// 스텝1(스캔) → 스텝2(검토·선택·attestation) → 가져오기.
 function UnityFolderImporter({ controller, onDone }) {
   const [folder, setFolder] = useState('');
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);   // {ok, items, truncated, ...}
   const [scanError, setScanError] = useState('');
-  // 각 item 의 선택 상태. key=relPath → {checked, id, attested:{checked,owner,license}}
   const [rowState, setRowState] = useState({});
   const [importing, setImporting] = useState(false);
 
@@ -248,7 +137,6 @@ function UnityFolderImporter({ controller, onDone }) {
     }));
   }
 
-  // 선택된 항목 계산 + attestation 충족 여부 검사.
   function computeSelections() {
     if (!scanResult) return { selections: [], warnUnmet: 0 };
     const selections = [];
@@ -289,7 +177,6 @@ function UnityFolderImporter({ controller, onDone }) {
   }
 
   const { selections, warnUnmet } = computeSelections();
-  const selectedCount = selections.length + warnUnmet; // warnUnmet 포함 체크된 수(버튼 비활성 판단용)
   const checkedCount = !scanResult ? 0 : (scanResult.items || []).filter(it => {
     const rs = rowState[it.relPath];
     return rs && rs.checked && it.status !== 'blocked';
@@ -337,7 +224,6 @@ function UnityFolderImporter({ controller, onDone }) {
               const isWarn = it.status === 'warn';
               return (
                 <div key={it.relPath} style={{ ...itemRow, opacity: isBlocked ? 0.55 : 1 }}>
-                  {/* 배지 + 체크박스 */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <input type="checkbox"
                       disabled={isBlocked}
@@ -351,9 +237,7 @@ function UnityFolderImporter({ controller, onDone }) {
                           title={it.relPath}>{it.relPath}</span>
                     <span style={{ fontSize: '9px', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>{it.kind} {fmtBytes(it.bytes)}</span>
                   </div>
-                  {/* reason */}
                   {it.reason && <div style={{ fontSize: '9px', color: isBlocked ? '#e57373' : '#c8a000', marginLeft: '20px' }}>{it.reason}</div>}
-                  {/* id 편집 */}
                   {!isBlocked && rs.checked && (
                     <input style={{ ...finp, fontSize: '10px', marginLeft: '20px', marginTop: '2px' }}
                       placeholder={'id: ' + (it.suggestedId || '')}
@@ -361,7 +245,6 @@ function UnityFolderImporter({ controller, onDone }) {
                       onInput={(e) => updateRow(it.relPath, { id: e.target.value })}
                     />
                   )}
-                  {/* warn attestation 패널 */}
                   {isWarn && !isBlocked && rs.checked && (
                     <div style={attestPanel}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', cursor: 'pointer' }}>
@@ -395,7 +278,6 @@ function UnityFolderImporter({ controller, onDone }) {
             })}
           </div>
 
-          {/* 가져오기 버튼 */}
           <div style={{ marginTop: '6px' }}>
             {warnUnmet > 0 && (
               <div style={{ fontSize: '9px', color: '#c8a000', marginBottom: '3px' }}>
@@ -414,14 +296,7 @@ function UnityFolderImporter({ controller, onDone }) {
   );
 }
 
-const panel = { display: 'flex', flexDirection: 'column', height: '100%',
-  background: 'var(--panel)', borderLeft: '1px solid var(--border)' };
-const header = { padding: '8px 10px', fontWeight: 600, fontSize: '12px',
-  color: 'var(--text-dim)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.5px' };
-const addBtn = { flex: 1, background: 'var(--panel2)', color: 'var(--text)', border: '1px solid var(--border)',
-  borderRadius: '3px', padding: '5px 8px', cursor: 'pointer', fontSize: '11px' };
-const assignBtn = { background: 'var(--accent)', color: '#08121a', border: 'none', borderRadius: '3px',
-  padding: '2px 7px', cursor: 'pointer', fontWeight: 700 };
+// ── 어더 전용 스타일(기존 보존) ────────────────────────────────────────────────
 const form = { border: '1px solid var(--border)', borderRadius: '4px', padding: '7px 8px', marginBottom: '8px',
   display: 'flex', flexDirection: 'column', gap: '4px', background: 'var(--bg)' };
 const formTitle = { fontSize: '11px', fontWeight: 600, color: 'var(--accent)' };
@@ -429,9 +304,6 @@ const finp = { width: '100%', background: 'var(--panel)', color: 'var(--text)', 
   borderRadius: '3px', padding: '4px 6px', fontSize: '11px' };
 const okBtn = { background: 'var(--accent)', color: '#08121a', border: 'none', borderRadius: '3px',
   padding: '5px 8px', cursor: 'pointer', fontWeight: 600, fontSize: '11px', marginTop: '2px' };
-const tabOn = { flex: 1, background: 'var(--accent)', color: '#08121a', border: 'none', borderRadius: '3px', padding: '3px', cursor: 'pointer', fontSize: '10px' };
-const tabOff = { flex: 1, background: 'var(--panel2)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '3px', padding: '3px', cursor: 'pointer', fontSize: '10px' };
-// Unity 임포트 위저드 전용 스타일
 const itemList = { maxHeight: '240px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '3px',
   background: 'var(--bg)', padding: '4px' };
 const itemRow = { borderBottom: '1px solid var(--border)', paddingBottom: '5px', marginBottom: '5px' };

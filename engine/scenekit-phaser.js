@@ -402,11 +402,20 @@
     function looksLikeImage(url) {
       return /\.(png|jpe?g|gif|webp)(\?|#|$)/i.test(String(url || ''));
     }
-    // frame 텍스처 크기 — frameConfig 있으면 그 셀 크기, 없으면 def.w/h(또는 기본).
+    // frame 텍스처 크기 — frames 영역(free-mode) > frameConfig 셀 > def.w/h(또는 기본).
+    //  placeholder 임시 크기용(실제 텍스처 로드 후 commitBaked 가 정확한 프레임으로 교체).
+    function firstRegion(def) {
+      var fr = def && def.frames;
+      return (Array.isArray(fr) && fr[0] && typeof fr[0] === 'object' && fr[0].w > 0 && fr[0].h > 0) ? fr[0] : null;
+    }
     function frameDimW(def, fallback) {
+      var rg = firstRegion(def);
+      if (rg) return rg.w | 0;
       return (def && def.frameConfig && def.frameConfig.frameWidth > 0) ? (def.frameConfig.frameWidth | 0) : fallback;
     }
     function frameDimH(def, fallback) {
+      var rg = firstRegion(def);
+      if (rg) return rg.h | 0;
       return (def && def.frameConfig && def.frameConfig.frameHeight > 0) ? (def.frameConfig.frameHeight | 0) : fallback;
     }
     // 에셋 url → 실제 로드 경로. 에디터(chrome)=repo-root 절대('/'+url), export 게임=game-root
@@ -430,18 +439,34 @@
       cx.drawImage(img, 0, 0);
       if (scene.textures.exists(texKey)) scene.textures.remove(texKey);
       var tex = scene.textures.addCanvas(texKey, canvas);   // same-origin canvas → getPixel/bakeHash 동작
-      var fc = def && def.frameConfig;
-      if (tex && tex.add && fc && fc.frameWidth > 0 && fc.frameHeight > 0) {
-        var fw = fc.frameWidth | 0, fh = fc.frameHeight | 0;
-        var margin = (fc.margin > 0) ? (fc.margin | 0) : 0;
-        var spacing = (fc.spacing > 0) ? (fc.spacing | 0) : 0;
-        var cols = Math.max(1, Math.floor((iw - margin + spacing) / (fw + spacing)));
-        var rows = Math.max(1, Math.floor((ih - margin + spacing) / (fh + spacing)));
-        for (var r = 0; r < rows; r++) {
-          for (var c = 0; c < cols; c++) {
-            var sx = margin + c * (fw + spacing);
-            var sy = margin + r * (fh + spacing);
-            try { tex.add(r * cols + c, 0, sx, sy, fw, fh); } catch (e) { /* 셀 등록 실패 무시 */ }
+      // 비균일 명시 영역(def.frames = [{x,y,w,h}, ...]) 우선 — 슬라이서 free-mode 산출물(에셋 def 레벨).
+      //  주의: 이 def.frames(영역 배열)는 AnimatedSprite 컴포넌트의 comp.anims[].frames(셀 인덱스 배열)와
+      //  전혀 다른 개념이다. 가드: 배열 & 첫 원소가 객체 & w/h 보유일 때만 영역으로 취급(셀 인덱스 배열 오인 방지).
+      var fr = def && def.frames;
+      var isRegionFrames = (tex && tex.add && Array.isArray(fr) && fr.length > 0 &&
+        fr[0] && typeof fr[0] === 'object' && fr[0].w > 0 && fr[0].h > 0);
+      if (isRegionFrames) {
+        for (var fi = 0; fi < fr.length; fi++) {
+          var f = fr[fi];
+          if (!f || typeof f !== 'object') continue;
+          if (!(f.w > 0) || !(f.h > 0)) continue;
+          try { tex.add(fi, 0, f.x | 0, f.y | 0, f.w | 0, f.h | 0); } catch (e) { /* 영역 등록 실패 무시 */ }
+        }
+      } else {
+        // 균일 격자(frameConfig) — frames 영역이 없을 때만(frames 우선, 배타적).
+        var fc = def && def.frameConfig;
+        if (tex && tex.add && fc && fc.frameWidth > 0 && fc.frameHeight > 0) {
+          var fw = fc.frameWidth | 0, fh = fc.frameHeight | 0;
+          var margin = (fc.margin > 0) ? (fc.margin | 0) : 0;
+          var spacing = (fc.spacing > 0) ? (fc.spacing | 0) : 0;
+          var cols = Math.max(1, Math.floor((iw - margin + spacing) / (fw + spacing)));
+          var rows = Math.max(1, Math.floor((ih - margin + spacing) / (fh + spacing)));
+          for (var r = 0; r < rows; r++) {
+            for (var c = 0; c < cols; c++) {
+              var sx = margin + c * (fw + spacing);
+              var sy = margin + r * (fh + spacing);
+              try { tex.add(r * cols + c, 0, sx, sy, fw, fh); } catch (e) { /* 셀 등록 실패 무시 */ }
+            }
           }
         }
       }
@@ -465,12 +490,15 @@
       bakedTextures[spriteId] = texKey;
       var ents = (state.world && state.world.entities) || [];
       for (var i = 0; i < ents.length; i++) {
-        var sc = SceneKit.getComponentOn(ents[i], 'Sprite') || SceneKit.getComponentOn(ents[i], 'AnimatedSprite');
+        // Sprite 우선(정적), 없으면 AnimatedSprite — getComponentOn 호출을 엔티티당 최소화(핫패스).
+        var staticComp = SceneKit.getComponentOn(ents[i], 'Sprite');
+        var animComp = staticComp ? null : SceneKit.getComponentOn(ents[i], 'AnimatedSprite');
+        var sc = staticComp || animComp;
         if (sc && String(sc.sprite) === String(spriteId)) {
           var go = spriteByEntity[ents[i].id];
           if (go && go.setTexture) {
             try { go.setTexture(texKey); } catch (e) { /* 무시 */ }
-            applyDisplayFrame(go, texKey, initialFrameFor(ents[i], sc));
+            applyDisplayFrame(go, texKey, initialFrameFor(ents[i], sc, animComp));
           }
         }
       }
@@ -482,19 +510,27 @@
       var tex = scene.textures.get(texKey);
       if (tex && tex.has && tex.has(frame)) { try { go.setFrame(frame); } catch (e) { /* 무시 */ } }
     }
-    // 엔티티 초기 표시 프레임 — AnimatedSprite=현재 애니 셀, 정적 Sprite=asset.frame 셀.
-    function initialFrameFor(ent, spriteComp) {
-      if (SceneKit.getComponentOn(ent, 'AnimatedSprite')) {
-        var cell = animCellFor(ent);
+    // 엔티티 초기 표시 프레임 — AnimatedSprite=현재 애니 셀, 정적 Sprite=프레임 셀.
+    // animComp(선택): 이미 조회한 AnimatedSprite 컴포넌트를 넘기면 재조회를 생략(핫패스 캐시).
+    // 정적 Sprite 우선순위(계약 §5.1): spriteComp.frame(>=0 정수) > def.frame(에셋레벨) > 0.
+    //  - 컴포넌트 frame 은 0 도 명시값(첫 셀 고정)으로 존중. def.frame 은 기존 규약대로 >0 일 때만.
+    function initialFrameFor(ent, spriteComp, animComp) {
+      var anim = (animComp !== undefined) ? animComp : SceneKit.getComponentOn(ent, 'AnimatedSprite');
+      if (anim) {
+        var cell = animCellFor(ent, anim);
         return (cell == null) ? 0 : cell;
+      }
+      if (spriteComp && typeof spriteComp.frame === 'number' && isFinite(spriteComp.frame) && spriteComp.frame >= 0) {
+        return spriteComp.frame | 0;
       }
       var def = findAssetDef(spriteComp && spriteComp.sprite);
       return (def && def.frame > 0) ? (def.frame | 0) : 0;
     }
     // AnimatedSprite 의 현재 표시 셀 — 코어 comp._anim/_frame 기준(_frame=anim.frames 배열 인덱스).
     // 표시 셀 = def.frames[_frame]. 코어가 결정적으로 진행하므로 어댑터는 읽어서 반영만(단일 진실).
-    function animCellFor(ent) {
-      var comp = SceneKit.getComponentOn(ent, 'AnimatedSprite');
+    // animComp(선택): 이미 조회한 컴포넌트를 넘기면 재조회 생략(핫패스 캐시 — buildEntity/update 에서 전달).
+    function animCellFor(ent, animComp) {
+      var comp = (animComp !== undefined) ? animComp : SceneKit.getComponentOn(ent, 'AnimatedSprite');
       if (!comp) return null;
       var anims = comp.anims || [];
       var def = null;
@@ -513,7 +549,7 @@
       var go = spriteByEntity[ent.id];
       if (!go) return;
       var texKey = bakedTextures[comp.sprite];
-      if (texKey) applyDisplayFrame(go, texKey, animCellFor(ent));
+      if (texKey) applyDisplayFrame(go, texKey, animCellFor(ent, comp));   // 조회한 comp 재사용(핫패스)
     }
     // ── 이미지 로드 ready 게이트(계약 H′ bakeHash 는 이 신호 후) ─────────────────
     function noteAssetLoadStart() { state.pendingAssetLoads++; state.assetsReady = false; }
@@ -605,14 +641,18 @@
     }
 
     function buildEntity(ent) {
-      var spriteComp = SceneKit.getComponentOn(ent, 'Sprite') || SceneKit.getComponentOn(ent, 'AnimatedSprite');
+      // Sprite 우선(정적), 없으면 AnimatedSprite. getComponentOn 을 엔티티당 1~2회로 캐시해
+      // initialFrameFor/animCellFor 의 중복 조회를 제거(동작·결정론 불변 — 동일 순수 조회 재사용).
+      var staticComp = SceneKit.getComponentOn(ent, 'Sprite');
+      var animComp = staticComp ? null : SceneKit.getComponentOn(ent, 'AnimatedSprite');
+      var spriteComp = staticComp || animComp;
       var go;
       if (spriteComp && spriteComp.sprite) {
         var texKey = bakeAsset(spriteComp.sprite);
-        // 초기 표시 프레임: 정적 Sprite=asset.frame 셀, AnimatedSprite=현재 애니 셀(t=0=frames[0]).
+        // 초기 표시 프레임: 정적 Sprite=Sprite.frame|asset.frame 셀, AnimatedSprite=현재 애니 셀(t=0=frames[0]).
         // 텍스처가 로딩 전(placeholder)이면 __BASE 유지, 로드 완료 시 commitBaked 가 셋.
         go = scene.add.image(0, 0, texKey);
-        applyDisplayFrame(go, texKey, initialFrameFor(ent, spriteComp));
+        applyDisplayFrame(go, texKey, initialFrameFor(ent, spriteComp, animComp));
       } else {
         // Sprite 없는 엔티티: Body 크기 또는 기본 점 마커.
         go = makeMarker(ent);

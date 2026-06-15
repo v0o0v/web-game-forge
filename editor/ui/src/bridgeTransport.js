@@ -51,6 +51,7 @@ export function createLocalTransport() {
     async runSkill() { return { ok: false, error: '브리지 없음(local 모드) — 스킬 실행은 /wgf-editor 브리지에서만 동작' }; },
     async addAsset() { return { ok: false, error: '브리지 없음(local 모드) — 에셋 추가는 브리지에서만 동작' }; },
     async listAssets() { return { sprites: [] }; },
+    // (스프라이트 브라우저 API 는 UI 가 sprite/spriteApi.js 를 직접 fetch — transport 노출 불필요.)
     stop() {}
   };
 }
@@ -92,6 +93,9 @@ export function createRemoteTransport(config) {
     try { json = await res.json(); } catch (e) { json = null; }
     return { status: res.status, json };
   }
+
+  // (스프라이트 브라우저 API(/api/sprite/*) 는 UI 가 sprite/spriteApi.js 에서 직접 fetch —
+  //  transport 에 중복 구현하지 않는다. 단일 구현 정리. 계약 §3.1.)
 
   // SSE 연결(자동 재연결 + Last-Event-ID 복구).
   function connect() {
