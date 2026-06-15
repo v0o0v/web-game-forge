@@ -610,6 +610,46 @@ async function main() {
           ok('S9-4 메타 전무 시트는 anims=[](과표면화 없음)',
             itC && Array.isArray(itC.anims) && itC.anims.length === 0,
             `anims=${itC && JSON.stringify(itC.anims)}`);
+
+          // ── S10 frameConfig 표면화(L1-C) ──────────────────────────────────────
+          //  ① 사이드카 없는 다운로드 시트(itA)가 analysis.json frameConfig(16×16)를 항목에
+          //     frameConfig 로 표면화 — SheetSlicer 가 16×16 기본값/"메타 없음" 대신 실제 grid 로 열림.
+          ok('S10-1 analysis.json frameConfig 자동표면화(frameWidth>0)',
+            itA && itA.frameConfig && itA.frameConfig.frameWidth === 16 && itA.frameConfig.frameHeight === 16,
+            `fc=${itA && JSON.stringify(itA.frameConfig)}`);
+          //  ① 보강: analysis.json frames 보유 시트(itB)는 frames 도 항목에 표면화(영역 2개).
+          ok('S10-2 analysis.json frames 자동표면화(영역 2개)',
+            itB && Array.isArray(itB.frames) && itB.frames.length === 2 &&
+            itB.frames[0].w === 8 && itB.frames[0].h === 8,
+            `frames=${itB && JSON.stringify(itB.frames)}`);
+          //  음성 대조: 메타 전무 시트(itC)는 frameConfig=null(과표면화 없음).
+          ok('S10-3 메타 전무 시트는 frameConfig=null(과표면화 없음)',
+            itC && itC.frameConfig === null,
+            `fc=${itC && JSON.stringify(itC.frameConfig)}`);
+
+          //  ② 우선순위: 사이드카 frameConfig 가 analysis.json 보다 우선. itA(analysis=16×16)에
+          //     사이드카 frameConfig 32×32 를 심어 재스캔 → 항목에 32 가 떠야(사이드카 승).
+          //     wgf-slices.json 은 cleanup() 이 처리(시작 시 없었으면 종료 시 제거).
+          const SLICES = path.resolve(REPO_ROOT, 'assets-library', 'wgf-slices.json');
+          let prevSlices = null;
+          try { prevSlices = fs.readFileSync(SLICES, 'utf8'); } catch (e) {}
+          try {
+            const doc = prevSlices ? JSON.parse(prevSlices) : { version: 1, sheets: {} };
+            if (!doc.sheets || typeof doc.sheets !== 'object') doc.sheets = {};
+            doc.sheets[relA] = { frameConfig: { frameWidth: 32, frameHeight: 32, margin: 0, spacing: 0 } };
+            fs.writeFileSync(SLICES, JSON.stringify(doc, null, 2));
+            const scan2 = scanLibrary(REPO_ROOT, null);
+            const itA2 = scan2.items.find((it) => it.kind === 'sheet' && it.relPath === relA);
+            ok('S10-4 사이드카 frameConfig 우선(analysis 16 위에 사이드카 32)',
+              itA2 && itA2.frameConfig && itA2.frameConfig.frameWidth === 32 && itA2.frameConfig.frameHeight === 32,
+              `fc=${itA2 && JSON.stringify(itA2.frameConfig)}`);
+          } finally {
+            // 사이드카 원복(테스트 격리 — S10 이 심은 relA 항목 제거).
+            try {
+              if (prevSlices === null) { if (!slicesExistedBefore) fs.rmSync(SLICES, { force: true }); }
+              else fs.writeFileSync(SLICES, prevSlices);
+            } catch (e) {}
+          }
         }
       } catch (e) {
         ok('S9 자동표면화 블록 예외', false, String(e && e.stack || e));

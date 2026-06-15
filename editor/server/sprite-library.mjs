@@ -433,8 +433,21 @@ export function scanLibrary(repoRoot, gameDir) {
     for (const img of nonNumbered) {
       if (items.length >= budget.limit) { budget.truncated = true; break; }
       const sc = slices[img.rel] && typeof slices[img.rel] === 'object' ? slices[img.rel] : null;
-      const frameConfig = (sc && sc.frameConfig) ? sanitizeFrameConfig(sc.frameConfig) : null;
-      const frames = (sc && sc.frames) ? sanitizeFrames(sc.frames) : null;
+      let frameConfig = (sc && sc.frameConfig) ? sanitizeFrameConfig(sc.frameConfig) : null;
+      let frames = (sc && sc.frames) ? sanitizeFrames(sc.frames) : null;
+      // frameConfig/frames 표면화(L1-C): 사이드카에 없으면 analysis.json fallback. 다운로드만 한
+      //  시트(예: kenney-pixel-platformer tilemap-characters → 24×24)가 라이브러리에서 frameConfig
+      //  없이 떠 SheetSlicer 가 16×16 기본값으로 열리고 "프레임 메타 없음"이 뜨던 격차를 메운다.
+      //  우선순위: 사이드카 frameConfig > analysis.json frameConfig(사이드카에 없을 때만 조회).
+      //  readAnalysisSheet 는 readJsonCached 로 analysis.json 을 캐시하므로 resolveScanAnims 의
+      //  동일 호출과 합쳐 팩당 1회 디스크 read(중복 파싱 없음). 위생화 후 표면화.
+      if (!frameConfig || !frames) {
+        const analysis = readAnalysisSheet(repoRoot, img.rel);
+        if (analysis) {
+          if (!frameConfig && analysis.frameConfig) frameConfig = sanitizeFrameConfig(analysis.frameConfig);
+          if (!frames && analysis.frames) frames = sanitizeFrames(analysis.frames);
+        }
+      }
       items.push({
         kind: 'sheet',
         id: stableId(img.rel),
