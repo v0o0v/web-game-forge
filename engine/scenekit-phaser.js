@@ -417,49 +417,50 @@
       if (state.chrome) return '/' + url.replace(/^\/+/, '');
       return url;
     }
-    // 시트에서 frame 1칸을 오프스크린 canvas 로 crop. frameConfig 없으면 전체 이미지.
-    // 좌표는 frameConfig·frame 로만 계산(Math.random 미사용 — 결정성 규약). 범위초과는 마지막 칸 클램프.
-    function cropFrameToCanvas(img, def) {
+    // 시트 전체를 canvas 텍스처로 등록하고, frameConfig 면 각 셀을 frame(0..N-1)로 추가한다.
+    // 정적 Sprite 는 asset.frame 셀을, AnimatedSprite 는 코어가 진행한 현재 셀을 setFrame 으로 표시 →
+    // 한 텍스처로 정적·애니 모두 대응. 좌표는 frameConfig 로만 계산(Math.random 미사용 — 결정성 규약).
+    // frameConfig 없으면 단일(__BASE) 프레임(전체 이미지). 스케일 보간은 표시 시 pixelArt 설정이 담당.
+    function bakeSheetTexture(texKey, img, def) {
       var iw = img.width | 0, ih = img.height | 0;
-      var fc = def && def.frameConfig;
-      var fw = (fc && fc.frameWidth > 0) ? (fc.frameWidth | 0) : iw;
-      var fh = (fc && fc.frameHeight > 0) ? (fc.frameHeight | 0) : ih;
-      var margin = (fc && fc.margin > 0) ? (fc.margin | 0) : 0;
-      var spacing = (fc && fc.spacing > 0) ? (fc.spacing | 0) : 0;
-      var cols = fc ? Math.max(1, Math.floor((iw - margin + spacing) / (fw + spacing))) : 1;
-      var rows = fc ? Math.max(1, Math.floor((ih - margin + spacing) / (fh + spacing))) : 1;
-      var total = Math.max(1, cols * rows);
-      var idx = (def && def.frame > 0) ? (def.frame | 0) : 0;
-      if (idx >= total) idx = total - 1;
-      if (idx < 0) idx = 0;
-      var sx = margin + (idx % cols) * (fw + spacing);
-      var sy = margin + Math.floor(idx / cols) * (fh + spacing);
       var canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, fw); canvas.height = Math.max(1, fh);
+      canvas.width = Math.max(1, iw); canvas.height = Math.max(1, ih);
       var cx = canvas.getContext('2d');
-      cx.imageSmoothingEnabled = !metaPixelArt(state.sceneDoc);
-      cx.drawImage(img, sx, sy, fw, fh, 0, 0, fw, fh);
-      return canvas;
+      cx.imageSmoothingEnabled = false;             // 1:1 시트 복사
+      cx.drawImage(img, 0, 0);
+      if (scene.textures.exists(texKey)) scene.textures.remove(texKey);
+      var tex = scene.textures.addCanvas(texKey, canvas);   // same-origin canvas → getPixel/bakeHash 동작
+      var fc = def && def.frameConfig;
+      if (tex && tex.add && fc && fc.frameWidth > 0 && fc.frameHeight > 0) {
+        var fw = fc.frameWidth | 0, fh = fc.frameHeight | 0;
+        var margin = (fc.margin > 0) ? (fc.margin | 0) : 0;
+        var spacing = (fc.spacing > 0) ? (fc.spacing | 0) : 0;
+        var cols = Math.max(1, Math.floor((iw - margin + spacing) / (fw + spacing)));
+        var rows = Math.max(1, Math.floor((ih - margin + spacing) / (fh + spacing)));
+        for (var r = 0; r < rows; r++) {
+          for (var c = 0; c < cols; c++) {
+            var sx = margin + c * (fw + spacing);
+            var sy = margin + r * (fh + spacing);
+            try { tex.add(r * cols + c, 0, sx, sy, fw, fh); } catch (e) { /* 셀 등록 실패 무시 */ }
+          }
+        }
+      }
     }
-    // 이미지 비동기 로드 → crop → addCanvas 텍스처 → 참조 엔티티 setTexture(commitBaked).
+    // 이미지 비동기 로드 → 풀 시트 멀티프레임 텍스처 → 참조 엔티티 setTexture+표시프레임(commitBaked).
     function startImageBake(spriteId, def) {
       var texKey = 'wgf_asset_' + spriteId;
       if (scene.textures.exists(texKey)) { commitBaked(spriteId, texKey); return; }
       noteAssetLoadStart();
       var img = new Image();
       img.onload = function () {
-        try {
-          var canvas = cropFrameToCanvas(img, def);
-          if (scene.textures.exists(texKey)) scene.textures.remove(texKey);
-          scene.textures.addCanvas(texKey, canvas);   // same-origin canvas → getPixel/bakeHash 동작
-          commitBaked(spriteId, texKey);
-        } catch (e) { /* crop/등록 실패 → placeholder 유지 */ }
+        try { bakeSheetTexture(texKey, img, def); commitBaked(spriteId, texKey); }
+        catch (e) { /* 등록 실패 → placeholder 유지 */ }
         noteAssetLoaded();
       };
       img.onerror = function () { noteAssetLoaded(); /* 로드 실패 → placeholder 유지 */ };
       img.src = resolveAssetUrl(def.url);
     }
-    // placeholder → 진짜 텍스처 교체 + 그 에셋 id 를 참조하는 엔티티만 setTexture.
+    // placeholder → 진짜 텍스처 교체 + 그 에셋 id 를 참조하는 엔티티만 setTexture + 표시 프레임 적용.
     function commitBaked(spriteId, texKey) {
       bakedTextures[spriteId] = texKey;
       var ents = (state.world && state.world.entities) || [];
@@ -467,10 +468,52 @@
         var sc = SceneKit.getComponentOn(ents[i], 'Sprite') || SceneKit.getComponentOn(ents[i], 'AnimatedSprite');
         if (sc && String(sc.sprite) === String(spriteId)) {
           var go = spriteByEntity[ents[i].id];
-          if (go && go.setTexture) { try { go.setTexture(texKey, 0); } catch (e) { /* 무시 */ } }
+          if (go && go.setTexture) {
+            try { go.setTexture(texKey); } catch (e) { /* 무시 */ }
+            applyDisplayFrame(go, texKey, initialFrameFor(ents[i], sc));
+          }
         }
       }
       if (state.chrome) refreshOutlines();
+    }
+    // 표시 프레임 적용 — 텍스처에 그 frame 이 있을 때만(없으면 __BASE 유지, 콘솔 경고 회피).
+    function applyDisplayFrame(go, texKey, frame) {
+      if (!go || !go.setFrame || frame == null) return;
+      var tex = scene.textures.get(texKey);
+      if (tex && tex.has && tex.has(frame)) { try { go.setFrame(frame); } catch (e) { /* 무시 */ } }
+    }
+    // 엔티티 초기 표시 프레임 — AnimatedSprite=현재 애니 셀, 정적 Sprite=asset.frame 셀.
+    function initialFrameFor(ent, spriteComp) {
+      if (SceneKit.getComponentOn(ent, 'AnimatedSprite')) {
+        var cell = animCellFor(ent);
+        return (cell == null) ? 0 : cell;
+      }
+      var def = findAssetDef(spriteComp && spriteComp.sprite);
+      return (def && def.frame > 0) ? (def.frame | 0) : 0;
+    }
+    // AnimatedSprite 의 현재 표시 셀 — 코어 comp._anim/_frame 기준(_frame=anim.frames 배열 인덱스).
+    // 표시 셀 = def.frames[_frame]. 코어가 결정적으로 진행하므로 어댑터는 읽어서 반영만(단일 진실).
+    function animCellFor(ent) {
+      var comp = SceneKit.getComponentOn(ent, 'AnimatedSprite');
+      if (!comp) return null;
+      var anims = comp.anims || [];
+      var def = null;
+      for (var i = 0; i < anims.length; i++) { if (anims[i] && anims[i].key === comp._anim) { def = anims[i]; break; } }
+      if (!def || !def.frames || !def.frames.length) return 0;
+      var fi = comp._frame | 0;
+      if (fi < 0) fi = 0;
+      if (fi >= def.frames.length) fi = def.frames.length - 1;
+      var cell = def.frames[fi];
+      return (typeof cell === 'number' && cell >= 0) ? (cell | 0) : 0;
+    }
+    // play 중 AnimatedSprite 의 표시 프레임을 코어 현재 셀로 갱신.
+    function updateAnimatedFrame(ent) {
+      var comp = SceneKit.getComponentOn(ent, 'AnimatedSprite');
+      if (!comp || comp.sprite == null) return;
+      var go = spriteByEntity[ent.id];
+      if (!go) return;
+      var texKey = bakedTextures[comp.sprite];
+      if (texKey) applyDisplayFrame(go, texKey, animCellFor(ent));
     }
     // ── 이미지 로드 ready 게이트(계약 H′ bakeHash 는 이 신호 후) ─────────────────
     function noteAssetLoadStart() { state.pendingAssetLoads++; state.assetsReady = false; }
@@ -566,8 +609,10 @@
       var go;
       if (spriteComp && spriteComp.sprite) {
         var texKey = bakeAsset(spriteComp.sprite);
-        // AnimatedSprite 는 t=0=프레임0. edit 에선 정적 프레임0 표시.
-        go = scene.add.image(0, 0, texKey, 0);
+        // 초기 표시 프레임: 정적 Sprite=asset.frame 셀, AnimatedSprite=현재 애니 셀(t=0=frames[0]).
+        // 텍스처가 로딩 전(placeholder)이면 __BASE 유지, 로드 완료 시 commitBaked 가 셋.
+        go = scene.add.image(0, 0, texKey);
+        applyDisplayFrame(go, texKey, initialFrameFor(ent, spriteComp));
       } else {
         // Sprite 없는 엔티티: Body 크기 또는 기본 점 마커.
         go = makeMarker(ent);
@@ -981,6 +1026,7 @@
           for (var i = 0; i < ents.length; i++) {
             if (!spriteByEntity[ents[i].id]) buildEntity(ents[i]);
             else syncEntityTransform(ents[i]);
+            updateAnimatedFrame(ents[i]);   // AnimatedSprite 표시 프레임 = 코어 현재 셀
           }
           // play 중 사라진 엔티티 정리.
           var live = {};
