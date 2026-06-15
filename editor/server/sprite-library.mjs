@@ -20,6 +20,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+// 애니 도출 + 의존 위생화/상한 심볼은 catalog 와 공유하는 공통모듈(engine/derive-anims.mjs)로
+// *재배치*됨(P1-0). 여기서는 import 해 쓰고, deriveAnims·sanitizeFrameConfig 는 기존 소비자
+// (bridge.mjs 네임스페이스 import·test-sprite-library.mjs)를 위해 그대로 re-export 한다.
+import {
+  deriveAnims,
+  sanitizeFrameConfig,
+  sanitizeFrames,
+  MAX_FRAMES,
+} from '../../engine/derive-anims.mjs';
+export { deriveAnims, sanitizeFrameConfig };
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 export const IMAGE_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'];
@@ -27,12 +37,9 @@ export const IMAGE_EXT = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'];
 export const MAX_LIBRARY_ITEMS = 2000;
 // 스캔 디렉터리 깊이 가드(DoS).
 const MAX_SCAN_DEPTH = 12;
-// 시트 한 변 최대 픽셀(그리드 cols/rows 계산 입력 상한 — 거대입력 OOM 방어).
-const MAX_SHEET_DIM = 16384;
-// 그리드 셀(rows*cols) 최대 — 현실적 시트는 충분히 포함, 그 이상은 애니 시트로 비현실적(OOM 방어).
-const MAX_GRID_CELLS = 100000;
-// frames[](명시 영역) 개수 상한 — 악성 대형 analysis.json/사이드카 자재화 거부(DoS).
-const MAX_FRAMES = 100000;
+// (MAX_SHEET_DIM·MAX_GRID_CELLS·MAX_FRAMES·sanitizeFrameConfig·sanitizeFrames·deriveAnims 는
+//  engine/derive-anims.mjs 로 이동 — 위 import 참조. MAX_FRAMES 는 sanitizeAnims 등 이 파일이
+//  계속 참조하므로 import 로 가져온다.)
 // 슬라이스 사이드카 경로(repo-상대). 키 = repo-상대 이미지 경로.
 export const SLICES_REL = 'assets-library/wgf-slices.json';
 
@@ -74,35 +81,9 @@ function stableId(relPath) {
     .replace(/^[-.]+|[-.]+$/g, '') || 'sprite';
 }
 
-// ── frameConfig 위생화(bridge.sanitizeFrameMeta 동등) ─────────────────────────
-// frameWidth/frameHeight 가 양수일 때만 채택, margin/spacing 은 음수 아닐 때만. 전부 정수 강제.
-// 시트가 아니면(유효 frameConfig 없으면) null.
-export function sanitizeFrameConfig(fc) {
-  if (!fc || typeof fc !== 'object') return null;
-  if (typeof fc.frameWidth !== 'number' || !(fc.frameWidth > 0)) return null;
-  if (typeof fc.frameHeight !== 'number' || !(fc.frameHeight > 0)) return null;
-  const out = { frameWidth: fc.frameWidth | 0, frameHeight: fc.frameHeight | 0 };
-  if (typeof fc.margin === 'number' && fc.margin >= 0) out.margin = fc.margin | 0;
-  if (typeof fc.spacing === 'number' && fc.spacing >= 0) out.spacing = fc.spacing | 0;
-  return out;
-}
-
-// frames[](비균일 명시 영역) 위생화 — 각 {name?,x,y,w,h} 정수 강제, w/h 양수만.
-function sanitizeFrames(frames) {
-  if (!Array.isArray(frames)) return null;
-  const out = [];
-  // 개수 상한: 초과분은 잘라낸다(악성 대형 입력의 거대 배열 자재화·순회 방어).
-  const capped = frames.length > MAX_FRAMES ? frames.slice(0, MAX_FRAMES) : frames;
-  for (const f of capped) {
-    if (!f || typeof f !== 'object') continue;
-    if (typeof f.x !== 'number' || typeof f.y !== 'number') continue;
-    if (typeof f.w !== 'number' || !(f.w > 0) || typeof f.h !== 'number' || !(f.h > 0)) continue;
-    const item = { x: f.x | 0, y: f.y | 0, w: f.w | 0, h: f.h | 0 };
-    if (typeof f.name === 'string') item.name = f.name.slice(0, 64);
-    out.push(item);
-  }
-  return out.length ? out : null;
-}
+// (sanitizeFrameConfig·sanitizeFrames 는 engine/derive-anims.mjs 로 이동 — 상단 import 참조.
+//  sanitizeFrameConfig 는 bridge.mjs·test 호환 위해 re-export. sanitizeFrames 는 이 파일이
+//  계속 직접 호출하므로 import 로 가져온다.)
 
 // anims[] 위생화 — 각 {key,frames:[셀idx],fps,loop}. frames 는 0 이상 정수 인덱스만.
 function sanitizeAnims(anims) {
@@ -129,99 +110,8 @@ function sanitizeExcluded(excluded) {
   return out.length ? out : null;
 }
 
-// ── deriveAnims(D1 — 동작별 의미 분석) ────────────────────────────────────────
-// 가져온 시트를 "동작별 애니메이션"으로 분석한다(휴리스틱, zero-dep — 픽셀 디코드 없음).
-//  입력 sheetMeta: { frameConfig?:{frameWidth,frameHeight,margin?,spacing?}, frames?:[{x,y,w,h,name?}],
-//                    w?, h? }(w/h = 이미지 픽셀 크기 — 라이브러리 스캔이 보유하면 전달).
-//  반환: { anims:[{key,frames:[셀idx],fps,loop}], rows?, cols? }.
-//
-//  ① 그리드(frameConfig + w/h): cols/rows 계산 → 행(row) 단위로 클립 1개.
-//     - 각 클립 frames = 해당 행의 셀 인덱스(row-major: r*cols + c).
-//     - 의미 라벨링: rows<=7 이면 행 순서대로 ['idle','walk','run','jump','attack','hurt','die'],
-//       아니면 'row_0','row_1'... 1프레임뿐인 행은 loop:false + key 접미사 '_pose'.
-//  ② frames[](비균일 영역, 그리드 없음): 영역명 prefix 로 그룹핑(같은 prefix → 한 클립),
-//     prefix 가 전혀 없으면 전체를 단일 'all' 클립으로 묶는다.
-//  ③ 그리드도 frames 도 없으면 best-effort 빈 배열.
-const ANIM_VERBS = ['idle', 'walk', 'run', 'jump', 'attack', 'hurt', 'die'];
-const DERIVE_DEFAULT_FPS = 8;
-
-export function deriveAnims(sheetMeta) {
-  const meta = (sheetMeta && typeof sheetMeta === 'object') ? sheetMeta : {};
-  const fc = sanitizeFrameConfig(meta.frameConfig);
-  const w = (typeof meta.w === 'number' && meta.w > 0) ? (meta.w | 0) : 0;
-  const h = (typeof meta.h === 'number' && meta.h > 0) ? (meta.h | 0) : 0;
-
-  // ① 그리드 경로 — frameConfig + 이미지 w/h 가 있어야 cols/rows 계산 가능.
-  //    w/h 가 MAX_SHEET_DIM 이하일 때만 계산(거대입력 OOM 방어).
-  if (fc && w > 0 && w <= MAX_SHEET_DIM && h > 0 && h <= MAX_SHEET_DIM) {
-    const margin = fc.margin || 0;
-    const spacing = fc.spacing || 0;
-    // 어댑터(scenekit-phaser.js bakeSheetTexture, margin 1배)와 동일 공식으로 cols/rows 산출:
-    //   cols = floor((w - margin + spacing) / (frameWidth + spacing)). 최소 1.
-    // (어댑터의 실제 셀 격자와 frame 인덱스를 일치시키기 위함 — margin>0 에서도 어긋나지 않게.)
-    const stepX = fc.frameWidth + spacing;
-    const stepY = fc.frameHeight + spacing;
-    const cols = (stepX > 0) ? Math.max(1, Math.floor((w - margin + spacing) / stepX)) : 1;
-    const rows = (stepY > 0) ? Math.max(1, Math.floor((h - margin + spacing) / stepY)) : 1;
-    // 셀 총수 상한 초과면 루프 없이 거부(자재화 거부 — nested loop OOM 방어).
-    if (cols * rows > MAX_GRID_CELLS) {
-      return { anims: [], cols, rows, truncated: true };
-    }
-    const anims = [];
-    for (let r = 0; r < rows; r++) {
-      const frames = [];
-      for (let c = 0; c < cols; c++) frames.push(r * cols + c);
-      // 의미 라벨: rows<=7 → 동작 어휘, 아니면 row_N.
-      let key = (rows <= ANIM_VERBS.length) ? ANIM_VERBS[r] : ('row_' + r);
-      const single = frames.length === 1;
-      if (single) key = key + '_pose';
-      anims.push({ key, frames, fps: DERIVE_DEFAULT_FPS, loop: !single });
-    }
-    return { anims, cols, rows };
-  }
-
-  // ② frames[] 경로 — 비균일 명시 영역. 영역명 prefix 로 그룹핑.
-  const fr = sanitizeFrames(meta.frames);
-  if (fr && fr.length > 0) {
-    // prefix 추출: name 의 끝 숫자/구분자 제거(예: 'walk_0'→'walk', 'attack-2'→'attack').
-    const groups = new Map();   // prefix -> [원본 인덱스...]
-    let anyNamed = false;
-    for (let i = 0; i < fr.length; i++) {
-      const nm = (typeof fr[i].name === 'string') ? fr[i].name : '';
-      let prefix = '';
-      if (nm) {
-        anyNamed = true;
-        const m = nm.match(/^(.*?)[ _-]?\d+$/);
-        prefix = (m ? m[1] : nm).replace(/[ _-]+$/, '');
-      }
-      const key = prefix || '';
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(i);
-    }
-    // prefix 가 전혀 없으면(이름 없거나 전부 빈 prefix) 전체를 단일 'all' 클립으로.
-    const keys = Array.from(groups.keys());
-    const meaningful = anyNamed && keys.some((k) => k.length > 0);
-    if (!meaningful) {
-      const allFrames = fr.map((_, i) => i);
-      const single = allFrames.length === 1;
-      return { anims: [{ key: single ? 'all_pose' : 'all', frames: allFrames, fps: DERIVE_DEFAULT_FPS, loop: !single }] };
-    }
-    // 그룹별 클립(빈 prefix 그룹은 'misc' 로). 안정 정렬(prefix 사전순).
-    const anims = [];
-    const sortedKeys = keys.slice().sort();
-    for (const k of sortedKeys) {
-      const idxs = groups.get(k);
-      const single = idxs.length === 1;
-      let key = k || 'misc';
-      if (single) key = key + '_pose';
-      anims.push({ key, frames: idxs, fps: DERIVE_DEFAULT_FPS, loop: !single });
-    }
-    return { anims };
-  }
-
-  // ③ 그리드도 frames 도 없음 — best-effort 빈 결과.
-  return { anims: [] };
-}
+// (deriveAnims 는 engine/derive-anims.mjs 로 이동 — 상단 import 참조. bridge.mjs 네임스페이스
+//  import·test-sprite-library.mjs 호환 위해 re-export 됨. 동작·시그니처 불변.)
 
 // patch(부분) 를 위생화해 사이드카에 저장 가능한 항목으로 만든다. 키가 없으면 미설정(머지 시 보존).
 // 반환: { name?, frameConfig?, frames?, anims?, excludedFrames? }(존재하는 키만).
@@ -551,9 +441,11 @@ function packIdOf(dirRel) {
 // relPath(assets-library/ 또는 games/ 하위) 시트의 frameConfig/frames 를 조회한다.
 //  우선순위: 사이드카 wgf-slices.json > 팩 analysis.json(alpha 검출 frames). 둘 다 없으면
 //  frameConfig/frames 는 null(그리드 추정 불가).
-//  반환: { ok:true, relPath, frameConfig, frames } 또는 { ok:false, code, error }(경로 거부).
+//  반환: { ok:true, relPath, frameConfig, frames, anims } 또는 { ok:false, code, error }(경로 거부).
+//   anims = 사이드카 사용자 편집 anims 또는 catalog analysis.json 이 emit 시 deriveAnims 로
+//   채운 도출값(없으면 []). 형태 통일(P1-0) 후 catalog↔editor 가 같은 anims 를 왕복한다.
 //  보안: resolveLibraryPath 로 경로 검증(traversal·dotfile·범위밖 거부) + 실제 파일 확인.
-//  zero-dep: PNG 픽셀 디코드 없음 — frameConfig/frames 는 사이드카·analysis.json 메타에서만.
+//  zero-dep: PNG 픽셀 디코드 없음 — frameConfig/frames/anims 는 사이드카·analysis.json 메타에서만.
 export function getSheetMeta(repoRoot, relPath) {
   const abs = resolveLibraryPath(repoRoot, relPath);
   if (!abs) return { ok: false, code: 400, error: 'relPath 범위 밖/traversal 거부: ' + JSON.stringify(String(relPath).slice(0, 128)) };
@@ -563,31 +455,37 @@ export function getSheetMeta(repoRoot, relPath) {
   if (st.isSymbolicLink() || !st.isFile()) return { ok: false, code: 400, error: '원본이 일반 파일 아님(심볼릭링크/디렉터리 거부)' };
   const key = relOf(repoRoot, abs);
 
-  // 1) 사이드카 슬라이스(wgf-slices.json) — 사용자가 저장한 frameConfig/frames 우선.
+  // 1) 사이드카 슬라이스(wgf-slices.json) — 사용자가 저장한 frameConfig/frames/anims 우선.
   let frameConfig = null;
   let frames = null;
+  let anims = null;
   const sc = readSlices(repoRoot).sheets[key];
   if (sc && typeof sc === 'object') {
     if (sc.frameConfig) frameConfig = sanitizeFrameConfig(sc.frameConfig);
     if (sc.frames) frames = sanitizeFrames(sc.frames);
+    if (sc.anims) anims = sanitizeAnims(sc.anims);
   }
 
-  // 2) 팩 analysis.json(alpha 검출 frames) — 사이드카에 없을 때 fallback.
+  // 2) 팩 analysis.json(alpha 검출 frames + catalog 도출 anims) — 사이드카에 없을 때 fallback.
   //    assets-library/<pack>/raw/<file> → assets-library/<pack>/analysis.json 에서 file 매칭.
   if (!frameConfig && !frames) {
     const fromAnalysis = readAnalysisSheet(repoRoot, key);
     if (fromAnalysis) {
       if (fromAnalysis.frameConfig) frameConfig = sanitizeFrameConfig(fromAnalysis.frameConfig);
       if (fromAnalysis.frames) frames = sanitizeFrames(fromAnalysis.frames);
+      if (!anims && fromAnalysis.anims) anims = sanitizeAnims(fromAnalysis.anims);
     }
   }
 
-  return { ok: true, relPath: key, frameConfig, frames };
+  return { ok: true, relPath: key, frameConfig, frames, anims: anims || [] };
 }
 
 // 팩 analysis.json 에서 특정 시트(repo-상대 경로 key)의 분석 항목을 찾는다.
 //  analysis.json 경로: assets-library/<pack>/analysis.json. 그 sheets[].file 이
 //  raw/ 기준 파일명이므로 key 의 파일명(basename)으로 매칭한다. 없으면 null.
+//  스키마 형태(P1-0 통일): catalog analyze-pack 은 sheets 를 *배열*로 직렬화한다.
+//  → 배열 우선 순회 + 레거시 객체형 폴백(둘 다 수용, 후방호환). 매칭 항목은 anims 를 포함할 수
+//    있으며(catalog 가 emit 시 deriveAnims 로 채움), 호출부(getSheetMeta)가 그대로 소비한다.
 function readAnalysisSheet(repoRoot, key) {
   const segs = String(key || '').split('/').filter(Boolean);
   if (segs[0] !== 'assets-library' || !segs[1]) return null;
@@ -597,8 +495,9 @@ function readAnalysisSheet(repoRoot, key) {
   if (!doc || !doc.sheets || typeof doc.sheets !== 'object') return null;
   const baseName = segs[segs.length - 1];
   const sheets = doc.sheets;
-  for (const k of Object.keys(sheets)) {
-    const sh = sheets[k];
+  // 표준 형태: 배열. 레거시: 객체(값 순회). 둘 다 같은 매칭 규칙(sh.file basename).
+  const list = Array.isArray(sheets) ? sheets : Object.keys(sheets).map((k) => sheets[k]);
+  for (const sh of list) {
     if (sh && typeof sh === 'object' && typeof sh.file === 'string' && path.basename(sh.file) === baseName) {
       return sh;
     }

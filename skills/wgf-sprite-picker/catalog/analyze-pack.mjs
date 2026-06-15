@@ -27,6 +27,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
+// 애니 도출은 editor 와 공유하는 공통모듈(engine/derive-anims.mjs, zero-dep ESM)을 상향 import.
+// catalog 가 emit 시 시트별 anims 를 채워 analysis.json/library.json 에 영속시킨다(P1-0 배선).
+// (engine/ 는 코어 영역이라 두 소비자가 상향 import 가능 — 공통모듈은 node: 빌트인조차 없는 순수
+//  함수라 스킬 디렉터리 zero-dep/독립성 제약을 위반하지 않는다.)
+import { deriveAnims } from '../../../engine/derive-anims.mjs';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));        // catalog/
 const PACKS = path.join(DIR, 'packs.json');
@@ -592,6 +597,18 @@ function isCompositeSheet(width, height, unit) {
       method = 'single';
     }
 
+    // ── 동작별 애니 도출(P1-0 배선) ──
+    // editor 와 공유하는 공통모듈(deriveAnims)에 emit 시점 스코프의 frameConfig/frames + 디코드된
+    // 이미지 w/h 를 {frameConfig, frames, w, h} 로 묶어 전달한다(/api/sprite/analyze 와 동일 입력 계약).
+    //  - grid: frameConfig + w/h → 행 단위 의미 클립.  - atlas/alpha: frames[] prefix 그룹핑.
+    //  - single(메타 없음): 그리드도 frames 도 없어 빈 배열([]) — 기존 동작과 동일하나 키 일관 유지.
+    const anims = deriveAnims({
+      frameConfig: frameConfig,
+      frames: frames,
+      w: decoded ? decoded.width : undefined,
+      h: decoded ? decoded.height : undefined
+    }).anims;
+
     // 시트 복사: <packDir>/<slug>.<ext>. atlas/grid/alpha 모두 원본 그대로 둔다.
     // (이 시점은 EMIT 게이트를 이미 통과 — 비-EMIT 원자/프로모는 여기 도달하지 않아 복사되지 않는다.)
     const outExt = path.extname(fileName).toLowerCase() || '.png';
@@ -621,7 +638,7 @@ function isCompositeSheet(width, height, unit) {
 
     sheets.push({
       id: sheetId, file: sheetFile, method: method,
-      frameConfig: frameConfig, frames: frames, anims: [],
+      frameConfig: frameConfig, frames: frames, anims: anims,
       excludedFrames: excludedFrames || undefined
     });
     methods[sheetId] = method;
@@ -642,7 +659,7 @@ function isCompositeSheet(width, height, unit) {
       full: relFull,
       frameConfig: frameConfig,
       frames: frames,
-      anims: [],
+      anims: anims,
       excludedFrames: excludedFrames || undefined,
       thumbnail: relThumb,
       usedIn: [],
