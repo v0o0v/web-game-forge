@@ -437,6 +437,27 @@ function AnimEditor({ item, onClose, onSaved }) {
   }
   function clearSel() { setSel([]); setLastClicked(-1); }
 
+  // 선택 프레임으로 즉석 클립 캐릭터 드래그(1E) — 다중선택을 임시 anims[1] 로 만들어
+  //  AnimatedSprite 페이로드로 드래그한다(저장 없이도 드롭→엔티티화 가능).
+  //  선택 순서가 곧 클립 frames[] 순서. 빈 선택/빈 relPath 면 드래그 금지.
+  //  frameConfig/frames 메타도 실어 어댑터가 시트를 셀로 슬라이싱하게 한다(없으면 전체 1장 렌더).
+  function onSelectionDragStart(e) {
+    try {
+      if (!sel.length || !relPath) { e.preventDefault(); return; }
+      const clip = { key: 'clip', frames: sel.slice(), fps: Math.max(1, parseInt(newFps, 10) || 8), loop: !!newLoop };
+      const payload = JSON.stringify({
+        relPath: relPath,
+        as: 'AnimatedSprite',
+        anims: [clip],
+        play: clip.key,
+        frameConfig: item.frameConfig,
+        frames: (item.frames && item.frames.length) ? item.frames : undefined
+      });
+      e.dataTransfer.setData('application/wgf-asset', payload);
+      e.dataTransfer.effectAllowed = 'copy';
+    } catch (err) {}
+  }
+
   // 클립 조작.
   function addClip() {
     if (!sel.length) { setMsg('프레임을 먼저 선택하세요'); return; }
@@ -528,6 +549,15 @@ function AnimEditor({ item, onClose, onSaved }) {
                 <span style={subHead}>프레임 선택</span>
                 <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{sel.length ? `${sel.length}개 선택(순서대로)` : '클릭으로 선택, Shift+클릭 범위'}</span>
                 {sel.length > 0 && <button style={miniAction} onClick={clearSel}>선택 해제</button>}
+                {/* 다중선택 프레임을 즉석 클립으로 통째 드래그(1E) — 저장 없이 드롭→AnimatedSprite 엔티티화. */}
+                {sel.length > 0 && (
+                  <span draggable
+                        onDragStart={onSelectionDragStart}
+                        style={dragHandle}
+                        title={`선택한 ${sel.length}프레임을 캐릭터(AnimatedSprite)로 드래그 → 씬/뷰포트에 드롭`}>
+                    🧍 선택 드래그
+                  </span>
+                )}
               </div>
               {frameCount === 0
                 ? <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>프레임 메타 없음 — "시트 편집"으로 그리드를 먼저 지정하세요.</div>

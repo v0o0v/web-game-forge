@@ -23,9 +23,16 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const BRIDGE = path.join(SERVER_DIR, 'bridge.mjs');
+const REPO_ROOT = path.resolve(SERVER_DIR, '../..');
+
+// SceneKit 코어(H′ 불변식 직접 검증용) — 브리지가 거치는 동일 코어를 그대로 로드.
+const require = createRequire(import.meta.url);
+const SceneKit = require(path.resolve(REPO_ROOT, 'engine/scenekit.js'));
+require(path.resolve(REPO_ROOT, 'engine/scenekit-components.js'));  // 컴포넌트 등록(필수)
 
 const checks = [];
 let pass = 0, fail = 0;
@@ -680,6 +687,74 @@ async function main() {
 
         sseS.close();
         try { bms.child.kill(); } catch (e) {}
+        await sleep(50);
+      }
+    }
+
+    // ── G9 다중 프레임/캐릭터 드롭 → AnimatedSprite 엔티티(anims 보유) + t=0=프레임0(H′) ──
+    // 뷰포트 드롭 경로(Viewport.onDrop → controller.createEntityAtFromAsset)가 만들어 보내는
+    //  addEntity 커맨드 모양을 그대로 브리지에 POST 해, 다중 프레임 드래그→AnimatedSprite 엔티티화가
+    //  실제 단일 진실(world)에 반영되는지 + 코어 H′ 불변식(t=0=프레임0)이 유지되는지 검증한다.
+    //  (createEntityAtFromAsset: as==='AnimatedSprite' → {type:'AnimatedSprite', sprite, anims, play}.)
+    {
+      let bdrop;
+      try { bdrop = await startBridge(); } catch (e) { bdrop = null; }
+      if (!bdrop) {
+        ok('G9 드롭 브리지 기동', false, '기동 실패');
+      } else {
+        const id = bdrop.info;
+        const sseD = await openSSE(id);
+
+        // 드롭 페이로드(다중 프레임 선택으로 만든 즉석 클립). 샘플 씬 자산 spr_player 참조.
+        const dropClip = { key: 'clip', frames: [0, 1, 2, 3], fps: 10, loop: true };
+        // createEntityAtFromAsset 가 만드는 컴포넌트와 동일한 모양.
+        const animComponent = { type: 'AnimatedSprite', sprite: 'spr_player', anims: [dropClip], play: 'clip' };
+        const dropCmd = { type: 'addEntity', entity: { name: 'animated', transform: { x: 120, y: 90 }, components: [animComponent] } };
+
+        const dropRes = await api(id, 'POST', '/api/command', { command: dropCmd });
+        const dropBody = JSON.parse(dropRes.body);
+        ok('G9-1 드롭 addEntity(AnimatedSprite) POST → ok + newId',
+          dropRes.status === 200 && dropBody.ok === true && dropBody.newId != null,
+          `status=${dropRes.status} newId=${dropBody.newId}`);
+
+        // SSE 델타에 같은 newId 의 addEntity 가 AnimatedSprite 컴포넌트를 달고 도착.
+        const gotDrop = await waitFor(() => sseD.events.some((e) =>
+          e.type === 'command' && e.command && e.command.type === 'addEntity' &&
+          e.command.entity && e.command.entity.id === dropBody.newId), 2000);
+        ok('G9-2 SSE 델타에 AnimatedSprite addEntity 수신', gotDrop, `newId=${dropBody.newId}`);
+
+        // 스냅샷에 그 엔티티가 AnimatedSprite + anims(클립 4프레임) + play 로 반영.
+        const snap = JSON.parse((await api(id, 'GET', '/api/scene')).body);
+        const dropped = snap.scene.scenes[0].entities.find((e) => e.id === dropBody.newId);
+        const animComp = dropped && (dropped.components || []).find((c) => c.type === 'AnimatedSprite');
+        ok('G9-3 스냅샷 엔티티가 AnimatedSprite 컴포넌트 보유', !!animComp,
+          `components=${dropped && JSON.stringify((dropped.components || []).map((c) => c.type))}`);
+        ok('G9-4 AnimatedSprite anims 보유(클립 4프레임)',
+          animComp && Array.isArray(animComp.anims) && animComp.anims.length === 1 &&
+          Array.isArray(animComp.anims[0].frames) && animComp.anims[0].frames.length === 4,
+          `anims=${animComp && JSON.stringify(animComp.anims)}`);
+        ok('G9-5 AnimatedSprite play 기본키 보존(clip)', animComp && animComp.play === 'clip',
+          `play=${animComp && animComp.play}`);
+        ok('G9-6 sprite ref 보존(spr_player)', animComp && animComp.sprite === 'spr_player',
+          `sprite=${animComp && animComp.sprite}`);
+
+        // H′ 불변식 — 스냅샷 씬 문서를 코어로 직접 load(play) 후 t=0 에서 _frame===0.
+        //  (createEntityAtFromAsset 가 t=0=프레임0 계약을 깨지 않는지 엔드투엔드 확인.)
+        const wH = SceneKit.load(snap.scene, { mode: 'play', sceneId: snap.scene.scenes[0].id, seed: 1 });
+        const entH = SceneKit.findEntity(wH, dropBody.newId);
+        const compH = entH && SceneKit.getComponentOn(entH, 'AnimatedSprite');
+        ok('G9-7 H′ — 드롭 AnimatedSprite t=0 = 프레임0', compH && compH._frame === 0,
+          `_frame=${compH && compH._frame}`);
+        ok('G9-8 H′ — 초기 재생 애니 = play 키(clip)', compH && compH._anim === 'clip',
+          `_anim=${compH && compH._anim}`);
+
+        // dt 진행 후에도 프레임 인덱스가 클립 범위(0..3) 안 — 어댑터 슬라이싱 전제 데이터 정합.
+        for (let i = 0; i < 15; i++) SceneKit.step(wH, 1 / 60);  // 0.25s @ fps10 → 프레임 2
+        ok('G9-9 H′ — dt 진행 후 프레임 2(fps10·0.25s)', compH && compH._frame === 2,
+          `_frame=${compH && compH._frame}`);
+
+        sseD.close();
+        try { bdrop.child.kill(); } catch (e) {}
         await sleep(50);
       }
     }
