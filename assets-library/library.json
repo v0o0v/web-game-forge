@@ -157,6 +157,240 @@
         "games/runeburst"
       ],
       "addedAt": "2026-06-07"
+    },
+    {
+      "id": "kenney-pixel-platformer__tilemap-backgrounds",
+      "name": "Pixel Platformer — tilemap-backgrounds",
+      "sourceId": "kenney",
+      "sourcePackId": "kenney-pixel-platformer",
+      "license": "CC0-1.0",
+      "safetyTier": "cc0",
+      "style": "pixel",
+      "contentTypes": [
+        "character",
+        "tileset",
+        "item",
+        "background"
+      ],
+      "tags": [
+        "18x18",
+        "tilemap",
+        "platformer",
+        "characters",
+        "coins"
+      ],
+      "files": [
+        "assets-library/kenney-pixel-platformer/tilemap-backgrounds.png"
+      ],
+      "full": "assets-library/kenney-pixel-platformer/tilemap-backgrounds.png",
+      "frameConfig": {
+        "frameWidth": 24,
+        "frameHeight": 24,
+        "margin": 0,
+        "spacing": 1
+      },
+      "frames": null,
+      "anims": [],
+      "thumbnail": "assets-library/kenney-pixel-platformer/tilemap-backgrounds.thumb.png",
+      "usedIn": [],
+      "downloaded": true,
+      "analysisVersion": 2,
+      "addedAt": "2026-06-15"
+    },
+    {
+      "id": "kenney-pixel-platformer__tilemap-backgrounds-packed",
+      "name": "Pixel Platformer — tilemap-backgrounds-packed",
+      "sourceId": "kenney",
+      "sourcePackId": "kenney-pixel-platformer",
+      "license": "CC0-1.0",
+      "safetyTier": "cc0",
+      "style": "pixel",
+      "contentTypes": [
+        "character",
+        "tileset",
+        "item",
+        "background"
+      ],
+      "tags": [
+        "18x18",
+        "tilemap",
+        "platformer",
+        "characters",
+        "coins"
+      ],
+      "files": [
+        "assets-library/kenney-pixel-platformer/tilemap-backgrounds-packed.png"
+      ],
+      "full": "assets-library/kenney-pixel-platformer/tilemap-backgrounds-packed.png",
+      "frameConfig": {
+        "frameWidth": 24,
+        "frameHeight": 24,
+        "margin": 0,
+        "spacing": 0
+      },
+      "frames": null,
+      "anims": [],
+      "thumbnail": "assets-library/kenney-pixel-platformer/tilemap-backgrounds-packed.thumb.png",
+      "usedIn": [],
+      "downloaded": true,
+      "analysisVersion": 2,
+      "addedAt": "2026-06-15"
+    },
+    {
+      "id": "kenney-pixel-platformer__tilemap-characters",
+      "name": "Pixel Platformer — tilemap-characters",
+      "sourceId": "kenney",
+      "sourcePackId": "kenney-pixel-platformer",
+      "license": "CC0-1.0",
+      "safetyTier": "cc0",
+      "style": "pixel",
+      "contentTypes": [
+        "character",
+        "tileset",
+        "item",
+        "background"
+      ],
+      "tags": [
+        "18x18",
+        "tilemap",
+        "platformer",
+        "characters",
+        "coins"
+      ],
+      "files": [
+        "assets-library/kenney-pixel-platformer/tilemap-characters.png"
+      ],
+      "full": "assets-library/kenney-pixel-platformer/tilemap-characters.png",
+      "frameConfig": {
+        "frameWidth": 24,
+        "frameHeight": 24,
+        "margin": 0,
+        "spacing": 1
+      },
+      "frames": null,
+      "anims": [],
+      "thumbnail": "assets-library/kenney-pixel-platformer/tilemap-characters.thumb.png",
+      "usedIn": [],
+      "downloaded": true,
+      "analysisVersion": 2,
+      "addedAt": "2026-06-15"
+    },
+    {
+      "id": "kenney-pixel-platformer__tilemap-characters-packed",
+      "name": "Pixel Platformer — tilemap-characters-packed",
+      "sourceId": "kenney",
+      "sourcePackId": "kenney-pixel-platformer",
+      "license": "CC0-1.0",
+      "safetyTier": "cc0",
+      "style": "pixel",
+      "contentTypes": [
+        "character",
+        "tileset",
+        "item",
+        "background"
+      ],
+      "tags": [
+        "18x18",
+        "tilemap",
+        "platformer",
+        "characters",
+        "coins"
+      ],
+      "files": [
+        "assets-library/kenney-pixel-platformer/tilemap-characters-packed.png"
+      ],
+      "full": "assets-library/kenney-pixel-platformer/tilemap-characters-packed.png",
+      "frameConfig": {
+        "frameWidth": 24,
+        "frameHeight": 24,
+        "margin": 0,
+        "spacing": 0
+      },
+      "frames": null,
+      "anims": [],
+      "thumbnail": "assets-library/kenney-pixel-platformer/tilemap-characters-packed.thumb.png",
+      "usedIn": [],
+      "downloaded": true,
+      "analysisVersion": 2,
+      "addedAt": "2026-06-15"
+    },
+    {
+      "id": "kenney-pixel-platformer__tilemap",
+      "name": "Pixel Platformer — tilemap",
+      "sourceId": "kenney",
+      "sourcePackId": "kenney-pixel-platformer",
+      "license": "CC0-1.0",
+      "safetyTier": "cc0",
+      "style": "pixel",
+      "contentTypes": [
+        "character",
+        "tileset",
+        "item",
+        "background"
+      ],
+      "tags": [
+        "18x18",
+        "tilemap",
+        "platformer",
+        "characters",
+        "coins"
+      ],
+      "files": [
+        "assets-library/kenney-pixel-platformer/tilemap.png"
+      ],
+      "full": "assets-library/kenney-pixel-platformer/tilemap.png",
+      "frameConfig": {
+        "frameWidth": 18,
+        "frameHeight": 18,
+        "margin": 0,
+        "spacing": 1
+      },
+      "frames": null,
+      "anims": [],
+      "thumbnail": "assets-library/kenney-pixel-platformer/tilemap.thumb.png",
+      "usedIn": [],
+      "downloaded": true,
+      "analysisVersion": 2,
+      "addedAt": "2026-06-15"
+    },
+    {
+      "id": "kenney-pixel-platformer__tilemap-packed",
+      "name": "Pixel Platformer — tilemap-packed",
+      "sourceId": "kenney",
+      "sourcePackId": "kenney-pixel-platformer",
+      "license": "CC0-1.0",
+      "safetyTier": "cc0",
+      "style": "pixel",
+      "contentTypes": [
+        "character",
+        "tileset",
+        "item",
+        "background"
+      ],
+      "tags": [
+        "18x18",
+        "tilemap",
+        "platformer",
+        "characters",
+        "coins"
+      ],
+      "files": [
+        "assets-library/kenney-pixel-platformer/tilemap-packed.png"
+      ],
+      "full": "assets-library/kenney-pixel-platformer/tilemap-packed.png",
+      "frameConfig": {
+        "frameWidth": 18,
+        "frameHeight": 18,
+        "margin": 0,
+        "spacing": 0
+      },
+      "frames": null,
+      "anims": [],
+      "thumbnail": "assets-library/kenney-pixel-platformer/tilemap-packed.thumb.png",
+      "usedIn": [],
+      "downloaded": true,
+      "analysisVersion": 2,
+      "addedAt": "2026-06-15"
     }
   ]
 }

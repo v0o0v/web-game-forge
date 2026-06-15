@@ -1,0 +1,84 @@
+{
+  "packId": "kenney-pixel-platformer",
+  "analyzedAt": "2026-06-15T14:10:08.238Z",
+  "sheets": [
+    {
+      "id": "kenney-pixel-platformer__tilemap-backgrounds",
+      "file": "tilemap-backgrounds.png",
+      "method": "grid",
+      "frameConfig": {
+        "frameWidth": 24,
+        "frameHeight": 24,
+        "margin": 0,
+        "spacing": 1
+      },
+      "frames": null,
+      "anims": []
+    },
+    {
+      "id": "kenney-pixel-platformer__tilemap-backgrounds-packed",
+      "file": "tilemap-backgrounds-packed.png",
+      "method": "grid",
+      "frameConfig": {
+        "frameWidth": 24,
+        "frameHeight": 24,
+        "margin": 0,
+        "spacing": 0
+      },
+      "frames": null,
+      "anims": []
+    },
+    {
+      "id": "kenney-pixel-platformer__tilemap-characters",
+      "file": "tilemap-characters.png",
+      "method": "grid",
+      "frameConfig": {
+        "frameWidth": 24,
+        "frameHeight": 24,
+        "margin": 0,
+        "spacing": 1
+      },
+      "frames": null,
+      "anims": []
+    },
+    {
+      "id": "kenney-pixel-platformer__tilemap-characters-packed",
+      "file": "tilemap-characters-packed.png",
+      "method": "grid",
+      "frameConfig": {
+        "frameWidth": 24,
+        "frameHeight": 24,
+        "margin": 0,
+        "spacing": 0
+      },
+      "frames": null,
+      "anims": []
+    },
+    {
+      "id": "kenney-pixel-platformer__tilemap",
+      "file": "tilemap.png",
+      "method": "grid",
+      "frameConfig": {
+        "frameWidth": 18,
+        "frameHeight": 18,
+        "margin": 0,
+        "spacing": 1
+      },
+      "frames": null,
+      "anims": []
+    },
+    {
+      "id": "kenney-pixel-platformer__tilemap-packed",
+      "file": "tilemap-packed.png",
+      "method": "grid",
+      "frameConfig": {
+        "frameWidth": 18,
+        "frameHeight": 18,
+        "margin": 0,
+        "spacing": 0
+      },
+      "frames": null,
+      "anims": []
+    }
+  ]
+}

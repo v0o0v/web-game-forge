@@ -300,21 +300,91 @@ function detectFramesByAlpha(img) {
   return boxes.map(function (b, i) { return { name: 'frame_' + i, x: b.x, y: b.y, w: b.w, h: b.h }; });
 }
 
-// ── 그리드 분석: tileSize/파일명 힌트로 균일 frameConfig, 빈 칸 excludedFrames ─
-function detectGrid(img, pack, fileName) {
-  // 1) 파일명 힌트 _WxH (예: tiles_18x18.png).
-  let tw = 0, th = 0;
-  const m = /(\d+)\s*[xX]\s*(\d+)/.exec(fileName);
-  if (m) { tw = parseInt(m[1], 10); th = parseInt(m[2], 10); }
-  // 2) packs.json tileSize.
-  if ((!tw || !th) && pack.tileSize) { tw = th = pack.tileSize; }
-  if (!tw || !th) return null;
-  if (tw <= 0 || th <= 0 || img.width % tw !== 0 || img.height % th !== 0) {
-    // 정확히 안 나눠지면 그리드 부적합(호출부가 alpha 로 폴백).
-    return null;
+// ── Kenney Tilesheet 스펙 파서 ────────────────────────────────────────────────
+// Kenney 팩은 "Tilesheet (Backgrounds).txt" 같은 스펙 파일을 동봉한다:
+//   "Tile size • 24px × 24px" / "Space between tiles • 1px × 1px".
+// 한 팩에 시트별로 타일 크기가 다를 수 있어(예: tiles 18px·characters 24px) packs.json 의
+// 단일 tileSize 로는 정확히 못 자른다. 이 스펙을 읽어 시트별 정답 (tw,th,spacing) 을 얻는다.
+// 반환: [{ category:'backgrounds', tw:24, th:24, spacing:1 }, ...] (없으면 []).
+function parseKenneyTilesheets(rawDir) {
+  const specs = [];
+  let files;
+  try { files = listFilesRec(rawDir); } catch (e) { return specs; }
+  for (const f of files) {
+    if (!/tilesheet[^/\\]*\.txt$/i.test(f)) continue;
+    let txt; try { txt = fs.readFileSync(f, 'utf8'); } catch (e) { continue; }
+    const sz = /tile\s*size[^\d]*(\d+)\s*px\s*[×xX]\s*(\d+)\s*px/i.exec(txt);
+    if (!sz) continue;
+    const tw = parseInt(sz[1], 10), th = parseInt(sz[2], 10);
+    if (!(tw > 0) || !(th > 0)) continue;
+    const sp = /space\s*between\s*tiles[^\d]*(\d+)\s*px/i.exec(txt);
+    const spacing = sp ? parseInt(sp[1], 10) : 0;
+    // 카테고리: 파일명 괄호 안(예: "Tilesheet (Backgrounds).txt" → backgrounds), 없으면 베이스명.
+    const base = path.basename(f);
+    const paren = /\(([^)]+)\)/.exec(base);
+    const category = (paren ? paren[1] : base.replace(/\.txt$/i, '').replace(/tilesheet/i, '')).trim().toLowerCase();
+    specs.push({ category, tw, th, spacing });
   }
-  const cols = img.width / tw, rows = img.height / th;
-  // 완전 투명 칸을 excludedFrames 후보로.
+  return specs;
+}
+
+// 시트 파일명에 가장 구체적으로 일치하는 Kenney 스펙을 고른다.
+// 'tile(s)' 는 메인 타일맵용 일반 키워드라 가장 약하게(점수 1) 취급 — 그래야
+// "tilemap-backgrounds" 가 'tile'(약) 대신 'background'(강) 로 정확히 매칭된다.
+function matchKenneySpec(specs, fileBase) {
+  const f = String(fileBase).toLowerCase();
+  let best = null, bestScore = 0;
+  for (const s of specs) {
+    const cat = s.category;
+    const kws = new Set([cat, cat.replace(/s$/, '')]);   // 단/복수 모두 시도
+    let score = 0;
+    for (const kw of kws) {
+      if (kw.length < 4 || !f.includes(kw)) continue;
+      const isGeneric = (kw === 'tile' || kw === 'tiles');
+      score = Math.max(score, isGeneric ? 1 : kw.length);
+    }
+    if (score > bestScore) { bestScore = score; best = s; }
+  }
+  return best;
+}
+
+// tw×th 가 정해졌을 때, 여백 후보 중 양변이 정확히 나눠떨어지는 것을 골라 frameConfig 산출.
+// (패킹된 시트는 spacing 0, 원본은 보통 1 — 동일 타일 크기로 두 변종을 한 번에 처리.)
+function fitGrid(img, tw, th, spacingCandidates) {
+  if (!(tw > 0) || !(th > 0)) return null;
+  const seen = new Set();
+  for (let sp of spacingCandidates) {
+    if (sp == null || sp < 0) continue;
+    sp = sp | 0;
+    if (seen.has(sp)) continue; seen.add(sp);
+    const stepX = tw + sp, stepY = th + sp;
+    if (stepX <= 0 || stepY <= 0) continue;
+    if ((img.width + sp) % stepX !== 0 || (img.height + sp) % stepY !== 0) continue;
+    const cols = (img.width + sp) / stepX, rows = (img.height + sp) / stepY;
+    if (cols >= 1 && rows >= 1) return { frameWidth: tw, frameHeight: th, margin: 0, spacing: sp, cols, rows };
+  }
+  return null;
+}
+
+// ── 그리드 분석: 파일명 힌트 → Kenney 스펙 → packs.json tileSize 순으로 균일 frameConfig ─
+// 각 후보마다 여백 0/1(스펙은 명시 여백 우선)을 시도해 정확히 나눠떨어질 때만 채택.
+// 빈(완전 투명) 칸은 excludedFrames 후보로(여백·간격 반영한 셀 원점 기준).
+function detectGrid(img, pack, fileName, kenneySpecs) {
+  let chosen = null;   // { frameWidth, frameHeight, margin, spacing, cols, rows }
+  // 1) 파일명 힌트 _WxH (예: tiles_18x18.png) — 여백 0/1 시도.
+  const m = /(\d+)\s*[xX]\s*(\d+)/.exec(fileName);
+  if (m) chosen = fitGrid(img, parseInt(m[1], 10), parseInt(m[2], 10), [0, 1]);
+  // 2) Kenney Tilesheet 스펙(시트별 정답 타일 크기) — 혼합 크기 팩 대응. 명시 여백 우선.
+  if (!chosen && kenneySpecs && kenneySpecs.length) {
+    const spec = matchKenneySpec(kenneySpecs, fileName);
+    if (spec) chosen = fitGrid(img, spec.tw, spec.th, [spec.spacing, 0, 1]);
+  }
+  // 3) packs.json tileSize — 여백 0/1 시도.
+  if (!chosen && pack.tileSize) chosen = fitGrid(img, pack.tileSize | 0, pack.tileSize | 0, [0, 1]);
+  if (!chosen) return null;   // 어떤 후보도 정확히 안 나눠지면 호출부가 alpha 로 폴백.
+
+  const { frameWidth: tw, frameHeight: th, margin, spacing, cols, rows } = chosen;
+  const stepX = tw + spacing, stepY = th + spacing;
   const excluded = [];
   const { data, width } = img;
   for (let r = 0; r < rows; r++) {
@@ -322,7 +392,7 @@ function detectGrid(img, pack, fileName) {
       let anyOpaque = false;
       for (let y = 0; y < th && !anyOpaque; y++) {
         for (let x = 0; x < tw; x++) {
-          const px = c * tw + x, py = r * th + y;
+          const px = margin + c * stepX + x, py = margin + r * stepY + y;
           if (data[(py * width + px) * 4 + 3] > 8) { anyOpaque = true; break; }
         }
       }
@@ -330,7 +400,7 @@ function detectGrid(img, pack, fileName) {
     }
   }
   return {
-    frameConfig: { frameWidth: tw, frameHeight: th, margin: 0, spacing: 0 },
+    frameConfig: { frameWidth: tw, frameHeight: th, margin, spacing },
     excludedFrames: excluded,
     cols, rows
   };
@@ -449,6 +519,9 @@ function isCompositeSheet(width, height, unit) {
     return 16;
   }
 
+  // Kenney 동봉 Tilesheet 스펙(시트별 정답 타일 크기) — 혼합 크기 팩에서 그리드 정확도 확보.
+  const kenneySpecs = parseKenneyTilesheets(rawDir);
+
   const sheets = [];          // analysis.json 의 sheets (= EMIT 된 항목)
   const itemIds = [];
   const methods = {};
@@ -503,7 +576,7 @@ function isCompositeSheet(width, height, unit) {
       method = 'atlas'; frames = atlasFrames;
     } else if (decoded) {
       // 2) grid
-      const grid = detectGrid(decoded, pack, fileName);
+      const grid = detectGrid(decoded, pack, fileName, kenneySpecs);
       if (grid) {
         method = 'grid'; frameConfig = grid.frameConfig;
         if (grid.excluded && grid.excluded.length) excludedFrames = grid.excluded;
