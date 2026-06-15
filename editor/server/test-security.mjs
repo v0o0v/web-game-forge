@@ -223,6 +223,61 @@ async function main() {
       ok('5 정상 토큰 + Origin evil.com → 403', evilOrigin.status === 403, `status=${evilOrigin.status}`);
     }
 
+    // ── 5.5 신규 /api/screenshot* 엔드포인트 신뢰경계(2B) ───────────────────────
+    // 새 캡처 엔드포인트도 /api/* 전 구간 가드(토큰·Origin)를 동일 적용받아야 한다.
+    //  또한 셸 미경유 불변식 보존 — 이 엔드포인트는 execFile 을 호출하지 않으므로 셸 표면 0.
+    {
+      // (a) GET /api/screenshot/capture — 토큰 없음 → 401.
+      const capNoTok = await request({
+        host: '127.0.0.1', port: info.port, path: '/api/screenshot/capture', method: 'GET',
+        headers: { 'Origin': `http://127.0.0.1:${info.port}` }
+      });
+      ok('5.5-a /api/screenshot/capture 토큰 없음 → 401', capNoTok.status === 401, `status=${capNoTok.status}`);
+
+      // (b) GET /api/screenshot/capture — 정상 토큰 + 외부 Origin(evil.com) → 403.
+      const capEvil = await request({
+        host: '127.0.0.1', port: info.port, path: '/api/screenshot/capture', method: 'GET',
+        headers: { 'X-WGF-Token': info.token, 'Origin': 'http://evil.com' }
+      });
+      ok('5.5-b /api/screenshot/capture 외부 Origin → 403', capEvil.status === 403, `status=${capEvil.status}`);
+
+      // (c) POST /api/screenshot — 토큰 없음 → 401(회신 위조 차단).
+      const postNoTok = await request({
+        host: '127.0.0.1', port: info.port, path: '/api/screenshot', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Origin': `http://127.0.0.1:${info.port}` }
+      }, JSON.stringify({ requestId: 'x', dataUrl: 'data:image/png;base64,iVBORw0KGgo=' }));
+      ok('5.5-c POST /api/screenshot 토큰 없음 → 401', postNoTok.status === 401, `status=${postNoTok.status}`);
+
+      // (d) POST /api/screenshot — 정상 토큰 + 외부 Origin → 403.
+      const postEvil = await request({
+        host: '127.0.0.1', port: info.port, path: '/api/screenshot', method: 'POST',
+        headers: { 'X-WGF-Token': info.token, 'Content-Type': 'application/json', 'Origin': 'http://evil.com' }
+      }, JSON.stringify({ requestId: 'x', dataUrl: 'data:image/png;base64,iVBORw0KGgo=' }));
+      ok('5.5-d POST /api/screenshot 외부 Origin → 403', postEvil.status === 403, `status=${postEvil.status}`);
+
+      // (e) 정상 토큰+Origin POST 인데 미매칭 requestId → 404(pending 없음). 임의 회신이
+      //     캡처를 가로채지 못함(서버 발급 requestId 만 매칭).
+      const postBadId = await api(info, 'POST', '/api/screenshot', { requestId: 'no-such-request', dataUrl: 'data:image/png;base64,iVBORw0KGgo=' });
+      ok('5.5-e 미매칭 requestId 회신 → 404', postBadId.status === 404, `status=${postBadId.status}`);
+
+      // (f) 비-PNG dataUrl(스크립트 data: 스킴) → 400 거부(저장형 XSS·위장 페이로드 차단).
+      //     매칭 requestId 가 없어도 형식 검증이 선행되어야 하므로 404 이전에 400 이 나야 한다.
+      const postBadFmt = await api(info, 'POST', '/api/screenshot', { requestId: 'x', dataUrl: 'data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==' });
+      ok('5.5-f 비-PNG dataUrl → 400 거부', postBadFmt.status === 400, `status=${postBadFmt.status}`);
+
+      // (g) PNG 시그니처 위장(헤더만 PNG MIME, 본문은 PNG 매직넘버 아님) → 400 거부.
+      const fakePngB64 = Buffer.from('not a real png payload').toString('base64');
+      const postFakeSig = await api(info, 'POST', '/api/screenshot', { requestId: 'x', dataUrl: 'data:image/png;base64,' + fakePngB64 });
+      ok('5.5-g PNG 시그니처 위장 → 400 거부', postFakeSig.status === 400, `status=${postFakeSig.status}`);
+
+      // (h) 셸 미경유 불변식 보존: 캡처 엔드포인트 호출 후에도 CANARY 미생성(execFile 표면 0).
+      //     (구독자 없으므로 capture 는 즉시 headless 200 ok:false — 셸 동작 없음.)
+      await api(info, 'GET', '/api/screenshot/capture');
+      await sleep(60);
+      const canaryAfterShot = fs.existsSync(CANARY_PATH);
+      ok('5.5-h 캡처 엔드포인트 셸 미경유(CANARY 미생성)', canaryAfterShot === false, `canaryExists=${canaryAfterShot}`);
+    }
+
     // ── 6. 토큰 파일 권한(POSIX 한정: 0o600 — 다른 로컬 사용자 비노출) ────────────
     {
       if (process.platform === 'win32') {

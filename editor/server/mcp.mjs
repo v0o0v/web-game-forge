@@ -286,11 +286,27 @@ const TOOLS = {
   },
 
   scene_screenshot: {
-    description: '에디터 뷰포트 스크린샷을 캡처한다. 브라우저 미오픈(헤드리스 편집) 시 "뷰포트 없음" 구조화 에러를 반환(편집은 계속 가능).',
+    description: '에디터 뷰포트 스크린샷(PNG)을 캡처한다. 연결된 브라우저 뷰포트에 캡처를 요청해 canvas.toDataURL PNG 를 image content 로 반환한다. 브라우저 미오픈(헤드리스 편집) 시 "뷰포트 없음" 구조화 에러를 반환(편집은 계속 가능).',
     inputSchema: OBJ({}),
     async handler() {
-      // 브리지는 헤드리스 — 브라우저 캡처 파이프라인은 P3 범위 외. 항상 구조화 에러.
-      return toolError('뷰포트 없음 — 브라우저 미오픈(헤드리스 편집). 스크린샷은 브라우저 캡처 파이프라인 도입(후속) 필요.', { headless: true });
+      // 브리지가 연결된 브라우저 뷰포트에 SSE 로 캡처를 요청하고 PNG 회신을 기다린다(2B).
+      //  프록시 타임아웃은 브리지 캡처 타임아웃(기본 4s)보다 길게 잡아 헤드리스 판정을 브리지에 위임.
+      const r = await bridgeRequest('GET', '/api/screenshot/capture', null, 15000);
+      if (r.status !== 200 || !r.json) return toolError('스크린샷 캡처 실패', { status: r.status });
+      if (r.json.ok !== true) {
+        // 헤드리스(브라우저 미오픈/타임아웃) — 구조화 에러. 편집은 계속 가능.
+        return toolError('뷰포트 없음 — 브라우저 미오픈(헤드리스 편집). 브라우저(/wgf-editor)를 열면 PNG 를 캡처합니다.', { headless: true, reason: r.json.reason });
+      }
+      // PNG dataURL → MCP image content(base64). 헤드리스가 아니므로 실제 PNG 회신.
+      const dataUrl = r.json.dataUrl || '';
+      const m = dataUrl.match(/^data:(image\/png);base64,([A-Za-z0-9+/=]+)$/);
+      if (!m) return toolError('스크린샷 응답 형식 오류', { detail: 'dataUrl' });
+      return {
+        content: [
+          { type: 'image', data: m[2], mimeType: m[1] },
+          { type: 'text', text: JSON.stringify({ ok: true, mimeType: m[1], bytes: r.json.bytes, width: r.json.width, height: r.json.height }) }
+        ]
+      };
     }
   },
 

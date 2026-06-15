@@ -106,6 +106,59 @@ function App({ controller, settings }) {
     return off;
   }, []);
 
+  // scene_screenshot 캡처 왕복(2B) — 브리지가 SSE 로 캡처를 요청하면 뷰포트를 PNG 로 캡처해
+  //  브리지에 회신한다. remote 전용(local 은 컨트롤러가 무동작).
+  //  [ACC-1] WebGL 뷰포트는 컴포지팅 후 드로잉버퍼가 비어 canvas.toDataURL 이 검은 PNG 를
+  //   줄 수 있다(preserveDrawingBuffer 미설정). Phaser 의 renderer.snapshot(cb) 은 다음
+  //   프레임에 스냅샷을 강제 렌더해 그 값과 무관하게 올바른 PNG 를 준다 — 이를 우선하고,
+  //   미가용/실패/타임아웃이면 canvas.toDataURL 로 폴백한다. 캡처는 Promise(비동기).
+  useEffect(() => {
+    if (!controller.isRemote || !controller.onScreenshotRequest) return;
+
+    // 뷰포트 host 의 <canvas>(Phaser 생성) 직접 캡처 — 폴백 경로.
+    function captureCanvasFallback() {
+      const host = (typeof document !== 'undefined') ? document.getElementById('wgf-viewport') : null;
+      const canvas = host ? host.querySelector('canvas') : null;
+      if (!canvas) return null;
+      let dataUrl = null;
+      try { dataUrl = canvas.toDataURL('image/png'); } catch (e) { return null; }
+      if (typeof dataUrl !== 'string' || dataUrl.indexOf('data:image/png;base64,') !== 0) return null;
+      return { dataUrl, width: canvas.width, height: canvas.height };
+    }
+
+    controller.onScreenshotRequest(() => {
+      // Phaser game.renderer.snapshot 우선(WebGL 드로잉버퍼 무관 — 다음 프레임 강제 렌더).
+      const adapter = controller.getAdapter ? controller.getAdapter() : null;
+      const game = adapter && adapter._game ? adapter._game : null;
+      const renderer = game && game.renderer ? game.renderer : null;
+      if (!renderer || typeof renderer.snapshot !== 'function') {
+        // snapshot 미가용 → 폴백.
+        return captureCanvasFallback();
+      }
+      return new Promise((resolve) => {
+        let settled = false;
+        const done = (v) => { if (!settled) { settled = true; resolve(v); } };
+        // snapshot 콜백이 늦거나 안 오면(렌더 정지 등) 폴백으로 회신.
+        const fbTimer = setTimeout(() => done(captureCanvasFallback()), 1500);
+        try {
+          renderer.snapshot((image) => {
+            clearTimeout(fbTimer);
+            // image = HTMLImageElement(WebGL/Canvas 공통, type 기본 image/png). .src 가 PNG dataURL.
+            const src = image && typeof image.src === 'string' ? image.src : null;
+            if (src && src.indexOf('data:image/png;base64,') === 0) {
+              done({ dataUrl: src, width: (image.width || game.scale.width), height: (image.height || game.scale.height) });
+            } else {
+              done(captureCanvasFallback());
+            }
+          });
+        } catch (e) {
+          clearTimeout(fbTimer);
+          done(captureCanvasFallback());
+        }
+      });
+    });
+  }, []);
+
   // 전역 키보드 단축키 — 메뉴에 표시된 단축키를 실제 바인딩. 입력 위젯(INPUT/TEXTAREA/
   // SELECT/contentEditable) 포커스 시엔 가로채지 않는다(텍스트 편집·네이티브 undo 보존).
   useEffect(() => {
