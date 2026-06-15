@@ -195,6 +195,35 @@ async function main() {
       ok('G-DET lint-kit-deps exit 0', !o3.isError && o3.data && o3.data.ok === true && o3.data.exit === 0,
         `exit=${o3.data && o3.data.exit}`);
 
+      // [3A] 화이트리스트 5종 전부 에디터 표면 — lint-rng(결정론) game.js 대상 → exit 0.
+      const r3b = await mcp.rpc('tools/call', { name: 'skill_run_tool', arguments: { tool: 'lint-rng', args: { file: 'games/super-runner/game.js', json: true } } }, 35000);
+      const o3b = parseToolResult(r3b);
+      ok('G-DET lint-rng(game.js) exit 0', !o3b.isError && o3b.data && o3b.data.ok === true && o3b.data.exit === 0,
+        `exit=${o3b.data && o3b.data.exit}`);
+
+      // [3A] qa-score(종합 점수) target=games/<slug> 슬러그 → 도구 실행됨(exit 0/1 무관, 거부 아님).
+      const r3c = await mcp.rpc('tools/call', { name: 'skill_run_tool', arguments: { tool: 'qa-score', args: { target: 'super-runner', json: true } } }, 35000);
+      const o3c = parseToolResult(r3c);
+      ok('G-DET qa-score(슬러그) 실행됨(거부 아님)', !o3c.isError && o3c.data && o3c.data.ok === true && typeof o3c.data.exit === 'number',
+        `exit=${o3c.data && o3c.data.exit}`);
+
+      // [3A] 화이트리스트 5종이 모두 실행 가능(거부 아님)임을 한 번에 단언 — 에디터 결정형 표면 완비.
+      const WL5 = [
+        { tool: 'lint-scene', args: { file: 'current', json: true } },
+        { tool: 'lint-rng', args: { file: 'games/super-runner/game.js', json: true } },
+        { tool: 'lint-juice', args: { file: 'games/super-runner/game.js', json: true } },
+        { tool: 'lint-kit-deps', args: { json: true } },
+        { tool: 'qa-score', args: { target: 'super-runner', json: true } }
+      ];
+      let wlAllRan = true; const wlDetail = [];
+      for (const w of WL5) {
+        const rr = JSON.parse((await api(info, 'POST', '/api/skill/run', w)).body);
+        const ran = rr.ok === true && typeof rr.exit === 'number';
+        wlDetail.push(w.tool + '=' + (ran ? 'run' : 'REJECT'));
+        if (!ran) wlAllRan = false;
+      }
+      ok('G-DET 결정형 화이트리스트 5종 전부 에디터 표면(skill_run_tool 실행)', wlAllRan, wlDetail.join(' '));
+
       // 직접 HTTP(에디터 결정형 트랙) 경로도 동일 동작 — POST /api/skill/run.
       const r4 = JSON.parse((await api(info, 'POST', '/api/skill/run', { tool: 'lint-scene', args: { file: 'current', json: true } })).body);
       ok('G-DET 에디터 직접 트랙(POST /api/skill/run) exit 0', r4.ok === true && r4.exit === 0 && r4.json && r4.json.ok === true,
@@ -291,6 +320,25 @@ async function main() {
       // Claude → editor_reply 왕복(처리 완료 응답).
       const replyOut = parseToolResult(await mcp.rpc('tools/call', { name: 'editor_reply', arguments: { text: '스토리를 입혔습니다.', replyTo: handledId } }));
       ok('G-DISP editor_reply 왕복', !replyOut.isError && replyOut.data && replyOut.data.ok === true, `seq=${replyOut.data && replyOut.data.seq}`);
+
+      // [3A] 콘텐츠 디렉터 스킬(sprite-picker·story-architect·style-architect) 디스패치:
+      //  에디터 SkillMenu 의 dispatchCreative 가 만드는 메시지 형식을 시뮬레이션한다 —
+      //  스킬명을 머리에 명시 + 현재 씬 요약을 동봉해 챗 큐에 enqueue → Claude 가 디큐.
+      const sceneSnap2 = JSON.parse((await api(info, 'GET', '/api/scene')).body);
+      const ctx2 = sceneSnap2.scene.scenes[0].entities.map((e) => e.name).join(', ');
+      const DIRECTOR_SKILLS = ['wgf-sprite-picker', 'wgf-story-architect', 'wgf-style-architect'];
+      let dispatchedAll = true; const dispDetail = [];
+      for (const skill of DIRECTOR_SKILLS) {
+        const msg = '[창작 요청] ' + skill + ' 로 처리해줘.\n(현재 씬 문맥: ' + ctx2 + ')';
+        const enq = JSON.parse((await api(info, 'POST', '/api/chat', { text: msg })).body);
+        if (!(enq.ok === true && enq.id >= 1)) { dispatchedAll = false; dispDetail.push(skill + '=enqFail'); continue; }
+        const deq = parseToolResult(await mcp.rpc('tools/call', { name: 'editor_next_message', arguments: {} }, 6000));
+        const got = deq.data && deq.data.message;
+        const okMsg = !!(got && got.text === msg && got.text.includes(skill) && got.text.includes('현재 씬 문맥'));
+        dispDetail.push(skill + '=' + (okMsg ? 'ok' : 'BAD'));
+        if (!okMsg) dispatchedAll = false;
+      }
+      ok('G-DISP 콘텐츠 디렉터 3종 디스패치(씬 요약 chat-queue enqueue→디큐)', dispatchedAll, dispDetail.join(' '));
     }
 
     // ── G-REF: 에셋 추가 → Sprite ref → lint-scene 통과(댕글링 아님) ─────────────

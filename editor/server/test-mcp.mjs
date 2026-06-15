@@ -298,6 +298,84 @@ async function main() {
       await sleep(50);
     }
 
+    // ── G-SHOT: scene_screenshot 브라우저 캡처 왕복 + 헤드리스(2B) ───────────────
+    // (1) 구독자(브라우저) 없음 → scene_screenshot 가 headless 구조화 에러.
+    // (2) SSE 구독자가 screenshot-request 를 받아 PNG 를 POST /api/screenshot 으로 회신 →
+    //     scene_screenshot 가 image content(PNG base64) 반환.
+    {
+      // (1) 헤드리스: 현재 SSE 구독자 0(직전 sse.close). scene_screenshot → isError + headless.
+      const shotHeadless = await mcp.rpc('tools/call', { name: 'scene_screenshot', arguments: {} }, 8000);
+      const sh = shotHeadless.result;
+      const shText = sh && sh.content && sh.content[0] && sh.content[0].text;
+      let shJson = null; try { shJson = JSON.parse(shText); } catch (e) {}
+      ok('G-SHOT 구독자 없음 → headless 구조화 에러',
+        !!(sh && sh.isError) && shJson && shJson.ok === false && shJson.detail && shJson.detail.headless === true,
+        `isError=${sh && sh.isError} headless=${shJson && shJson.detail && shJson.detail.headless}`);
+
+      // (2) 브라우저 시뮬: SSE 구독자 연결 → screenshot-request 수신 시 PNG 회신.
+      const sse2 = await openSSE(info);
+      ok('G-SHOT SSE 구독(브라우저 시뮬) 연결', sse2.status === 200, `status=${sse2.status}`);
+      await sleep(50);   // 구독 등록 여유(브리지 subscribers 에 추가)
+
+      // 1x1 PNG(유효 시그니처) — 브라우저 toDataURL 회신을 모사.
+      const TINY_PNG_B64 = Buffer.from([
+        0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A, 0x00,0x00,0x00,0x0D,0x49,0x48,0x44,0x52,
+        0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x01, 0x08,0x02,0x00,0x00,0x00,0x90,0x77,0x53,
+        0xDE,0x00,0x00,0x00,0x0C,0x49,0x44,0x41, 0x54,0x08,0xD7,0x63,0xF8,0xCF,0xC0,0x00,
+        0x00,0x00,0x02,0x00,0x01,0xE2,0x21,0xBC, 0x33,0x00,0x00,0x00,0x00,0x49,0x45,0x4E,
+        0x44,0xAE,0x42,0x60,0x82
+      ]).toString('base64');
+      const dataUrl = 'data:image/png;base64,' + TINY_PNG_B64;
+
+      // scene_screenshot rpc 를 발사(아직 await 안 함) → SSE 로 screenshot-request 도착 →
+      //  그 requestId 로 PNG 회신 → rpc 가 image content 로 resolve.
+      const shotPromise = mcp.rpc('tools/call', { name: 'scene_screenshot', arguments: {} }, 10000);
+      // screenshot-request 이벤트 도착 대기(data.type==='screenshot-request' + requestId).
+      let reqEvt = null;
+      const gotReq = await waitFor(async () => {
+        reqEvt = sse2.events.find((e) => e && e.type === 'screenshot-request' && typeof e.requestId === 'string');
+        return !!reqEvt;
+      }, 4000);
+      ok('G-SHOT screenshot-request SSE 수신(requestId)', gotReq && !!reqEvt, `req=${reqEvt && reqEvt.requestId && reqEvt.requestId.slice(0, 8)}`);
+
+      // 브라우저 회신: POST /api/screenshot {requestId, dataUrl}.
+      if (reqEvt) {
+        const postRes = JSON.parse((await api(info, 'POST', '/api/screenshot', { requestId: reqEvt.requestId, dataUrl, width: 1, height: 1 })).body);
+        ok('G-SHOT POST /api/screenshot 회신 ok', postRes.ok === true, `ok=${postRes.ok}`);
+      } else {
+        ok('G-SHOT POST /api/screenshot 회신 ok', false, 'requestId 미수신');
+      }
+
+      const shotRes = await shotPromise;
+      const sr = shotRes.result;
+      const imgC = sr && sr.content && sr.content.find((c) => c.type === 'image');
+      ok('G-SHOT scene_screenshot image content(PNG base64) 반환',
+        !!(sr && !sr.isError && imgC && imgC.mimeType === 'image/png' && typeof imgC.data === 'string' && imgC.data.length > 0),
+        `hasImage=${!!imgC} mime=${imgC && imgC.mimeType}`);
+
+      // 잘못된 requestId POST → 404(매칭 없음) — 임의 회신이 pending 을 가로채지 못함.
+      const badPost = await api(info, 'POST', '/api/screenshot', { requestId: 'deadbeef'.repeat(2), dataUrl });
+      ok('G-SHOT 미매칭 requestId 회신 → 404', badPost.status === 404, `status=${badPost.status}`);
+
+      // 비-PNG dataUrl 회신 → 400(형식 거부). 먼저 새 캡처를 띄워 requestId 확보.
+      sse2.events.length = 0;
+      const shotPromise2 = mcp.rpc('tools/call', { name: 'scene_screenshot', arguments: {} }, 10000);
+      let reqEvt2 = null;
+      await waitFor(async () => { reqEvt2 = sse2.events.find((e) => e && e.type === 'screenshot-request'); return !!reqEvt2; }, 4000);
+      if (reqEvt2) {
+        const badFmt = await api(info, 'POST', '/api/screenshot', { requestId: reqEvt2.requestId, dataUrl: 'data:text/html;base64,PHNjcmlwdD4=' });
+        ok('G-SHOT 비-PNG dataUrl 회신 → 400 거부', badFmt.status === 400, `status=${badFmt.status}`);
+        // 유효 PNG 로 마무리(pending 정리 — rpc resolve).
+        await api(info, 'POST', '/api/screenshot', { requestId: reqEvt2.requestId, dataUrl });
+      } else {
+        ok('G-SHOT 비-PNG dataUrl 회신 → 400 거부', false, 'requestId2 미수신');
+      }
+      await shotPromise2.catch(() => {});
+
+      sse2.close();
+      await sleep(50);
+    }
+
     // ── G-HB: 하트비트 5초 임계 로직(테스트 단축) ──────────────────────────────
     // 짧은 임계(WGF_BRIDGE_HEARTBEAT_MS=300)로 별도 브리지를 띄워 임계 전후 status 검증.
     {

@@ -106,6 +106,22 @@ function App({ controller, settings }) {
     return off;
   }, []);
 
+  // scene_screenshot 캡처 왕복(2B) — 브리지가 SSE 로 캡처를 요청하면 뷰포트 canvas 를
+  //  toDataURL(PNG)로 캡처해 브리지에 회신한다. 뷰포트 canvas 부재(부트 전/숨김)면 null
+  //  반환 → 회신 생략(브리지가 타임아웃→헤드리스). remote 전용(local 은 컨트롤러가 무동작).
+  useEffect(() => {
+    if (!controller.isRemote || !controller.onScreenshotRequest) return;
+    controller.onScreenshotRequest(() => {
+      const host = (typeof document !== 'undefined') ? document.getElementById('wgf-viewport') : null;
+      const canvas = host ? host.querySelector('canvas') : null;
+      if (!canvas) return null;
+      let dataUrl = null;
+      try { dataUrl = canvas.toDataURL('image/png'); } catch (e) { return null; }
+      if (typeof dataUrl !== 'string' || dataUrl.indexOf('data:image/png;base64,') !== 0) return null;
+      return { dataUrl, width: canvas.width, height: canvas.height };
+    });
+  }, []);
+
   // 전역 키보드 단축키 — 메뉴에 표시된 단축키를 실제 바인딩. 입력 위젯(INPUT/TEXTAREA/
   // SELECT/contentEditable) 포커스 시엔 가로채지 않는다(텍스트 편집·네이티브 undo 보존).
   useEffect(() => {

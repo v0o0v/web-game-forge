@@ -508,6 +508,20 @@ export function createController(opts) {
     chatListeners.push(cb);
     return () => { const i = chatListeners.indexOf(cb); if (i >= 0) chatListeners.splice(i, 1); };
   }
+
+  // ── scene_screenshot 캡처 왕복(2B — 브리지 권위) ──────────────────────────────
+  // 브리지가 SSE 로 캡처를 요청하면(transport.onScreenshotRequest) 셸이 뷰포트 canvas 를
+  //  toDataURL 로 PNG 화해 transport.respondScreenshot 으로 회신한다. local 모드는 무동작.
+  //  capture: () => { dataUrl, width, height } | null. 뷰포트 canvas 부재면 null(회신 생략).
+  function onScreenshotRequest(capture) {
+    if (!isRemote || !transport || !transport.onScreenshotRequest) return;
+    transport.onScreenshotRequest((requestId) => {
+      let shot = null;
+      try { shot = capture ? capture() : null; } catch (e) { shot = null; }
+      if (!shot || !shot.dataUrl) return;   // 캡처 불가 — 회신 생략(브리지가 타임아웃→헤드리스)
+      Promise.resolve(transport.respondScreenshot(requestId, shot.dataUrl, { width: shot.width, height: shot.height })).catch(() => {});
+    });
+  }
   function onStatusChange(cb) {
     statusListeners.push(cb);
     return () => { const i = statusListeners.indexOf(cb); if (i >= 0) statusListeners.splice(i, 1); };
@@ -690,6 +704,7 @@ export function createController(opts) {
     onChange, onSelectionChange, getComponentDef, getAdapter,
     startRemote, isRemote,
     sendChat, onChatChange, onStatusChange, getChatLog, getClaudeStatus,
+    onScreenshotRequest,
     // P4 — 스킬(2트랙) + 에셋
     runSkill, dispatchCreative, sceneContextSummary,
     getAssets, addProceduralAsset, addCc0Asset, assignAssetToEntity, onAssetChange,

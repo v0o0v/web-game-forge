@@ -78,6 +78,15 @@ const CHAT_POLL_TIMEOUT_MS = parseInt(process.env.WGF_BRIDGE_CHAT_POLL_MS || '25
 const ENDPOINT_FILE = process.env.WGF_BRIDGE_ENDPOINT_FILE ||
   path.resolve(REPO_ROOT, '.omc', 'wgf-editor', 'bridge-endpoint.json');
 
+// scene_screenshot 캡처 왕복 타임아웃(ms) — `GET /api/screenshot/capture` 가 연결된
+//  브라우저 뷰포트의 `POST /api/screenshot` 회신을 이 시간까지 기다린다. 초과하거나
+//  애초에 구독자(브라우저)가 없으면 "뷰포트 없음" 구조화 에러로 응답(헤드리스 편집 계속).
+//  기본 4000ms — 브라우저 toDataURL 왕복에 충분하되 헤드리스에서 과대 대기 안 함.
+//  테스트는 단축/연장해 캡처·타임아웃 경로를 모두 검증한다.
+const SCREENSHOT_TIMEOUT_MS = parseInt(process.env.WGF_BRIDGE_SCREENSHOT_MS || '4000', 10);
+// 회신 PNG dataURL 본문 상한(바이트) — 과대 페이로드 거부(메모리 보호). 기본 16MB.
+const SCREENSHOT_MAX_BYTES = parseInt(process.env.WGF_BRIDGE_SCREENSHOT_BYTES || String(16 * 1024 * 1024), 10);
+
 // ── 토큰(보안 §6) ─────────────────────────────────────────────────────────────
 const TOKEN = crypto.randomBytes(24).toString('hex');
 
@@ -440,6 +449,16 @@ function broadcastScene(op, payload) {
 // 각 구독자: {res, buffer:[], alive}. buffer 는 백프레셔 상한 초과 시 비우고 resync 발행.
 const subscribers = new Set();
 
+// ── scene_screenshot 캡처 대기(브라우저 뷰포트 왕복, 2B) ───────────────────────
+// `GET /api/screenshot/capture` 가 requestId 를 만들어 SSE `screenshot-request` 이벤트로
+// 연결된 브라우저(에디터 뷰포트)에 캡처를 요청하고, 여기에 {resolve,timer} 를 등록한다.
+// 브라우저가 `POST /api/screenshot {requestId,dataUrl}` 로 PNG 를 회신하면 그 entry 를
+// resolve 해 도구 응답으로 돌려준다. 타임아웃/무구독자면 "뷰포트 없음" 헤드리스 에러.
+//  - 키 = requestId(crypto.randomUUID 또는 randomBytes hex — 추측 불가).
+//  - 보안: requestId 는 서버가 발급하므로 임의 POST 가 pending 을 가로채려면 정확히
+//    일치하는 id 를 알아야 한다(+토큰·Origin 가드는 /api/ 전 구간 동일 적용).
+const pendingScreenshots = new Map();   // requestId → { resolve, timer }
+
 // ── P3 역채널 상태(영속 챗 큐 + 하트비트) ─────────────────────────────────────
 // chat: 에디터 → Claude 역방향. messages = 미처리 사용자 메시지 큐(FIFO, 파일 영속).
 //   재기동 후 CHAT_FILE 에서 복원 → 미처리 메시지 무손실(§5 P3 게이트).
@@ -646,6 +665,59 @@ function attachDrain(sub) {
     sub.pending = 0;
     sub.resyncing = false;
   });
+}
+
+// 현재 살아있는 SSE 구독자 수(브라우저 뷰포트 연결 추정 — scene_screenshot 헤드리스 판정).
+function liveSubscriberCount() {
+  let n = 0;
+  for (const sub of subscribers) { if (sub.alive) n += 1; }
+  return n;
+}
+
+// ── scene_screenshot 캡처 요청(브라우저 뷰포트 왕복, 2B) ───────────────────────
+// requestId 발급 → 모든 SSE 구독자에 `event: screenshot-request` 명시 이벤트 전송
+//  (seq 미소비 — resync 와 동일하게 시퀀스에서 빼지 않는다, 씬 델타 아님) →
+//  pendingScreenshots 에 {resolve,timer} 등록. 브라우저가 toDataURL PNG 를 회신하면
+//  resolveScreenshot 이 resolve, 미회신이면 timer 가 {ok:false,headless:true} 로 resolve.
+//  반환은 Promise(첫 회신/타임아웃 중 먼저). 구독자 0 이면 즉시 헤드리스(대기 없음).
+function requestScreenshot() {
+  if (liveSubscriberCount() === 0) {
+    return Promise.resolve({ ok: false, headless: true, reason: 'no-subscriber' });
+  }
+  const requestId = crypto.randomBytes(16).toString('hex');
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (pendingScreenshots.has(requestId)) {
+        pendingScreenshots.delete(requestId);
+        resolve({ ok: false, headless: true, reason: 'timeout' });
+      }
+    }, SCREENSHOT_TIMEOUT_MS);
+    pendingScreenshots.set(requestId, { resolve, timer });
+    // 명시 이벤트(event: screenshot-request) — onmessage 가 아니라 addEventListener 로 받음.
+    //  id 없음(시퀀스 미소비). 데이터에 requestId.
+    const frame = `event: screenshot-request\ndata: ${JSON.stringify({ type: 'screenshot-request', requestId })}\n\n`;
+    let delivered = false;
+    for (const sub of subscribers) {
+      if (!sub.alive) continue;
+      try { sub.res.write(frame); delivered = true; } catch (e) { sub.alive = false; }
+    }
+    // 쓰기 직전 모든 구독자가 죽어 전송 0건이면 즉시 헤드리스(타임아웃 대기 없이 정리).
+    if (!delivered) {
+      clearTimeout(timer);
+      pendingScreenshots.delete(requestId);
+      resolve({ ok: false, headless: true, reason: 'no-subscriber' });
+    }
+  });
+}
+
+// 브라우저 회신 PNG 를 해당 pending 캡처에 연결해 resolve. 매칭 없으면 false.
+function resolveScreenshot(requestId, payload) {
+  const entry = pendingScreenshots.get(requestId);
+  if (!entry) return false;
+  pendingScreenshots.delete(requestId);
+  clearTimeout(entry.timer);
+  entry.resolve(Object.assign({ ok: true }, payload));
+  return true;
 }
 
 // Last-Event-ID 이후 누락 델타 재전송(무손실 복구, §8 위험8).
@@ -1721,6 +1793,60 @@ function handleApi(req, res, u, p) {
           sendJSON(res, 200, { ok: true, packId, stdout: (String(fOut || '') + String(aOut || '')).slice(-2048) });
         });
       });
+    });
+    return;
+  }
+
+  // ── scene_screenshot 브라우저 캡처 왕복(2B) ─────────────────────────────────
+  // GET /api/screenshot/capture — MCP scene_screenshot 가 호출. 연결된 브라우저 뷰포트에
+  //  SSE 로 캡처를 요청하고 PNG 회신을 기다린다. 회신 시 {ok,mimeType,bytes,dataUrl},
+  //  무구독자/타임아웃이면 {ok:false,headless:true} 구조화 응답(편집은 계속 가능).
+  //  토큰·Origin 가드는 /api/ 전 구간(handleApi 진입 전)에서 이미 적용됨.
+  if (req.method === 'GET' && p === '/api/screenshot/capture') {
+    requestScreenshot().then((r) => {
+      if (r && r.ok) {
+        sendJSON(res, 200, { ok: true, mimeType: r.mimeType, bytes: r.bytes, dataUrl: r.dataUrl, width: r.width, height: r.height });
+      } else {
+        // 헤드리스(브라우저 미오픈) — 200 + ok:false(헤드리스는 정상 경로, HTTP 오류 아님).
+        sendJSON(res, 200, { ok: false, headless: true, reason: (r && r.reason) || 'headless' });
+      }
+    }).catch((e) => {
+      sendJSON(res, 500, { ok: false, error: '스크린샷 캡처 실패: ' + String(e && e.message || e) });
+    });
+    return;
+  }
+
+  // POST /api/screenshot {requestId, dataUrl} — 브라우저 뷰포트가 toDataURL PNG 를 회신.
+  //  requestId 가 pending 캡처에 매칭되고 dataUrl 이 data:image/png;base64 형식이어야 한다.
+  //  토큰·Origin 가드 동일 적용(/api/ 전 구간). 본문 상한은 readBody(5MB) 외에 별도 검사.
+  if (req.method === 'POST' && p === '/api/screenshot') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body || '{}'); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      const requestId = parsed && parsed.requestId;
+      const dataUrl = parsed && parsed.dataUrl;
+      if (typeof requestId !== 'string' || requestId.length === 0 || requestId.length > 64) {
+        sendJSON(res, 400, { ok: false, error: 'requestId 누락/형식 오류' }); return;
+      }
+      // dataUrl 형식 검증: data:image/png;base64,<...>. PNG 만 허용(임의 스킴/타입 차단).
+      const m = (typeof dataUrl === 'string') ? dataUrl.match(/^data:(image\/png);base64,([A-Za-z0-9+/=]+)$/) : null;
+      if (!m) { sendJSON(res, 400, { ok: false, error: 'dataUrl 형식 오류(data:image/png;base64 만 허용)' }); return; }
+      const base64 = m[2];
+      // 디코드 바이트 추정(base64 길이 → 바이트). 상한 초과 거부(메모리 보호).
+      const bytes = Math.floor(base64.length * 3 / 4);
+      if (bytes > SCREENSHOT_MAX_BYTES) { sendJSON(res, 413, { ok: false, error: 'PNG 과대(상한 초과)' }); return; }
+      // PNG 매직넘버 검증(디코드 첫 8바이트가 PNG 시그니처) — 위장 페이로드 차단.
+      let buf;
+      try { buf = Buffer.from(base64, 'base64'); } catch (e) { sendJSON(res, 400, { ok: false, error: 'base64 디코드 실패' }); return; }
+      const PNG_SIG = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+      if (buf.length < 8 || !buf.subarray(0, 8).equals(PNG_SIG)) {
+        sendJSON(res, 400, { ok: false, error: 'PNG 시그니처 불일치' }); return;
+      }
+      const width = (parsed && typeof parsed.width === 'number' && parsed.width > 0) ? (parsed.width | 0) : undefined;
+      const height = (parsed && typeof parsed.height === 'number' && parsed.height > 0) ? (parsed.height | 0) : undefined;
+      const matched = resolveScreenshot(requestId, { mimeType: m[1], bytes: buf.length, dataUrl, width, height });
+      if (!matched) { sendJSON(res, 404, { ok: false, error: '매칭되는 캡처 요청 없음(만료/미요청)' }); return; }
+      sendJSON(res, 200, { ok: true });
     });
     return;
   }

@@ -14,16 +14,31 @@
  * ========================================================================== */
 import { useState } from 'preact/hooks';
 
-// 결정형 트랙 버튼 정의(화이트리스트 도구 — 브리지가 최종 강제).
-//  - current=true 면 file="current"(현재 씬 임시 직렬화). 아니면 target/file 입력.
+// 결정형 트랙 버튼 정의(화이트리스트 5종 전부 — bridge.mjs SKILL_TOOLS 와 1:1).
+//  브리지가 화이트리스트·인자스키마·execFile(셸 미경유)로 최종 강제한다. 인자 형태:
+//   - current=true       → file="current"(현재 씬 임시 직렬화 후 검증).
+//   - needsInput:'file'  → game.js 등 리포 내 경로를 사용자가 입력(positional file).
+//   - needsInput:'target'→ qa-score 의 games/<slug> 또는 slug 입력(positional target).
+//   - 입력 불필요(lint-kit-deps) → 기본 manifest 로 실행.
 const DETERMINISTIC = [
   { tool: 'lint-scene', label: 'lint-scene', desc: '현재 씬 정적 검증(스키마·댕글링·화이트리스트)', current: true },
-  { tool: 'lint-kit-deps', label: 'lint-kit-deps', desc: '엔진 킷 의존성 그래프 검증', args: { json: true } }
+  { tool: 'lint-rng', label: 'lint-rng', desc: 'game.js 결정론 검증(RngForge·Math.random 금지)',
+    needsInput: 'file', placeholder: '예: games/super-runner/game.js' },
+  { tool: 'lint-juice', label: 'lint-juice', desc: 'game.js 게임필(juice) 정적 린트',
+    needsInput: 'file', placeholder: '예: games/super-runner/game.js' },
+  { tool: 'lint-kit-deps', label: 'lint-kit-deps', desc: '엔진 킷 의존성 그래프 검증(기본 manifest)' },
+  { tool: 'qa-score', label: 'qa-score', desc: '종합 QA 점수(BH/VU/IA) — games/<slug>',
+    needsInput: 'target', placeholder: '예: super-runner' }
 ];
 
 // 창작형 트랙 프리셋(Claude 디스패치 — 현재 씬 문맥 자동 동봉).
+//  콘텐츠 디렉터 스킬(sprite-picker·story-architect·style-architect)을 에디터에서 직접
+//  디스패치: dispatchCreative 가 현재 씬 요약을 챗 큐에 enqueue → Claude 가 editor_next_message
+//  로 받아 해당 스킬로 처리한다. prompt 머리에 스킬명을 명시해 라우팅을 돕는다.
 const CREATIVE = [
-  { label: '스토리 입혀줘', prompt: '이 게임에 어울리는 스토리·분위기를 입혀줘.' },
+  { label: '스프라이트 고르기', prompt: 'wgf-sprite-picker 로 이 게임에 어울리는 스프라이트/타일/아이콘을 골라 적용해줘.' },
+  { label: '스토리 입히기', prompt: 'wgf-story-architect 로 이 게임에 어울리는 스토리·분위기·캐릭터를 설계해 입혀줘.' },
+  { label: '아트 스타일 잡기', prompt: 'wgf-style-architect 로 이 게임 전체의 아트 스타일(팔레트·셰이딩·무드)을 정의해 강제해줘.' },
   { label: '능력 추가', prompt: '플레이어에게 어울리는 능력(대시/발사 등)을 하나 추가해줘.' },
   { label: '적 다양화', prompt: '적의 종류·행동(추격/순찰/사격)을 다양하게 만들어줘.' }
 ];
@@ -34,13 +49,21 @@ export function SkillMenu({ controller }) {
   const [running, setRunning] = useState(false);
   const [creativeInput, setCreativeInput] = useState('');
   const [dispatchMsg, setDispatchMsg] = useState('');
+  // needsInput 도구별 입력값(file/target) — tool 명을 키로 보관.
+  const [detInputs, setDetInputs] = useState({});
 
   async function runDeterministic(entry) {
     if (running) return;
-    setRunning(true); setResult(null);
     const args = Object.assign({}, entry.args || {});
     if (entry.current) args.file = 'current';
+    // needsInput('file'|'target') 도구 — 사용자가 입력한 경로/슬러그를 positional 인자로.
+    if (entry.needsInput) {
+      const v = (detInputs[entry.tool] || '').trim();
+      if (!v) { setResult({ tool: entry.tool, ok: false, error: (entry.needsInput === 'target' ? 'target(슬러그)' : 'file(경로)') + ' 를 입력하세요' }); return; }
+      args[entry.needsInput] = v;
+    }
     if (args.json === undefined) args.json = true;
+    setRunning(true); setResult(null);
     let r;
     try { r = await controller.runSkill(entry.tool, args); }
     catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
@@ -68,14 +91,22 @@ export function SkillMenu({ controller }) {
           </div>
         )}
 
-        {/* ── 결정형 트랙 ── */}
+        {/* ── 결정형 트랙(화이트리스트 5종) ── */}
         <div style={trackTitle}>결정형 (에디터 직접 실행)</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {DETERMINISTIC.map((e) => (
-            <button key={e.tool} style={detBtn} disabled={!remote || running}
-                    title={e.desc} onClick={() => runDeterministic(e)}>
-              {e.label}
-            </button>
+            <div key={e.tool} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <button style={detBtn} disabled={!remote || running}
+                      title={e.desc} onClick={() => runDeterministic(e)}>
+                {e.label}
+              </button>
+              {e.needsInput && (
+                <input style={{ ...inp, marginBottom: '2px' }} disabled={!remote || running}
+                       value={detInputs[e.tool] || ''} placeholder={e.placeholder || e.needsInput}
+                       onInput={(ev) => setDetInputs((s) => ({ ...s, [e.tool]: ev.target.value }))}
+                       onKeyDown={(ev) => { if (ev.key === 'Enter') runDeterministic(e); }} />
+              )}
+            </div>
           ))}
         </div>
         {running && <div style={{ color: 'var(--text-dim)', fontSize: '11px', marginTop: '6px' }}>실행 중…</div>}

@@ -44,6 +44,9 @@ export function createLocalTransport() {
     // local(P3): 브리지 없음 → 챗 역채널·하트비트 미동작. UI 가 안전히 비활성 표시.
     onChat() {},
     onStatus() {},
+    // local(2B): 스크린샷 캡처 왕복은 브리지 전용 — 요청 구독 무동작, 회신 안전 비활성.
+    onScreenshotRequest() {},
+    async respondScreenshot() { return { ok: false, error: '브리지 없음(local 모드) — 스크린샷 캡처 비활성' }; },
     async sendChat() { return { ok: false, error: '브리지 없음(local 모드) — 챗 비활성' }; },
     async fetchStatus() { return { status: 'disconnected' }; },
     // local(P4): 결정형 스킬·에셋도 브리지 전용 → 안전 비활성.
@@ -72,6 +75,7 @@ export function createRemoteTransport(config) {
   let chatCb = null;              // (chatEvt) => void — 챗 델타(user/assistant)
   let assetCb = null;             // (assetEvt) => void — 에셋 델타(P4 asset add)
   let statusCb = null;            // (status) => void — Claude 연결 상태(connected/waiting/disconnected)
+  let shotCb = null;              // (requestId) => void — scene_screenshot 캡처 요청(브라우저가 toDataURL 회신)
   let statusTimer = null;         // 상태 폴링 타이머
   let lastSeq = 0;                // 마지막으로 처리한 seq(Last-Event-ID 재연결용)
   let es = null;                  // EventSource
@@ -126,6 +130,14 @@ export function createRemoteTransport(config) {
     // resync 이벤트 — 브리지 백프레셔. /api/scene 재요청해 미러 재구성.
     es.addEventListener('resync', async () => {
       await doResync();
+    });
+
+    // screenshot-request 이벤트(2B) — 브리지가 scene_screenshot 캡처를 요청. 등록된
+    //  shotCb(앱이 canvas.toDataURL 후 respondScreenshot 호출)로 위임. shotCb 없으면 무시
+    //  (브리지가 타임아웃으로 헤드리스 판정).
+    es.addEventListener('screenshot-request', (ev) => {
+      let data; try { data = JSON.parse(ev.data); } catch (e) { return; }
+      if (data && typeof data.requestId === 'string' && shotCb) shotCb(data.requestId);
     });
 
     es.onerror = (ev) => {
@@ -204,6 +216,17 @@ export function createRemoteTransport(config) {
     onChat(cb) { chatCb = cb; },
     onAsset(cb) { assetCb = cb; },
     onStatus(cb) { statusCb = cb; },
+    // scene_screenshot 캡처 요청 구독(2B) — 앱이 canvas.toDataURL 후 respondScreenshot 호출.
+    onScreenshotRequest(cb) { shotCb = cb; },
+    // 캡처 PNG dataURL 을 브리지에 회신(POST /api/screenshot). 실패는 비치명({ok:false}).
+    async respondScreenshot(requestId, dataUrl, dims) {
+      const body = Object.assign({ requestId, dataUrl }, (dims && typeof dims === 'object') ? dims : {});
+      const { status, json } = await apiFetch('POST', '/api/screenshot', body);
+      if (status !== 200 || !json || json.ok !== true) {
+        return { ok: false, error: (json && json.error) || ('회신 실패 status=' + status) };
+      }
+      return { ok: true };
+    },
     async start() {
       // 초기 스냅샷 → 미러 부트 → SSE 연결 → 상태 폴링.
       const snap = await snapshot();
