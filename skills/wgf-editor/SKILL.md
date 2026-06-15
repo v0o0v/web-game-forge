@@ -79,11 +79,15 @@ npm run build
 node editor/server/bridge.mjs 5180
 ```
 
-그 다음 브라우저에서 다음 주소를 연다:
+기동이 완료되면 **기본 브라우저가 자동으로 다음 주소로 열린다**(수동으로 열 필요 없음):
 
 ```
 http://127.0.0.1:5180/editor/ui/
 ```
+
+자동 실행은 비치명적이라 브라우저가 없거나 헤드리스여도 서버는 계속 뜬다(위 주소를 직접 열면
+됨). 자동 실행을 끄려면 `WGF_NO_OPEN=1` 로 기동한다(PowerShell `$env:WGF_NO_OPEN="1"; node
+editor/server/bridge.mjs 5180`). 테스트 하니스(`WGF_BRIDGE_PORT=0`)에서는 자동으로 생략된다.
 
 기본으로 `games/_editor-samples/topdown-min/scene.json` 이 로드된다.
 
@@ -109,11 +113,8 @@ WGF_BRIDGE_SCENE=games/wgf-demo-arena/scene.json node editor/server/bridge.mjs 5
 node editor/serve.mjs 5174
 ```
 
-브라우저:
-
-```
-http://127.0.0.1:5174/editor/ui/
-```
+브리지와 마찬가지로 기동 시 **기본 브라우저가 자동으로** `http://127.0.0.1:5174/editor/ui/` 로
+열린다(`WGF_NO_OPEN=1` 로 끄기).
 
 local dev 는 Claude 협업·브리지 단일 진실·Play 권위가 없다(localStorage Save 까지). 협업
 편집·Play·export 전체 루프는 3.2 의 브리지 경로를 쓴다.
@@ -296,6 +297,7 @@ web-game-builder 워크플로에서 게임 제작 경로가 둘로 갈린다:
 | 증상 | 원인 | 해결 |
 |------|------|------|
 | `http://127.0.0.1:5180/editor/ui/` 가 빈 화면·404 | UI 셸 미빌드(`dist/bundle.js` 없음) | `cd editor/ui` → `npm install` → `npm run build` |
+| 기동했는데 브라우저가 자동으로 안 열림 | 헤드리스 환경·기본 브라우저 미설정·`WGF_NO_OPEN` 설정(자동 실행은 비치명적) | stderr 의 `브리지 기동 → <url>` 주소를 수동으로 연다. 자동 실행을 의도적으로 끄려면 `WGF_NO_OPEN=1` |
 | 브리지 기동 시 `EADDRINUSE` | 포트 5180 점유 | 다른 포트로 기동(`node editor/server/bridge.mjs 5200`) 또는 점유 프로세스 종료 |
 | MCP 도구가 "브리지 미기동" 에러 | 브리지가 안 떠 있음(엔드포인트 파일 부재) | 먼저 `node editor/server/bridge.mjs 5180` 으로 브리지 기동 |
 | Play 중 편집이 409 거부 | Play 권위 read-only(정상) | Stop(`/api/mode {mode:'edit'}`) 후 편집 |

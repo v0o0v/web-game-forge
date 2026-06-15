@@ -13,7 +13,8 @@
  * 실행(프로젝트 루트에서):
  *   node editor/serve.mjs [port]      # 기본 5174
  *   PORT=5200 node editor/serve.mjs
- * 그 다음 브라우저: http://127.0.0.1:5174/editor/ui/
+ *   WGF_NO_OPEN=1 node editor/serve.mjs   # 브라우저 자동 실행 끄기
+ * 기동 완료 시 기본 브라우저로 http://127.0.0.1:<port>/editor/ui/ 를 자동으로 연다.
  *
  * 보안(설계서 §6):
  *   - 127.0.0.1 전용 바인딩(0.0.0.0 금지 — LAN 비노출).
@@ -23,6 +24,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const SERVE_DIR = path.dirname(fileURLToPath(import.meta.url));   // editor/
@@ -90,10 +92,31 @@ const server = http.createServer((req, res) => {
   serveStatic(res, u.pathname);
 });
 
+// 기동 완료 시 기본 브라우저로 에디터 URL 을 연다(execFile, 셸 미경유). 생략 조건:
+//   - WGF_NO_OPEN 설정 : 명시 옵트아웃
+//   - PORT=0           : 임의 포트(자동화/스크립트)
+// 실패는 비치명적 — 브라우저가 없거나 헤드리스여도 서버는 계속 뜬다.
+function maybeOpenBrowser(url) {
+  if (process.env.WGF_NO_OPEN) return;
+  if (String(process.argv[2] || process.env.PORT) === '0') return;
+  let cmd, args;
+  if (process.platform === 'win32')       { cmd = process.env.ComSpec || 'cmd.exe'; args = ['/c', 'start', '', url]; }
+  else if (process.platform === 'darwin') { cmd = 'open';                            args = [url]; }
+  else                                    { cmd = 'xdg-open';                        args = [url]; }
+  try {
+    execFile(cmd, args, { windowsHide: true }, (err) => {
+      if (err) process.stderr.write(`[wgf-editor] 브라우저 자동 실행 실패(무시) — 수동으로 ${url} 여세요\n`);
+    });
+  } catch (e) {
+    process.stderr.write(`[wgf-editor] 브라우저 자동 실행 예외(무시): ${String(e)}\n`);
+  }
+}
+
 server.listen(PORT, HOST, () => {
   const url = `http://${HOST}:${PORT}/editor/ui/`;
   process.stderr.write(`[wgf-editor] dev 서버 기동 → ${url}\n`);
   process.stderr.write(`[wgf-editor] 서빙 루트: ${REPO_ROOT}\n`);
+  maybeOpenBrowser(url);
 });
 
 server.on('error', (e) => {
