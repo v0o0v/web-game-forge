@@ -510,16 +510,20 @@ export function createController(opts) {
   }
 
   // ── scene_screenshot 캡처 왕복(2B — 브리지 권위) ──────────────────────────────
-  // 브리지가 SSE 로 캡처를 요청하면(transport.onScreenshotRequest) 셸이 뷰포트 canvas 를
-  //  toDataURL 로 PNG 화해 transport.respondScreenshot 으로 회신한다. local 모드는 무동작.
-  //  capture: () => { dataUrl, width, height } | null. 뷰포트 canvas 부재면 null(회신 생략).
+  // 브리지가 SSE 로 캡처를 요청하면(transport.onScreenshotRequest) 셸이 뷰포트를 PNG 화해
+  //  transport.respondScreenshot 으로 회신한다. local 모드는 무동작.
+  //  capture: () => ({dataUrl,width,height} | null) 또는 그 Promise. 캡처 경로(main.jsx)는
+  //  Phaser renderer.snapshot(다음 프레임 강제 렌더 → preserveDrawingBuffer 무관 PNG)을
+  //  우선하므로 비동기다 — 여기서 Promise.resolve 로 동기/비동기 모두 수용한다.
   function onScreenshotRequest(capture) {
     if (!isRemote || !transport || !transport.onScreenshotRequest) return;
     transport.onScreenshotRequest((requestId) => {
-      let shot = null;
-      try { shot = capture ? capture() : null; } catch (e) { shot = null; }
-      if (!shot || !shot.dataUrl) return;   // 캡처 불가 — 회신 생략(브리지가 타임아웃→헤드리스)
-      Promise.resolve(transport.respondScreenshot(requestId, shot.dataUrl, { width: shot.width, height: shot.height })).catch(() => {});
+      let p;
+      try { p = capture ? capture() : null; } catch (e) { p = null; }
+      Promise.resolve(p).then((shot) => {
+        if (!shot || !shot.dataUrl) return;   // 캡처 불가 — 회신 생략(브리지가 타임아웃→헤드리스)
+        return transport.respondScreenshot(requestId, shot.dataUrl, { width: shot.width, height: shot.height });
+      }).catch(() => {});
     });
   }
   function onStatusChange(cb) {

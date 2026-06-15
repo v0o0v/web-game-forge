@@ -84,8 +84,13 @@ const ENDPOINT_FILE = process.env.WGF_BRIDGE_ENDPOINT_FILE ||
 //  기본 4000ms — 브라우저 toDataURL 왕복에 충분하되 헤드리스에서 과대 대기 안 함.
 //  테스트는 단축/연장해 캡처·타임아웃 경로를 모두 검증한다.
 const SCREENSHOT_TIMEOUT_MS = parseInt(process.env.WGF_BRIDGE_SCREENSHOT_MS || '4000', 10);
-// 회신 PNG dataURL 본문 상한(바이트) — 과대 페이로드 거부(메모리 보호). 기본 16MB.
-const SCREENSHOT_MAX_BYTES = parseInt(process.env.WGF_BRIDGE_SCREENSHOT_BYTES || String(16 * 1024 * 1024), 10);
+// 회신 PNG 디코드 바이트 상한 — 과대 페이로드 거부(메모리 보호). 기본 3MB.
+//  [REG-06] readBody 가 POST 본문을 5MB 로 먼저 막는다. dataURL 은 base64(원본의 ~4/3 배)
+//   + JSON 래핑이므로 디코드 PNG 가 이 상한을 넘기 전에 본문 한도(readBody)가 사실상 먼저
+//   적용된다. 따라서 이 상한은 readBody 한도와 정합되게 3MB 로 둔다(5MB 본문 → 디코드 ~3.7MB
+//   이므로, 이 디코드 상한이 실제로 발동하는 유효 가드 — 데드 코드 아님). 더 큰 캡처가
+//   필요하면 두 한도를 함께 올린다(WGF_BRIDGE_SCREENSHOT_BYTES + readBody).
+const SCREENSHOT_MAX_BYTES = parseInt(process.env.WGF_BRIDGE_SCREENSHOT_BYTES || String(3 * 1024 * 1024), 10);
 
 // ── 토큰(보안 §6) ─────────────────────────────────────────────────────────────
 const TOKEN = crypto.randomBytes(24).toString('hex');
