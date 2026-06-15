@@ -25,9 +25,14 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { deriveAnims } from './sprite-library.mjs';
+// 공통모듈(P1-0 재배치) 직접 import — sprite-library re-export 와 동일 함수임을 검증(import 패리티).
+import { deriveAnims as deriveAnimsCommon } from '../../engine/derive-anims.mjs';
+// getSheetMeta 직접 호출(왕복 단언: catalog analysis.json anims → editor 리더 동일 반환).
+import { getSheetMeta } from './sprite-library.mjs';
 
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SERVER_DIR, '..', '..');
@@ -401,6 +406,90 @@ async function main() {
         JSON.stringify(mgb.anims[0].frames) === '[0,1,2]' &&
         JSON.stringify(mgb.anims[1].frames) === '[3,4,5]',
         `anims=${mgb.anims && JSON.stringify(mgb.anims.map((a) => a.frames))}`);
+    }
+
+    // ── S8 공통모듈 재배치(P1-0): import 패리티 + 형태 패리티 + anims 도출값 ──────────
+    //  deriveAnims 가 engine/derive-anims.mjs 로 재배치되고 sprite-library 가 re-export 함을 검증.
+    {
+      // (1) import 패리티: sprite-library re-export 와 공통모듈 직접 import 가 동일 함수 참조.
+      ok('S8-1 deriveAnims re-export == 공통모듈 직접 import(동일 함수)',
+        typeof deriveAnims === 'function' && deriveAnims === deriveAnimsCommon,
+        `reexport=${typeof deriveAnims} common=${typeof deriveAnimsCommon} same=${deriveAnims === deriveAnimsCommon}`);
+
+      // (2) 형태 패리티: 공통모듈 직접 호출이 그리드 경로에서 같은 결과(라벨·frames·기본값) 산출.
+      const dc = deriveAnimsCommon({ frameConfig: { frameWidth: 16, frameHeight: 16 }, w: 64, h: 48 });
+      ok('S8-2 공통모듈 grid 도출(클립 3개·idle/walk/run·row-major)',
+        Array.isArray(dc.anims) && dc.anims.length === 3 &&
+        dc.anims[0].key === 'idle' && dc.anims[1].key === 'walk' && dc.anims[2].key === 'run' &&
+        JSON.stringify(dc.anims[0].frames) === '[0,1,2,3]' && dc.cols === 4 && dc.rows === 3,
+        `anims=${dc.anims && JSON.stringify(dc.anims.map((a) => a.key))}`);
+      // frames[] 경로 패리티(prefix 그룹핑).
+      const df = deriveAnimsCommon({ frames: [
+        { name: 'walk_0', x: 0, y: 0, w: 8, h: 8 }, { name: 'walk_1', x: 8, y: 0, w: 8, h: 8 },
+        { name: 'idle_0', x: 0, y: 8, w: 8, h: 8 }
+      ] });
+      const dfWalk = (df.anims || []).find((a) => a.key === 'walk');
+      const dfIdle = (df.anims || []).find((a) => a.key === 'idle_pose');
+      ok('S8-3 공통모듈 frames prefix 그룹핑(walk=2, idle_pose=1)',
+        dfWalk && JSON.stringify(dfWalk.frames) === '[0,1]' && dfIdle && JSON.stringify(dfIdle.frames) === '[2]',
+        `anims=${df.anims && JSON.stringify(df.anims.map((a) => a.key + ':' + JSON.stringify(a.frames)))}`);
+
+      // (3) catalog 왕복: 샘플 팩(raw/ 보유)에 analyze-pack 재실행 → analysis.json anims 가 빈 배열 아닌
+      //     도출값 + editor 리더(getSheetMeta)가 동일 anims 반환. raw/ 보유 팩이 없으면 환경 스킵.
+      const ANALYZE = path.resolve(REPO_ROOT, 'skills', 'wgf-sprite-picker', 'catalog', 'analyze-pack.mjs');
+      const LIB_ROOT = path.resolve(REPO_ROOT, 'assets-library');
+      let samplePack = null;
+      try {
+        for (const d of fs.readdirSync(LIB_ROOT, { withFileTypes: true })) {
+          if (!d.isDirectory()) continue;
+          if (fs.existsSync(path.join(LIB_ROOT, d.name, 'raw'))) { samplePack = d.name; break; }
+        }
+      } catch (e) {}
+      if (!samplePack) {
+        ok('S8-4 catalog 왕복(raw/ 팩 없음 — 환경 스킵)', true, 'no pack with raw/ present');
+      } else {
+        // analysis.json 백업(왕복 후 복원 — 리포 오염 0).
+        const analysisAbs = path.resolve(LIB_ROOT, samplePack, 'analysis.json');
+        const hadAnalysis = fs.existsSync(analysisAbs);
+        const analysisBackup = hadAnalysis ? fs.readFileSync(analysisAbs) : null;
+        // library.json 백업(upsert 복원).
+        const libJsonAbs = path.resolve(LIB_ROOT, 'library.json');
+        const hadLib = fs.existsSync(libJsonAbs);
+        const libBackup = hadLib ? fs.readFileSync(libJsonAbs) : null;
+        try {
+          const run = spawnSync(process.execPath, [ANALYZE, '--pack', samplePack], { cwd: REPO_ROOT, encoding: 'utf8' });
+          ok('S8-4 analyze-pack 재실행 exit 0', run.status === 0, `pack=${samplePack} status=${run.status} stderr=${(run.stderr || '').slice(-160)}`);
+          const doc = JSON.parse(fs.readFileSync(analysisAbs, 'utf8'));
+          const arr = Array.isArray(doc.sheets) ? doc.sheets : Object.keys(doc.sheets || {}).map((k) => doc.sheets[k]);
+          ok('S8-5 analysis.json sheets 배열 형태(표준)', Array.isArray(doc.sheets), `type=${Array.isArray(doc.sheets) ? 'array' : typeof doc.sheets}`);
+          // anims 가 빈 배열 아닌 도출값을 가진 시트가 1개 이상(grid/atlas/alpha 메타 보유 시트).
+          const withAnims = arr.find((s) => s && Array.isArray(s.anims) && s.anims.length > 0);
+          ok('S8-6 analysis.json anims 도출값 존재(빈 배열 아님)',
+            !!withAnims, `pack=${samplePack} sheets=${arr.length} withAnims=${withAnims ? withAnims.id : 'none'}`);
+          // 왕복: editor getSheetMeta 가 동일 anims 반환(키·frames 동치). raw/ 기준 파일명으로 조회.
+          if (withAnims) {
+            // analysis.sheets[].file 은 packDir 산출 파일(raw/ 아님)이라, getSheetMeta 가 매칭하는
+            // 경로는 assets-library/<pack>/raw/<원본 basename>. readAnalysisSheet 가 sh.file basename
+            // 으로 매칭하므로, file 과 같은 basename 의 raw 파일을 찾아 조회한다.
+            const baseName = path.basename(withAnims.file);
+            // raw/ 내에서 같은 basename(또는 slug 역추적이 어려우면 file 자체가 packDir 에 있으므로
+            // packDir 경로로 조회 — readAnalysisSheet 는 basename 매칭이라 packDir 파일도 매칭됨).
+            const rdRel = `assets-library/${samplePack}/${withAnims.file}`;
+            const meta = getSheetMeta(REPO_ROOT, rdRel);
+            ok('S8-7 editor getSheetMeta 왕복(동일 anims 반환)',
+              meta && meta.ok && Array.isArray(meta.anims) && meta.anims.length === withAnims.anims.length &&
+              meta.anims.length > 0 &&
+              JSON.stringify(meta.anims.map((a) => a.key)) === JSON.stringify(withAnims.anims.map((a) => a.key)),
+              `rel=${rdRel} reader=${meta && JSON.stringify(meta.anims && meta.anims.map((a) => a.key))} analysis=${JSON.stringify(withAnims.anims.map((a) => a.key))}`);
+          } else {
+            ok('S8-7 editor getSheetMeta 왕복(anims 없는 팩 — 스킵)', true, 'no derived anims to round-trip');
+          }
+        } finally {
+          // 복원(리포 오염 0).
+          try { if (hadAnalysis) fs.writeFileSync(analysisAbs, analysisBackup); } catch (e) {}
+          try { if (hadLib) fs.writeFileSync(libJsonAbs, libBackup); } catch (e) {}
+        }
+      }
     }
 
     // ── S5 경로 traversal 거부 ────────────────────────────────────────────────────
