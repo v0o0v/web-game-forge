@@ -7,7 +7,8 @@
  * AnimatedSprite 의 anims 는 구조화 폼(행 추가/삭제, key·frames·fps·loop) + 고급 raw JSON 폴백.
  * ==========================================================================*/
 import { spriteApi } from './sprite/spriteApi.js';
-import { useState } from 'preact/hooks';
+import { rectOf, AnimPreview } from './sprite/frameAnim.jsx';
+import { useState, useEffect, useMemo } from 'preact/hooks';
 
 export function Inspector({ controller, world, selection }) {
   if (!world || selection.length === 0) {
@@ -106,11 +107,112 @@ function ComponentEditor({ controller, world, ent, comp, index }) {
             return <AnimsEditor key={field.key} field={field} value={comp.anims}
                                 onChange={(v) => patch('anims', v)} />;
           }
+          // AnimatedSprite 의 play(초기 재생 키)는 anims 클립 드롭다운으로 — 2E 애니메이터-lite.
+          if ((comp.type === 'AnimatedSprite') && field.key === 'play') {
+            return <ClipSelect key={field.key} field={field} anims={comp.anims} value={comp.play}
+                               onChange={(v) => patch('play', v)} />;
+          }
           return (
             <FieldWidget key={field.key} field={field} value={comp[field.key]} world={world}
                          onChange={(v) => patch(field.key, v)} />
           );
         })}
+        {/* 2E: AnimatedSprite 선택 클립 라이브 미리보기(코어 무수정 — UI rAF 캔버스). */}
+        {comp.type === 'AnimatedSprite' && <AnimatedSpritePreview world={world} comp={comp} />}
+      </div>
+    </div>
+  );
+}
+
+// ── 2E: AnimatedSprite 클립 선택 드롭다운(초기 재생 키 = play) ──────────────────
+//  anims[].key 목록에서 재생할 클립을 고른다. play 미설정이면 첫 클립이 기본(코어 init 규칙과 일치).
+//  빈 문자열 play 는 코어가 "키 없음"으로 멈추므로 절대 커밋하지 않는다(항상 구체 키 커밋).
+function ClipSelect({ field, anims, value, onChange }) {
+  const clips = (Array.isArray(anims) ? anims : [])
+    .map((a) => a && (a.key || a.name))
+    .filter((k) => typeof k === 'string' && k !== '');
+  if (clips.length === 0) {
+    return (
+      <Field label={field.label || '초기 재생 키'}>
+        <span style={{ color: 'var(--text-dim)', fontSize: '11px' }}>클립 없음 — 위 "애니메이션 목록"에서 추가하세요</span>
+      </Field>
+    );
+  }
+  const cur = (typeof value === 'string' && value !== '') ? value : clips[0];
+  const options = clips.indexOf(cur) === -1 ? clips.concat([cur]) : clips;
+  return (
+    <Field label={field.label || '초기 재생 키'}>
+      <select style={inp} value={cur} onChange={(e) => onChange(e.target.value)}>
+        {options.map((k) => <option key={k} value={k}>{k}</option>)}
+      </select>
+    </Field>
+  );
+}
+
+// ── 2E: 선택 클립 라이브 미리보기(애니메이터-lite) ───────────────────────────────
+//  comp.sprite → world.assets.sprites 자산 def(url·frameConfig·frames) → 클립 frames 를
+//  rect 시퀀스로 변환해 AnimPreview 로 재생. play 우선, 없으면 첫 클립. ▶/■ 토글(기본 재생).
+//  코어(scenekit*.js) 무수정 — 순수 UI rAF 캔버스, H′(t=0=프레임0) 영향 0.
+function AnimatedSpritePreview({ world, comp }) {
+  const [img, setImg] = useState(null);
+  const [playing, setPlaying] = useState(true);
+  const def = findSpriteDef(world, comp && comp.sprite);
+  const url = (def && def.url) ? def.url : null;
+  useEffect(() => {
+    if (!url) { setImg(null); return; }
+    let alive = true;
+    spriteApi.loadImage(spriteApi.assetUrl(url)).then(
+      (im) => { if (alive) setImg(im); },
+      () => { if (alive) setImg(null); }
+    );
+    return () => { alive = false; };
+  }, [url]);
+
+  // 재생 클립: play(구체 키) 우선, 없으면 첫 클립 — 코어 init 규칙과 동일.
+  const anims = Array.isArray(comp.anims) ? comp.anims : [];
+  const playKey = (typeof comp.play === 'string' && comp.play !== '')
+    ? comp.play : (anims[0] && (anims[0].key || anims[0].name));
+  let clip = null;
+  for (let i = 0; i < anims.length; i++) {
+    const a = anims[i];
+    if (a && (a.key || a.name) === playKey) { clip = a; break; }
+  }
+  if (!clip) clip = anims[0] || null;
+
+  // 프레임 rect 시퀀스 — 시그니처 기반 useMemo 로 *안정 참조* 유지. 매 렌더 새 배열이면
+  //  AnimPreview 의 rAF 가 재시작돼 늘 프레임0 에 멈춘다(SpriteBrowser M-2 와 동일 함정).
+  //  ※ 모든 훅은 early-return 보다 위에 있어야 한다(훅 호출 순서 불변).
+  const fc = def && def.frameConfig;
+  const defFrames = def && def.frames;
+  const seqSig = JSON.stringify([clip && clip.frames, fc, defFrames, img ? img.width : 0]);
+  const frameSeq = useMemo(() => {
+    if (!img || !clip || !Array.isArray(clip.frames)) return [];
+    return clip.frames.map((i) => rectOf(fc, defFrames, i, img.width)).filter(Boolean);
+  }, [seqSig]);
+
+  if (anims.length === 0) return null;  // 클립 없으면 미리보기 영역 없음(드롭다운이 안내)
+
+  const pixel = (def && def.style) ? (def.style !== 'smooth' && def.style !== 'vector') : true;
+  const fps = (clip && (clip.fps || clip.frameRate)) || 8;
+  const loop = clip ? (clip.loop !== false) : true;
+
+  return (
+    <div style={{ marginTop: '8px', borderTop: '1px dashed var(--border)', paddingTop: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <button style={addBtn} onClick={() => setPlaying((p) => !p)}
+                title={playing ? '미리보기 정지' : '미리보기 재생'}>{playing ? '■ 정지' : '▶ 재생'}</button>
+        <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
+          클립 "{clip && (clip.key || clip.name)}" · {fps}fps{loop ? ' · loop' : ''}
+        </span>
+      </div>
+      <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'center' }}>
+        {!img
+          ? <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>미리보기 로딩…</span>
+          : (playing && frameSeq.length > 0)
+            ? <AnimPreview img={img} frameSeq={frameSeq} fps={fps} pixel={pixel} loop={loop} size={80} />
+            : <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
+                {frameSeq.length === 0 ? '프레임 메타 없음 — 미리보기 불가' : '정지됨'}
+              </span>}
       </div>
     </div>
   );
@@ -202,15 +304,20 @@ function FieldWidget({ field, value, onChange, world }) {
   );
 }
 
-// 스프라이트 id 로 world.assets.sprites 에서 def 를 찾아 썸네일 절대 URL 산출(없으면 null).
-function assetThumbUrl(world, spriteId) {
+// 스프라이트 id 로 world.assets.sprites 에서 자산 def 를 찾는다(url·frameConfig·frames·style 보유). 없으면 null.
+function findSpriteDef(world, spriteId) {
   if (!world || !spriteId) return null;
   const sprites = (world.assets && Array.isArray(world.assets.sprites)) ? world.assets.sprites : null;
   if (!sprites) return null;
-  let def = null;
   for (let i = 0; i < sprites.length; i++) {
-    if (sprites[i] && sprites[i].id === spriteId) { def = sprites[i]; break; }
+    if (sprites[i] && sprites[i].id === spriteId) return sprites[i];
   }
+  return null;
+}
+
+// 스프라이트 id 로 썸네일 절대 URL 산출(없으면 null).
+function assetThumbUrl(world, spriteId) {
+  const def = findSpriteDef(world, spriteId);
   if (!def || !def.url) return null;
   try { return spriteApi.assetUrl(def.url); } catch (e) { return null; }
 }

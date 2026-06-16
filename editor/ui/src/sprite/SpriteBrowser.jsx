@@ -18,6 +18,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'preact/hooks';
 import { spriteApi } from './spriteApi.js';
 import { SheetSlicer } from './SheetSlicer.jsx';
+import { rectOf, frameCountOf, AnimPreview } from './frameAnim.jsx';
 
 // 안전 등급 배지 색.
 const TIER_COLOR = {
@@ -27,31 +28,7 @@ const TIER_LABEL = {
   'cc0': 'CC0', 'permissive-attribution': '표기필요', 'mixed-per-item': '항목별', 'avoid': '주의'
 };
 
-// ── 순수 헬퍼: 프레임 기하(SheetSlicer 와 동일 규칙, 읽기 전용) ─────────────────
-function rectOf(frameConfig, frames, i, imgW) {
-  if (frames && frames.length) {
-    const f = frames[i];
-    if (!f) return null;
-    return { x: f.x || 0, y: f.y || 0, w: f.w || 0, h: f.h || 0 };
-  }
-  const fc = frameConfig || {};
-  const fw = fc.frameWidth, fh = fc.frameHeight;
-  if (!fw || !fh) return null;
-  const mg = fc.margin || 0, sp = fc.spacing || 0;
-  const cols = Math.max(1, Math.floor((imgW - mg + sp) / (fw + sp)));
-  const c = i % cols, r = Math.floor(i / cols);
-  return { x: mg + c * (fw + sp), y: mg + r * (fh + sp), w: fw, h: fh };
-}
-function frameCountOf(frameConfig, frames, imgW, imgH) {
-  if (frames && frames.length) return frames.length;
-  const fc = frameConfig || {};
-  const fw = fc.frameWidth, fh = fc.frameHeight;
-  if (!fw || !fh) return imgW && imgH ? 1 : 0;  // 메타 없으면 전체 1프레임
-  const mg = fc.margin || 0, sp = fc.spacing || 0;
-  const cols = Math.max(1, Math.floor((imgW - mg + sp) / (fw + sp)));
-  const rows = Math.max(1, Math.floor((imgH - mg + sp) / (fh + sp)));
-  return cols * rows;
-}
+// rectOf·frameCountOf 는 ./frameAnim.jsx 로 추출(Inspector 2E 와 공유). 상단 import.
 
 // ── 단일 프레임 canvas(시트 슬라이스 또는 컬렉션 개별 파일) ─────────────────────
 //  · 시트: img(로드 완료) + rect 로 그린다.
@@ -84,49 +61,7 @@ function FrameCanvas({ img, rect, pixel, size = 48, selected, excluded, onClick,
   );
 }
 
-// ── 라이브 애니 미리보기 canvas(rAF, 단일) ────────────────────────────────────
-//  frameSeq = [{rect}] 순서대로 fps 로 순환. img 로드 완료 후 동작.
-function AnimPreview({ img, frameSeq, fps, pixel, loop = true, size = 64 }) {
-  const ref = useRef(null);
-  const rafRef = useRef(null);
-  useEffect(() => {
-    if (!img || !frameSeq || !frameSeq.length) return;
-    let idx = 0, last = 0;
-    const interval = 1000 / Math.max(1, fps || 8);
-    const tick = (ts) => {
-      if (!last) last = ts;
-      if (ts - last >= interval) {
-        last = ts;
-        const cvs = ref.current;
-        const r = frameSeq[idx % frameSeq.length];
-        if (cvs && r && r.w && r.h) {
-          cvs.width = r.w; cvs.height = r.h;
-          try {
-            const ctx = cvs.getContext('2d');
-            ctx.clearRect(0, 0, r.w, r.h);
-            ctx.drawImage(img, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
-          } catch (e) {}
-        }
-        idx++;
-        if (!loop && idx >= frameSeq.length) { rafRef.current = null; return; }
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => { if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; } };
-  }, [img, frameSeq, fps, loop]);
-  const first = frameSeq && frameSeq[0];
-  const disp = first && first.w && first.h ? Math.max(1, Math.min(6, Math.floor(size / Math.max(first.w, first.h)) || 1)) : 1;
-  return (
-    <canvas ref={ref}
-      style={{
-        width: first ? first.w * disp + 'px' : size + 'px',
-        height: first ? first.h * disp + 'px' : size + 'px',
-        imageRendering: pixel ? 'pixelated' : 'auto',
-        background: '#0e1016', borderRadius: '4px', border: '1px solid var(--accent)'
-      }} />
-  );
-}
+// AnimPreview(라이브 애니 미리보기 canvas)는 ./frameAnim.jsx 로 추출(Inspector 2E 와 공유). 상단 import.
 
 // ── 라이브러리 항목(시트/컬렉션) 카드 — 펼치면 프레임 그리드 + 애니 미리보기 ─────
 //  애니 미리보기 동시 개수는 부모(LibraryTab) 의 previewCount/maxPreview 로 제한(§3.4).
