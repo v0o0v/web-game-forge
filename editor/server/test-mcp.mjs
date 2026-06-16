@@ -215,14 +215,15 @@ async function main() {
 
       const listRes = await mcp.rpc('tools/list', {});
       const tools = listRes.result && listRes.result.tools;
-      ok('G-MCP tools/list 도구 목록(29종 — P4 4종 + P6 unity 2종 + 멀티씬 5종 추가)',
-        Array.isArray(tools) && tools.length === 29,
+      ok('G-MCP tools/list 도구 목록(33종 — 멀티씬 5종 + 2D 프리팹 4종 추가)',
+        Array.isArray(tools) && tools.length === 33,
         `count=${tools && tools.length}`);
       // 핵심 도구 존재 단언(P4 추가 4종 포함).
       const names = (tools || []).map((t) => t.name);
       const required = ['scene_get', 'scene_add_entity', 'scene_set_transform', 'editor_next_message', 'editor_reply', 'undo', 'redo', 'project_list',
         'skill_run_tool', 'asset_list', 'asset_add_procedural', 'asset_add_cc0',
-        'scene_list', 'scene_switch', 'scene_add', 'scene_rename', 'scene_remove', 'scene_reparent'];
+        'scene_list', 'scene_switch', 'scene_add', 'scene_rename', 'scene_remove', 'scene_reparent',
+        'scene_duplicate', 'scene_save_prefab', 'scene_list_prefabs', 'scene_instantiate_prefab'];
       const allPresent = required.every((n) => names.includes(n));
       ok('G-MCP 필수 도구 스키마 노출', allPresent, `missing=${required.filter((n) => !names.includes(n)).join(',') || 'none'}`);
       // 스키마 형태(각 도구 inputSchema.type === object).
@@ -335,6 +336,81 @@ async function main() {
       // 정리: 추가한 엔티티 제거(상태 누수 방지).
       await mcp.rpc('tools/call', { name: 'scene_delete_entity', arguments: { id: cId } });
       await mcp.rpc('tools/call', { name: 'scene_delete_entity', arguments: { id: pId } });
+    }
+
+    // ── G-PREFAB: 2D 프리팹(scene_duplicate·save·list·instantiate_prefab, ADR-003) ──
+    {
+      const findEnt2 = (snap, id) => {
+        if (!snap || !snap.scene || !Array.isArray(snap.scene.scenes)) return null;
+        for (const s of snap.scene.scenes) {
+          if (Array.isArray(s.entities)) { const e = s.entities.find((x) => x && x.id === id); if (e) return e; }
+        }
+        return null;
+      };
+
+      // (1) scene_duplicate — 기본 브리지(MCP)에서 서브트리 복제·리맵·원자 undo(디스크 무관).
+      const pRes = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_add_entity', arguments: { name: 'PF부모', transform: { x: 30, y: 30 }, components: [] } }));
+      const cRes = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_add_entity', arguments: { name: 'PF자식', transform: { x: 5, y: 0 }, components: [] } }));
+      const pId = pRes && pRes.id, cId = cRes && cRes.id;
+      await mcp.rpc('tools/call', { name: 'scene_reparent', arguments: { id: cId, parentId: pId } });
+
+      const dupOut = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_duplicate', arguments: { id: pId } }));
+      ok('G-PREFAB scene_duplicate 서브트리 복제(ids 2개)',
+        dupOut && dupOut.ok === true && Array.isArray(dupOut.ids) && dupOut.ids.length === 2,
+        `ids=${dupOut && dupOut.ids && dupOut.ids.join(',')}`);
+      const dupRoot = dupOut && dupOut.ids && dupOut.ids[0], dupChild = dupOut && dupOut.ids && dupOut.ids[1];
+      ok('G-PREFAB 복제 id 가 원본과 다름(재발급)', dupRoot !== pId && dupChild !== cId, `dupRoot=${dupRoot} dupChild=${dupChild}`);
+      const snapDup = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_get', arguments: {} }));
+      const dc = findEnt2(snapDup, dupChild), dr = findEnt2(snapDup, dupRoot);
+      ok('G-PREFAB 복제 자식 parentId=복제 루트(배치-내부 리맵)', dc && dc.parentId === dupRoot, `parentId=${dc && dc.parentId} dupRoot=${dupRoot}`);
+      ok('G-PREFAB 복제 루트 최상위(원본 부모가 루트)', dr && dr.parentId == null, `parentId=${dr && dr.parentId}`);
+
+      // 단일 undo → 복제 서브트리(2개) 통째 제거.
+      await mcp.rpc('tools/call', { name: 'undo', arguments: {} });
+      const snapUndo = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_get', arguments: {} }));
+      ok('G-PREFAB 단일 undo 로 복제 서브트리 통째 제거', !findEnt2(snapUndo, dupRoot) && !findEnt2(snapUndo, dupChild), 'removed');
+      await mcp.rpc('tools/call', { name: 'scene_delete_entity', arguments: { id: cId } });
+      await mcp.rpc('tools/call', { name: 'scene_delete_entity', arguments: { id: pId } });
+
+      // (2) 디스크 프리팹(save→list→instantiate→undo) — 격리 게임 디렉터리 브리지(직접 HTTP).
+      const PF_GAME = path.join(REPO_ROOT, 'games', '_wgf-prefab-test');
+      const PF_SCENE_ABS = path.join(PF_GAME, 'scene.json');
+      const PF_SCENE_REL = path.relative(REPO_ROOT, PF_SCENE_ABS).split(path.sep).join('/');
+      let bpf = null;
+      try {
+        fs.mkdirSync(PF_GAME, { recursive: true });
+        fs.writeFileSync(PF_SCENE_ABS, JSON.stringify({
+          format: 'wgf-scene@1', slug: '_wgf-prefab-test',
+          scenes: [{ id: 'main', systems: {}, entities: [
+            { id: 'root1', name: 'R', transform: { x: 10, y: 10 }, components: [] },
+            { id: 'kid1', name: 'K', transform: { x: 2, y: 0 }, parentId: 'root1', components: [] }
+          ] }]
+        }), 'utf8');
+        bpf = await startBridge({ WGF_BRIDGE_SCENE: PF_SCENE_REL, WGF_BRIDGE_ENDPOINT_FILE: path.join(TMP, 'ep-pf.json'), WGF_BRIDGE_CHAT_FILE: path.join(TMP, 'chat-pf.json') });
+        const ipf = bpf.info;
+        const saveRes = JSON.parse((await api(ipf, 'POST', '/api/prefab/save', { name: 'camp', rootId: 'root1' })).body);
+        ok('G-PREFAB prefab/save 디스크 저장(count=2)', saveRes.ok === true && saveRes.count === 2, `count=${saveRes.count}`);
+        ok('G-PREFAB prefab 파일 생성', fs.existsSync(path.join(PF_GAME, 'prefabs', 'camp.json')), 'camp.json');
+        const listRes = JSON.parse((await api(ipf, 'GET', '/api/prefab/list')).body);
+        ok('G-PREFAB prefab/list 목록(camp·count2)', listRes.ok === true && listRes.prefabs.some((p) => p.name === 'camp' && p.count === 2), `prefabs=${JSON.stringify(listRes.prefabs)}`);
+        const before = JSON.parse((await api(ipf, 'GET', '/api/scene')).body).scene.scenes[0].entities.length;
+        const instRes = JSON.parse((await api(ipf, 'POST', '/api/prefab/instantiate', { name: 'camp', x: 100, y: 100 })).body);
+        ok('G-PREFAB prefab/instantiate ids 2개', instRes.ok === true && Array.isArray(instRes.ids) && instRes.ids.length === 2, `ids=${instRes.ids}`);
+        const after = JSON.parse((await api(ipf, 'GET', '/api/scene')).body);
+        ok('G-PREFAB instantiate 후 엔티티 +2', after.scene.scenes[0].entities.length === before + 2, `before=${before} after=${after.scene.scenes[0].entities.length}`);
+        const instRoot = after.scene.scenes[0].entities.find((e) => e.id === instRes.ids[0]);
+        ok('G-PREFAB 인스턴스 루트 위치=드롭좌표(100,100)', instRoot && instRoot.transform.x === 100 && instRoot.transform.y === 100, `pos=${instRoot && instRoot.transform.x},${instRoot && instRoot.transform.y}`);
+        const instChild = after.scene.scenes[0].entities.find((e) => e.id === instRes.ids[1]);
+        ok('G-PREFAB 인스턴스 자식 parentId=인스턴스 루트(리맵)', instChild && instChild.parentId === instRes.ids[0], `parentId=${instChild && instChild.parentId}`);
+        await api(ipf, 'POST', '/api/undo');
+        const undoCount = JSON.parse((await api(ipf, 'GET', '/api/scene')).body).scene.scenes[0].entities.length;
+        ok('G-PREFAB instantiate 단일 undo → -2', undoCount === before, `count=${undoCount}`);
+      } catch (e) {
+        ok('G-PREFAB 디스크 프리팹 e2e', false, String(e && e.stack || e));
+      } finally {
+        if (bpf) { try { bpf.child.kill(); } catch (e) {} await sleep(50); }
+        try { fs.rmSync(PF_GAME, { recursive: true, force: true }); } catch (e) {}
+      }
     }
 
     // ── G-CHAT: "적 3마리 추가" e2e(메커니즘) ──────────────────────────────────

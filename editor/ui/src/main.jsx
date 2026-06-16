@@ -33,6 +33,7 @@ import { MenuBar } from './menu/MenuBar.jsx';
 import { buildMenus } from './menu/menuModel.js';
 import { createEditorSettings } from './editorSettings.js';
 import { TilePalette } from './TilePalette.jsx';
+import { PrefabPanel } from './PrefabPanel.jsx';
 
 // 기본 자동 로드 씬 경로(dev 서버 루트 기준).
 const DEFAULT_SCENE_URL = '/games/_editor-samples/topdown-min/scene.json';
@@ -46,7 +47,7 @@ const FALLBACK_SCENE = {
 };
 
 // 도킹 가능한 패널 id 집합(panels 레지스트리 키 = layout 트리 panelId).
-const PANEL_IDS = ['hierarchy', 'viewport', 'inspector', 'assets', 'skills', 'chat'];
+const PANEL_IDS = ['hierarchy', 'viewport', 'inspector', 'assets', 'skills', 'chat', 'prefabs'];
 // 레이아웃 영속 키(설정과 분리 — 배치 트리만 보관).
 const LAYOUT_KEY = 'wgf-studio-layout';
 
@@ -179,6 +180,12 @@ function App({ controller, settings }) {
       else if (k === '=' || k === '+') { e.preventDefault(); settings.increaseFont(); }
       else if (k === '-' || k === '_') { e.preventDefault(); settings.decreaseFont(); }
       else if (k === '0') { e.preventDefault(); settings.resetFont(); }
+      else if (k === 'd' || k === 'D') {
+        // 2D 프리팹: 선택 엔티티의 서브트리 복제(Ctrl+D). 브라우저 북마크 단축키 가로채기.
+        e.preventDefault();
+        const sel = controller.getSelection();
+        if (sel && sel.length) controller.duplicateEntity(sel[0]);
+      }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -250,7 +257,8 @@ function App({ controller, settings }) {
     inspector: { title: '속성', icon: '🔧', render: () => <Inspector controller={controller} world={world} selection={selection} /> },
     assets: { title: '에셋', icon: '🖼', render: () => <AssetBrowser controller={controller} selection={selection} /> },
     skills: { title: '스킬', icon: '✨', render: () => <SkillMenu controller={controller} /> },
-    chat: { title: 'Claude 챗', icon: '💬', render: () => <ChatPanel controller={controller} /> }
+    chat: { title: 'Claude 챗', icon: '💬', render: () => <ChatPanel controller={controller} /> },
+    prefabs: { title: '프리팹', icon: '📦', render: () => <PrefabPanel controller={controller} world={world} selection={selection} /> }
   };
 
   // 메뉴는 순수 빌더 — 매 렌더 재호출해 최신 상태(selection·mode·undo·settings) 반영.
@@ -331,7 +339,13 @@ function boot() {
     addScene: (name) => controller.addScene(name),
     renameScene: (id, name) => controller.renameScene(id, name),
     removeScene: (id) => controller.removeScene(id),
-    switchScene: (id) => controller.switchScene(id)
+    switchScene: (id) => controller.switchScene(id),
+    // 2D 프리팹(서브트리 깊은복제·id재발급·Variant금지)
+    duplicateEntity: (id) => controller.duplicateEntity(id),
+    instantiate: (entities, parentId) => controller.instantiate(entities, parentId),
+    savePrefab: (name, rootId) => controller.savePrefab(name, rootId),
+    listPrefabs: () => controller.listPrefabs(),
+    instantiatePrefab: (name, x, y, parentId) => controller.instantiatePrefab(name, x, y, parentId)
   };
 
   render(<App controller={controller} settings={settings} />, document.getElementById('app'));

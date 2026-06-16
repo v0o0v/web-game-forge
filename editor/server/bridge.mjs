@@ -211,6 +211,35 @@ function currentGameDir() {
   return dir;
 }
 
+// ── 2D 프리팹 디스크 저장(games/<slug>/prefabs/<name>.json, ADR-003) ───────────
+//  서브트리(루트+parentId 후손)를 명명 프리팹 doc 으로 저장/인스턴스화. Variant 금지(일회성
+//  깊은복제). 쓰기 경로는 resolveScopedPath('games') 이중검증(traversal 차단, vendorFile 패턴).
+const PREFAB_FORMAT = 'wgf-prefab@1';
+const MAX_PREFABS = 256;
+
+// 프리팹 파일 경로 도출 — 이름 위생화(sanitizeSceneId 재사용: 영숫자._- 64자) + games/ 이중검증.
+function prefabFileFor(name) {
+  const gameDir = currentGameDir();
+  if (!gameDir) return null;
+  const safe = sanitizeSceneId(name, '');
+  if (!safe) return null;
+  const rel = path.relative(REPO_ROOT, path.join(gameDir, 'prefabs', safe + '.json')).split(path.sep).join('/');
+  const abs = resolveScopedPath(rel, 'games');
+  return abs ? { abs, safe, dir: path.dirname(abs) } : null;
+}
+
+// 서브트리를 prefab doc 으로 직렬화 — SceneKit.collectSubtree(루트+후손) ∩ serialize(world).entities.
+// (serializeEntity 가 비-export 라 전체 serialize 후 id 집합으로 필터 — parentId 보존됨.)
+function buildPrefabDoc(rootId, name) {
+  const subtree = SceneKit.collectSubtree(state.world, rootId);
+  if (!subtree.length) return null;
+  const subIds = new Set(subtree.map((e) => e.id));
+  const full = SceneKit.serialize(state.world);
+  const entities = (full.entities || []).filter((e) => subIds.has(e.id));
+  if (!entities.length) return null;
+  return { format: PREFAB_FORMAT, name: String(name || rootId), root: String(rootId), entities };
+}
+
 // {tool, args} 검증 → execFile 인자 배열 생성. 위반 시 {error} 반환.
 // 반환 {ok:true, toolPath, argv} 또는 {ok:false, code, error}.
 function buildSkillCommand(tool, argsIn) {
@@ -572,17 +601,23 @@ function pushCommand(command) {
   // addEntity 의 새 id 를 커맨드에 박아 redo/미러 재적용 시 같은 id 가 나오게(§ editorController 패턴).
   let stored = command;
   let newId = null;
+  let ids = null;
   if (command.type === 'addEntity' && undoDelta && undoDelta.type === 'removeEntity' && undoDelta.id != null) {
     newId = undoDelta.id;
     const ent = Object.assign({}, command.entity, { id: newId });
     stored = Object.assign({}, command, { entity: ent });
+  } else if (command.type === 'instantiate' && undoDelta && undoDelta.type === 'removeEntities') {
+    // 2D 프리팹(ADR-003): 발급된 id 목록 회수 + idMap 을 커맨드에 박아 미러/redo 가 같은 id 를
+    // 재현하게 한다(addEntity 의 newId 박기와 동형 — 결정적 미러 동기).
+    ids = undoDelta.ids;
+    if (undoDelta._idMap) stored = Object.assign({}, command, { idMap: undoDelta._idMap });
   }
   state.undoStack.push({ cmd: stored, undoDelta });
   if (state.undoStack.length > UNDO_LIMIT) state.undoStack.shift();
   state.redoStack.length = 0;
   // 미러 동기는 stored(확정 id 포함) 를 브로드캐스트해야 클라가 같은 id 로 applyCommand.
   const seq = applyAndBroadcast('command', stored, undoDelta);
-  return { seq, newId };
+  return { seq, newId, ids };
 }
 
 function doUndo() {
@@ -1207,7 +1242,7 @@ function handleApi(req, res, u, p) {
       if (!command || typeof command !== 'object') { sendJSON(res, 400, { ok: false, error: 'command 누락' }); return; }
       if (state.mode === 'play') { sendJSON(res, 409, { ok: false, error: 'Play 모드 — 씬 read-only(§4.9)' }); return; }
       const r = pushCommand(command);
-      sendJSON(res, 200, { ok: true, seq: r.seq, newId: r.newId });
+      sendJSON(res, 200, { ok: true, seq: r.seq, newId: r.newId, ids: r.ids });
     });
     return;
   }
@@ -1335,6 +1370,125 @@ function handleApi(req, res, u, p) {
       // 'scene' 델타(op=switch) 발행 — 에디터가 스냅샷 재요청(world 전체 교체이므로 resync 의미).
       const seq = broadcastScene('switch', { activeSceneId: id });
       sendJSON(res, 200, { ok: true, activeSceneId: state.activeSceneId, seq });
+    });
+    return;
+  }
+
+  // ── 2D 프리팹(서브트리 깊은복제·id재발급·Variant금지, ADR-003) ──────────────────
+  //  모두 코어 'instantiate' 원자명령(pushCommand 경유 — 단일 undo)으로 수렴. Play 모드면 409.
+
+  // POST /api/scene/duplicate {id, parentId?} — 선택 엔티티의 서브트리를 즉석 복제(Ctrl+D 류).
+  //  parentId 미지정이면 루트의 현재 부모를 유지(같은 계층에 복제).
+  if (req.method === 'POST' && p === '/api/scene/duplicate') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      if (state.mode === 'play') { sendJSON(res, 409, { ok: false, error: 'Play 모드 — 씬 read-only(§4.9)' }); return; }
+      const id = String((parsed && parsed.id) != null ? parsed.id : '');
+      const src = SceneKit.findEntity(state.world, id);
+      if (!src) { sendJSON(res, 404, { ok: false, error: '엔티티 없음: ' + id }); return; }
+      const doc = buildPrefabDoc(id, id);
+      if (!doc) { sendJSON(res, 400, { ok: false, error: '서브트리 직렬화 실패' }); return; }
+      const parentId = (parsed && parsed.parentId != null) ? String(parsed.parentId)
+        : (src.parentId != null ? String(src.parentId) : null);
+      const r = pushCommand({ type: 'instantiate', entities: doc.entities, parentId });
+      sendJSON(res, 200, { ok: true, seq: r.seq, ids: r.ids });
+    });
+    return;
+  }
+
+  // POST /api/scene/instantiate {entities, parentId?} — 명시 서브트리 doc 배열을 인스턴스화.
+  if (req.method === 'POST' && p === '/api/scene/instantiate') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      if (state.mode === 'play') { sendJSON(res, 409, { ok: false, error: 'Play 모드 — 씬 read-only(§4.9)' }); return; }
+      const entities = parsed && Array.isArray(parsed.entities) ? parsed.entities : null;
+      if (!entities || !entities.length) { sendJSON(res, 400, { ok: false, error: 'entities 배열 필수' }); return; }
+      const parentId = (parsed && parsed.parentId != null) ? String(parsed.parentId) : null;
+      const r = pushCommand({ type: 'instantiate', entities, parentId });
+      sendJSON(res, 200, { ok: true, seq: r.seq, ids: r.ids });
+    });
+    return;
+  }
+
+  // POST /api/prefab/save {name, rootId} — 서브트리를 명명 프리팹으로 디스크 저장.
+  if (req.method === 'POST' && p === '/api/prefab/save') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      const rootId = String((parsed && parsed.rootId) != null ? parsed.rootId : '');
+      const name = (parsed && parsed.name != null) ? String(parsed.name) : rootId;
+      if (!currentGameDir()) { sendJSON(res, 409, { ok: false, error: '현재 씬이 games/<slug> 아님 — 프리팹 저장 대상 없음' }); return; }
+      if (!SceneKit.findEntity(state.world, rootId)) { sendJSON(res, 404, { ok: false, error: '엔티티 없음: ' + rootId }); return; }
+      const target = prefabFileFor(name);
+      if (!target) { sendJSON(res, 400, { ok: false, error: '프리팹 이름 위반(영숫자._- 만)' }); return; }
+      const doc = buildPrefabDoc(rootId, target.safe);
+      if (!doc) { sendJSON(res, 400, { ok: false, error: '서브트리 직렬화 실패' }); return; }
+      try {
+        fs.mkdirSync(target.dir, { recursive: true });
+        const existing = fs.readdirSync(target.dir).filter((f) => f.endsWith('.json'));
+        if (existing.length >= MAX_PREFABS && !fs.existsSync(target.abs)) {
+          sendJSON(res, 400, { ok: false, error: '프리팹 수 상한 초과(최대 256)' }); return;
+        }
+        fs.writeFileSync(target.abs, JSON.stringify(doc, null, 2), 'utf8');
+      } catch (e) {
+        sendJSON(res, 500, { ok: false, error: '프리팹 저장 실패: ' + String(e && e.message || e) }); return;
+      }
+      sendJSON(res, 200, { ok: true, name: target.safe, root: rootId, count: doc.entities.length });
+    });
+    return;
+  }
+
+  // GET /api/prefab/list — 현재 게임의 프리팹 목록 [{name, root, count}].
+  if (req.method === 'GET' && p === '/api/prefab/list') {
+    const gameDir = currentGameDir();
+    const out = [];
+    if (gameDir) {
+      const dir = path.join(gameDir, 'prefabs');
+      let files = [];
+      try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.json')); } catch (e) { files = []; }
+      for (const f of files.sort()) {
+        try {
+          const doc = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+          if (doc && Array.isArray(doc.entities)) {
+            out.push({ name: f.replace(/\.json$/, ''), root: doc.root != null ? doc.root : null, count: doc.entities.length });
+          }
+        } catch (e) { /* 손상 파일 건너뜀 */ }
+      }
+    }
+    sendJSON(res, 200, { ok: true, prefabs: out });
+    return;
+  }
+
+  // POST /api/prefab/instantiate {name, x?, y?, parentId?} — 디스크 프리팹을 씬에 인스턴스화.
+  if (req.method === 'POST' && p === '/api/prefab/instantiate') {
+    readBody(req, (body) => {
+      let parsed;
+      try { parsed = JSON.parse(body); } catch (e) { sendJSON(res, 400, { ok: false, error: 'JSON 파싱 실패' }); return; }
+      if (state.mode === 'play') { sendJSON(res, 409, { ok: false, error: 'Play 모드 — 씬 read-only(§4.9)' }); return; }
+      const name = String((parsed && parsed.name) != null ? parsed.name : '');
+      const target = prefabFileFor(name);
+      if (!target) { sendJSON(res, 400, { ok: false, error: '프리팹 이름 위반' }); return; }
+      let doc;
+      try { doc = JSON.parse(fs.readFileSync(target.abs, 'utf8')); }
+      catch (e) { sendJSON(res, 404, { ok: false, error: '프리팹 없음: ' + target.safe }); return; }
+      if (!doc || !Array.isArray(doc.entities) || !doc.entities.length) { sendJSON(res, 400, { ok: false, error: '프리팹 손상' }); return; }
+      let entities = doc.entities;
+      const hasX = parsed && typeof parsed.x === 'number' && isFinite(parsed.x);
+      const hasY = parsed && typeof parsed.y === 'number' && isFinite(parsed.y);
+      if ((hasX || hasY) && doc.root != null) {
+        entities = entities.map((e) => {
+          if (String(e.id) !== String(doc.root)) return e;
+          const t = Object.assign({}, e.transform);
+          if (hasX) t.x = parsed.x;
+          if (hasY) t.y = parsed.y;
+          return Object.assign({}, e, { transform: t });
+        });
+      }
+      const parentId = (parsed && parsed.parentId != null) ? String(parsed.parentId) : null;
+      const r = pushCommand({ type: 'instantiate', entities, parentId });
+      sendJSON(res, 200, { ok: true, seq: r.seq, ids: r.ids, name: target.safe });
     });
     return;
   }

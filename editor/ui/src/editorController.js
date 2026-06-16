@@ -209,6 +209,9 @@ export function createController(opts) {
     if (cmd.type === 'addEntity' && undoDelta && undoDelta.type === 'removeEntity' && undoDelta.id != null) {
       const ent = Object.assign({}, cmd.entity, { id: undoDelta.id });
       stored = Object.assign({}, cmd, { entity: ent });
+    } else if (cmd.type === 'instantiate' && undoDelta && undoDelta.type === 'removeEntities' && undoDelta._idMap) {
+      // 2D 프리팹(ADR-003): idMap 을 커맨드에 박아 redo 재적용 시 같은 id 재현(addEntity 패턴 동형).
+      stored = Object.assign({}, cmd, { idMap: undoDelta._idMap });
     }
     undoStack.push({ cmd: stored, undoDelta: undoDelta });
     if (undoStack.length > UNDO_LIMIT) undoStack.shift();
@@ -304,6 +307,65 @@ export function createController(opts) {
   // (현재 editor/ui 미사용 — 향후 타일 이동·레이어 편입 UI 의 확장점. MCP scene_reparent 와 별개 경로.)
   function reparent(id, parentId) {
     return applyCommand({ type: 'reparent', id: id, parentId: parentId });
+  }
+
+  // ── 2D 프리팹(서브트리 깊은복제·id재발급·Variant금지, ADR-003) ──────────────────
+  //  instantiate = 코어 원자명령(단일 undo). remote 는 브리지 권위(/api/scene/duplicate·
+  //  /api/prefab/*), local 은 코어 collectSubtree 로 서브트리를 떠 직접 instantiate.
+
+  // 명시 서브트리 doc 배열을 인스턴스화(코어 'instantiate'). remote → Promise<{ids}>, local → undoDelta.
+  function instantiate(entities, parentId) {
+    return applyCommand({ type: 'instantiate', entities: entities, parentId: (parentId != null ? parentId : null) });
+  }
+
+  // 선택 엔티티의 서브트리를 즉석 복제(Ctrl+D 류). 새 id 의 첫 엔티티(루트)를 선택.
+  function duplicateEntity(id) {
+    if (isRemote) {
+      if (!transport || !transport.duplicate) return Promise.resolve(null);
+      return Promise.resolve(transport.duplicate(id)).then((r) => {
+        const ids = (r && Array.isArray(r.ids)) ? r.ids : null;
+        if (ids && ids.length) select([ids[0]]);
+        return ids;
+      });
+    }
+    const w = getWorld();
+    if (!w || !SceneKit || !SceneKit.collectSubtree) return null;
+    const sub = SceneKit.collectSubtree(w, id);
+    if (!sub.length) return null;
+    const subIds = new Set(sub.map((e) => e.id));
+    const full = SceneKit.serialize(w);
+    const entities = (full.entities || []).filter((e) => subIds.has(e.id));
+    const src = SceneKit.findEntity(w, id);
+    const parentId = (src && src.parentId != null) ? src.parentId : null;
+    const undoDelta = applyCommand({ type: 'instantiate', entities: entities, parentId: parentId });
+    const ids = (undoDelta && undoDelta.type === 'removeEntities') ? undoDelta.ids : null;
+    if (ids && ids.length) select([ids[0]]);
+    return ids;
+  }
+
+  // 서브트리를 명명 프리팹으로 디스크 저장(remote 전용 — 디스크는 브리지 권위).
+  function savePrefab(name, rootId) {
+    if (!isRemote || !transport || !transport.savePrefab) {
+      return Promise.resolve({ ok: false, error: '브리지 필요 — 프리팹 저장은 브리지에서만 동작' });
+    }
+    return Promise.resolve(transport.savePrefab(name, rootId));
+  }
+  function listPrefabs() {
+    if (!isRemote || !transport || !transport.listPrefabs) {
+      return Promise.resolve({ ok: false, error: '브리지 필요', prefabs: [] });
+    }
+    return Promise.resolve(transport.listPrefabs());
+  }
+  // 디스크 프리팹을 씬에 인스턴스화(x,y 드롭 좌표·parentId 선택). 새 루트 엔티티 선택.
+  function instantiatePrefab(name, x, y, parentId) {
+    if (!isRemote || !transport || !transport.instantiatePrefab) {
+      return Promise.resolve({ ok: false, error: '브리지 필요 — 프리팹 인스턴스화는 브리지에서만 동작' });
+    }
+    return Promise.resolve(transport.instantiatePrefab(name, x, y, parentId)).then((r) => {
+      const ids = (r && Array.isArray(r.ids)) ? r.ids : null;
+      if (ids && ids.length) select([ids[0]]);
+      return r;
+    });
   }
 
   // ── 트랜스폼 편집 ───────────────────────────────────────────────────────────
@@ -726,6 +788,8 @@ export function createController(opts) {
     // 멀티씬 + 뷰포트 드롭(기능 C/E)
     createEntityAtFromAsset,
     listScenes, addScene, renameScene, removeScene, switchScene,
+    // 2D 프리팹(서브트리 깊은복제·id재발급·Variant금지)
+    instantiate, duplicateEntity, savePrefab, listPrefabs, instantiatePrefab,
     STORAGE_KEY
   };
 }

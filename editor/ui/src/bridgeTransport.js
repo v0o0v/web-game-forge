@@ -60,6 +60,11 @@ export function createLocalTransport() {
     async sceneRename() { return { ok: false, error: '브리지 없음(local 모드) — 멀티씬은 브리지에서만 동작' }; },
     async sceneRemove() { return { ok: false, error: '브리지 없음(local 모드) — 멀티씬은 브리지에서만 동작' }; },
     async sceneSwitch() { return { ok: false, error: '브리지 없음(local 모드) — 멀티씬은 브리지에서만 동작' }; },
+    // local(2D 프리팹): 디스크·복제는 브리지 권위 → 안전 비활성(local instantiate 는 컨트롤러가 직접 collectSubtree).
+    async duplicate() { return { ok: false, error: '브리지 없음(local 모드)' }; },
+    async savePrefab() { return { ok: false, error: '브리지 없음(local 모드) — 프리팹 저장은 브리지에서만' }; },
+    async listPrefabs() { return { ok: false, prefabs: [] }; },
+    async instantiatePrefab() { return { ok: false, error: '브리지 없음(local 모드)' }; },
     // (스프라이트 브라우저 API 는 UI 가 sprite/spriteApi.js 를 직접 fetch — transport 노출 불필요.)
     stop() {}
   };
@@ -333,10 +338,35 @@ export function createRemoteTransport(config) {
       }
       return { ok: true, activeSceneId: json.activeSceneId, seq: json.seq };
     },
+    // ── 2D 프리팹(브리지 권위 — /api/scene/duplicate·/api/prefab/*) ──────────────
+    async duplicate(id, parentId) {
+      const body = { id }; if (parentId != null) body.parentId = parentId;
+      const { status, json } = await apiFetch('POST', '/api/scene/duplicate', body);
+      if (status !== 200 || !json || json.ok !== true) return { ok: false, error: (json && json.error) || ('복제 실패 status=' + status) };
+      return { ok: true, ids: json.ids || [], seq: json.seq };
+    },
+    async savePrefab(name, rootId) {
+      const { status, json } = await apiFetch('POST', '/api/prefab/save', { name, rootId });
+      if (status !== 200 || !json || json.ok !== true) return { ok: false, error: (json && json.error) || ('프리팹 저장 실패 status=' + status) };
+      return { ok: true, name: json.name, root: json.root, count: json.count };
+    },
+    async listPrefabs() {
+      const { json } = await apiFetch('GET', '/api/prefab/list');
+      return { ok: !!(json && json.ok), prefabs: (json && json.prefabs) || [] };
+    },
+    async instantiatePrefab(name, x, y, parentId) {
+      const body = { name };
+      if (typeof x === 'number') body.x = x;
+      if (typeof y === 'number') body.y = y;
+      if (parentId != null) body.parentId = parentId;
+      const { status, json } = await apiFetch('POST', '/api/prefab/instantiate', body);
+      if (status !== 200 || !json || json.ok !== true) return { ok: false, error: (json && json.error) || ('인스턴스화 실패 status=' + status) };
+      return { ok: true, ids: json.ids || [], seq: json.seq, name: json.name };
+    },
     async sendCommand(cmd) {
       const { status, json } = await apiFetch('POST', '/api/command', { command: cmd });
       if (status === 409) return { rejected: true, reason: 'play-readonly' };
-      return { seq: json && json.seq, newId: json && json.newId };
+      return { seq: json && json.seq, newId: json && json.newId, ids: json && json.ids };
     },
     async sendUndo() {
       const { json } = await apiFetch('POST', '/api/undo');

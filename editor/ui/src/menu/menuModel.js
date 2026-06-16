@@ -22,6 +22,7 @@ const PANEL_LABELS = {
   assets: '에셋',
   skills: '스킬',
   chat: '챗',
+  prefabs: '프리팹',
 };
 
 /** 컴포넌트 15종 */
@@ -183,8 +184,9 @@ function buildEditMenu(controller, settings, selection, undoDepth, redoDepth) {
   };
 }
 
-function buildGameObjectMenu(controller, selection) {
+function buildGameObjectMenu(controller, selection, layoutApi) {
   const hasSelection = selection && selection.length > 0;
+  const remote = !!controller.isRemote;
 
   return {
     label: '게임오브젝트',
@@ -211,6 +213,28 @@ function buildGameObjectMenu(controller, selection) {
             (selection || []).forEach((id) => controller.addComponent(id, { type }));
           }),
         })),
+      },
+      { type: 'separator' },
+      // 2D 프리팹(서브트리 깊은복제·id재발급·Variant금지, ADR-003).
+      {
+        label: '선택 복제',
+        shortcut: 'Ctrl+D',
+        disabled: !hasSelection,
+        action: safe(() => { if (selection && selection.length) controller.duplicateEntity(selection[0]); }),
+      },
+      {
+        label: '프리팹으로 저장…',
+        disabled: !hasSelection || !remote,
+        action: safe(() => {
+          if (!selection || !selection.length) return;
+          const name = (typeof window !== 'undefined' && window.prompt)
+            ? window.prompt('프리팹 이름(영숫자 . _ - 만):', selection[0]) : null;
+          if (name) controller.savePrefab(name, selection[0]);
+        }),
+      },
+      {
+        label: '프리팹 패널 열기…',
+        action: safe(() => layoutApi.showPanel('prefabs')),
       },
     ],
   };
@@ -461,7 +485,7 @@ export function buildMenus({
   return [
     buildFileMenu(controller),
     buildEditMenu(controller, settings, selection, undoDepth, redoDepth),
-    buildGameObjectMenu(controller, selection),
+    buildGameObjectMenu(controller, selection, layoutApi),
     buildAssetsMenu(layoutApi),
     buildSkillsMenu(controller, layoutApi),
     buildRunMenu(controller, mode),

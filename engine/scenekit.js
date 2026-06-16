@@ -215,6 +215,34 @@
     for (var i = 0; i < world.entities.length; i++) if (world.entities[i].id === id) return i;
     return -1;
   }
+
+  // 서브트리 수집(2D 프리팹·ADR-003) — rootId + parentId 체인으로 rootId 에 (직·간접)
+  // 도달하는 모든 후손을 transitive 하게 모은다. 1단계 계층 위 임의 깊이를 따라가는
+  // *읽기*(2A 의미 소비 — wouldCycle 의 조상 순회와 동형, 새 계층 의미 안 만듦). 결정적:
+  // world.entities 순서 보존. 반환은 엔티티 참조 배열(호출자가 serializeEntity 로 prefab
+  // doc 화). 루트 부재면 []. 고정점 루프(1단계 가정상 실제 1~2회 수렴).
+  function collectSubtree(world, rootId) {
+    if (!isObj(world)) return [];
+    var root = findEntity(world, rootId);
+    if (!root) return [];
+    var inSet = {};
+    inSet[root.id] = true;
+    var result = [root];
+    var changed = true;
+    while (changed) {
+      changed = false;
+      for (var i = 0; i < world.entities.length; i++) {
+        var e = world.entities[i];
+        if (inSet[e.id]) continue;
+        if (e.parentId != null && inSet[e.parentId]) {
+          inSet[e.id] = true;
+          result.push(e);
+          changed = true;
+        }
+      }
+    }
+    return result;
+  }
   // 엔티티의 특정 타입 컴포넌트(첫 번째). 없으면 null.
   function getComponentOn(entity, type) {
     var comps = entity.components;
@@ -660,6 +688,7 @@
       case 'addEntity': return cmdAddEntity(world, cmd);
       case 'removeEntity': return cmdRemoveEntity(world, cmd);
       case 'reparent': return cmdReparent(world, cmd);
+      case 'instantiate': return cmdInstantiate(world, cmd);
       default: return { type: 'noop' };
     }
   }
@@ -777,6 +806,57 @@
     return { type: 'removeEntity', id: ent.id };
   }
 
+  // ── instantiate(2D 프리팹·ADR-003) — 서브트리 깊은복제 + id 재발급 + 배치-내부 parentId 리맵 ─
+  //   cmd: { type:'instantiate', entities:[<doc>...], parentId?, idMap? }
+  //     entities = 서브트리 doc 배열(로컬 id 공간). parentId = 루트(배치-외부 부모)를 붙일 대상
+  //       컨테이너(드롭 대상). 생략/빈값이면 루트는 최상위. idMap = oldId→newId 사전박음
+  //       (redo·미러 재적용 결정성 — 같은 인스턴스 id 재현; 제거 후 재적용이라 충돌 없음).
+  //   원자성: N개를 한 번에 push, 단일 undoDelta {type:'removeEntities', ids:[...]} 로 통째 제거.
+  //   비대칭(ADR-003): undo 는 2A removeEntity 승격과 달리 인스턴스 전체를 직접 제거(승격 없음).
+  //   결정론: allocId(단조증가)만. 결과 id 는 대상 world._idSeq 의존(prefab doc 은 로컬 불변).
+  function cmdInstantiate(world, cmd) {
+    var srcList = arr(cmd.entities);
+    if (!srcList.length) return { type: 'noop' };
+    var idMap = isObj(cmd.idMap) ? cmd.idMap : {};
+    // 1차: oldId→newId 맵 구축(박힌 idMap 재사용 우선, 없으면 allocId 신규 발급).
+    var recs = [];
+    for (var i = 0; i < srcList.length; i++) {
+      var src = srcList[i];
+      if (!isObj(src)) continue;
+      var oldId = (src.id != null) ? String(src.id) : ('_p' + i);
+      var newId = has(idMap, oldId) ? String(idMap[oldId]) : allocId(world);
+      idMap[oldId] = newId;
+      recs.push({ newId: newId, src: src });
+    }
+    if (!recs.length) return { type: 'noop' };
+    var dropParent = (cmd.parentId != null && String(cmd.parentId) !== '') ? String(cmd.parentId) : null;
+    if (dropParent !== null && !findEntity(world, dropParent)) dropParent = null;  // 고아 드롭대상 무시(루트 최상위) — reparent 고아 거부와 정합
+    // 2차: 깊은복제(normalizeEntity) + parentId 리맵 + push.
+    var added = [];
+    for (var j = 0; j < recs.length; j++) {
+      var rec = recs[j];
+      var raw = {};
+      for (var key in rec.src) { if (has(rec.src, key)) raw[key] = rec.src[key]; }
+      raw.id = rec.newId;   // newId 박아 normalizeEntity 가 allocId 중복 호출 안 하게.
+      var srcParent = (rec.src.parentId != null && String(rec.src.parentId) !== '') ? String(rec.src.parentId) : null;
+      if (srcParent !== null && has(idMap, srcParent)) {
+        raw.parentId = idMap[srcParent];          // 배치-내부 → 새 id 리맵
+      } else if (dropParent !== null) {
+        raw.parentId = dropParent;                // 배치-외부(루트) → 드롭 대상 컨테이너
+      } else {
+        delete raw.parentId;                      // 루트, 드롭 대상 없음 → 최상위
+      }
+      var ent = normalizeEntity(raw, world);
+      world.entities.push(ent);
+      added.push(ent);
+    }
+    bumpIdSeq(world);
+    for (var k = 0; k < added.length; k++) initEntity(added[k], world);
+    var ids = [];
+    for (var m = 0; m < added.length; m++) ids.push(added[m].id);
+    return { type: 'removeEntities', ids: ids, _idMap: idMap };
+  }
+
   function cmdRemoveEntity(world, cmd) {
     var idx = findEntityIndex(world, cmd.id);
     if (idx < 0) return { type: 'noop' };
@@ -835,6 +915,17 @@
             var ch = findEntity(world, undoDelta._promotedChildren[pi]);
             if (ch) ch.parentId = undoDelta._formerParent;
           }
+        }
+        return;
+      }
+      case 'removeEntities': {
+        // instantiate(2D 프리팹·ADR-003) 의 역연산 — 인스턴스 전체를 역순으로 직접 제거.
+        // 2A removeEntity 승격과 비대칭: 승격 없음(인스턴스 내부 부모-자식이 함께 사라지고,
+        // 배치-외부 parentId 는 인스턴스에 미포함이라 고아가 생기지 않는다).
+        var rids = arr(undoDelta.ids);
+        for (var ri = rids.length - 1; ri >= 0; ri--) {
+          var rIdx = findEntityIndex(world, String(rids[ri]));
+          if (rIdx >= 0) world.entities.splice(rIdx, 1);
         }
         return;
       }
@@ -911,7 +1002,8 @@
 
     // 조회 헬퍼(어댑터·테스트용)
     findEntity: findEntity,
-    getComponentOn: getComponentOn
+    getComponentOn: getComponentOn,
+    collectSubtree: collectSubtree   // 2D 프리팹 — 서브트리(루트+parentId 후손) 수집
   };
 
   global.SceneKit = SceneKit;

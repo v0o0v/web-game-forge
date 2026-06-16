@@ -1390,6 +1390,106 @@ function ScenekitStep(w) { SceneKit.step(w, 1 / 60); }
     `parentId=${tileSer && tileSer.parentId}`);
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// G30  묶음H 2D 프리팹 — instantiate 원자 다중엔티티(서브트리 깊은복제·id재발급·리맵, ADR-003)
+//   A 회귀앵커: instantiate 도입 후 flat 골든 해시 불변(기존 경로 무수정 기계증명)
+//   B 인스턴스 결정성(같은 prefab+같은 idSeq 시작 → 동일 해시) + collectSubtree(transitive)
+//   C id 유일성(새 id 전부 유일·기존과 무충돌·eN 형식)
+//   D parentId 리맵 정확(배치-내부=새 컨테이너 newId·루트=parentOverride)
+//   E undo 원자복원(단일 applyUndo 로 N개 통째 제거 + 해시 원복)
+//   F instantiate 후 serialize→재load 동형(리맵된 parentId 보존)
+//   G 경계(빈 entities=noop·단일 루트 최상위·고아 드롭대상 무시)
+// ═════════════════════════════════════════════════════════════════════════════
+{
+  // G30-A 회귀앵커 — instantiate 명령 추가가 기존 경로 무수정임을 flat 골든으로 증명.
+  const GOLD_T0 = '4f7683f9';
+  const wf = SceneKit.load(SCENE_DOC, { mode: 'play', seed: 42 });
+  ok('G30-A instantiate 도입 후 flat 골든 해시 불변(기존 경로 무수정)', SceneKit.hashState(wf) === GOLD_T0,
+    `actual=${SceneKit.hashState(wf)} gold=${GOLD_T0}`);
+}
+{
+  // 프리팹 픽스처: 컨테이너(TilemapLayer) + 타일 2개(로컬 id 공간 p_*).
+  function buildPrefab() {
+    return [
+      { id: 'p_root', name: 'TilemapLayer:camp', transform: { x: 0, y: 0 }, components: [] },
+      { id: 'p_t0', name: '타일0', transform: { x: 0,  y: 0 }, parentId: 'p_root', components: [{ type: 'Sprite', sprite: 'ts', frame: 0 }] },
+      { id: 'p_t1', name: '타일1', transform: { x: 16, y: 0 }, parentId: 'p_root', components: [{ type: 'Sprite', sprite: 'ts', frame: 1 }] }
+    ];
+  }
+
+  // G30-B 인스턴스 결정성(빈 씬+같은 idSeq 시작 → 동일 해시).
+  const wA = SceneKit.load({ walls: [], entities: [] }, { mode: 'edit', seed: 1 });
+  const wB = SceneKit.load({ walls: [], entities: [] }, { mode: 'edit', seed: 1 });
+  SceneKit.applyCommand(wA, { type: 'instantiate', entities: buildPrefab() });
+  SceneKit.applyCommand(wB, { type: 'instantiate', entities: buildPrefab() });
+  ok('G30-B 인스턴스 결정성(같은 prefab+idSeq → 동일 해시)', SceneKit.hashState(wA) === SceneKit.hashState(wB),
+    `ha=${SceneKit.hashState(wA)} hb=${SceneKit.hashState(wB)}`);
+  ok('G30-B instantiate 후 엔티티 3개 추가', wA.entities.length === 3, `count=${wA.entities.length}`);
+
+  // G30-B collectSubtree transitive(컨테이너→자식→손자 2단계 + 무관 엔티티 제외).
+  const deep = SceneKit.load({ walls: [], entities: [
+    { id: 'g_root', name: 'R', transform: {}, components: [] },
+    { id: 'g_mid', name: 'M', transform: {}, parentId: 'g_root', components: [] },
+    { id: 'g_leaf', name: 'L', transform: {}, parentId: 'g_mid', components: [] },
+    { id: 'g_out', name: 'O', transform: {}, components: [] }
+  ] }, { mode: 'edit', seed: 1 });
+  const sub = SceneKit.collectSubtree(deep, 'g_root');
+  ok('G30-B collectSubtree transitive(루트+자식+손자=3, 무관 제외)', sub.length === 3,
+    `len=${sub.length} ids=${sub.map(e => e.id).join(',')}`);
+  ok('G30-B collectSubtree 손자(g_leaf) 포함', sub.some(e => e.id === 'g_leaf'), `ids=${sub.map(e => e.id).join(',')}`);
+
+  // G30-C id 유일성(기존 엔티티 있는 씬에 인스턴스화).
+  const wC = SceneKit.load({ walls: [], entities: [{ id: 'existing', name: 'X', transform: {}, components: [] }] }, { mode: 'edit', seed: 1 });
+  const undoC = SceneKit.applyCommand(wC, { type: 'instantiate', entities: buildPrefab() });
+  const newIds = undoC.ids;
+  ok('G30-C 새 id 3개', newIds.length === 3, `ids=${newIds.join(',')}`);
+  ok('G30-C 새 id 전부 유일', new Set(newIds).size === 3, `ids=${newIds.join(',')}`);
+  ok('G30-C 기존 id 와 무충돌', newIds.indexOf('existing') < 0, `ids=${newIds.join(',')}`);
+  ok('G30-C eN 형식 id', newIds.every(id => /^e\d+$/.test(id)), `ids=${newIds.join(',')}`);
+
+  // G30-D parentId 리맵(루트=드롭대상 host, 타일=새 컨테이너 newId).
+  const wD = SceneKit.load({ walls: [], entities: [{ id: 'host', name: 'Host', transform: { x: 200, y: 200 }, components: [] }] }, { mode: 'edit', seed: 1 });
+  const undoD = SceneKit.applyCommand(wD, { type: 'instantiate', entities: buildPrefab(), parentId: 'host' });
+  const newRootId = undoD.ids[0], newRoot = SceneKit.findEntity(wD, newRootId);
+  const nt0 = SceneKit.findEntity(wD, undoD.ids[1]), nt1 = SceneKit.findEntity(wD, undoD.ids[2]);
+  ok('G30-D 루트 parentId = 드롭대상(host)', newRoot.parentId === 'host', `parentId=${newRoot.parentId}`);
+  ok('G30-D 타일 parentId = 새 컨테이너 newId(리맵)', nt0.parentId === newRootId && nt1.parentId === newRootId,
+    `t0=${nt0.parentId} t1=${nt1.parentId} newRoot=${newRootId}`);
+  ok('G30-D 타일 parentId 가 old p_root 아님(리맵 확인)', nt0.parentId !== 'p_root', `parentId=${nt0.parentId}`);
+
+  // G30-E undo 원자복원(단일 undo → N개 통째 제거).
+  const wE = SceneKit.load({ walls: [], entities: [{ id: 'keep', name: 'K', transform: {}, components: [] }] }, { mode: 'edit', seed: 1 });
+  const hE0 = SceneKit.hashState(wE);
+  const undoE = SceneKit.applyCommand(wE, { type: 'instantiate', entities: buildPrefab() });
+  ok('G30-E instantiate 후 엔티티 +3(1→4)', wE.entities.length === 4, `count=${wE.entities.length}`);
+  ok('G30-E instantiate 후 해시 변경', SceneKit.hashState(wE) !== hE0, `h0=${hE0} now=${SceneKit.hashState(wE)}`);
+  SceneKit.applyUndo(wE, undoE);
+  ok('G30-E 단일 undo 로 N개 통째 제거(4→1)', wE.entities.length === 1, `count=${wE.entities.length}`);
+  ok('G30-E undo 후 해시 원복', SceneKit.hashState(wE) === hE0, `h0=${hE0} now=${SceneKit.hashState(wE)}`);
+  ok('G30-E undo 후 기존 keep 보존', SceneKit.findEntity(wE, 'keep') !== null, 'keep alive');
+
+  // G30-F instantiate 후 serialize→재load 동형(리맵 parentId 보존).
+  const wF = SceneKit.load({ walls: [], entities: [] }, { mode: 'edit', seed: 1 });
+  SceneKit.applyCommand(wF, { type: 'instantiate', entities: buildPrefab() });
+  const hF = SceneKit.hashState(wF);
+  const wF2 = SceneKit.load(SceneKit.serialize(wF), { mode: 'edit', seed: 1 });
+  ok('G30-F instantiate 후 serialize→재load 동형(리맵 parentId 보존)', SceneKit.hashState(wF2) === hF,
+    `orig=${hF} reload=${SceneKit.hashState(wF2)}`);
+
+  // G30-G 경계(빈 entities=noop·단일 루트 최상위·고아 드롭대상 무시).
+  const wG = SceneKit.load({ walls: [], entities: [] }, { mode: 'edit', seed: 1 });
+  const hG0 = SceneKit.hashState(wG);
+  const undoEmpty = SceneKit.applyCommand(wG, { type: 'instantiate', entities: [] });
+  ok('G30-G 빈 entities → noop(해시 불변)', undoEmpty.type === 'noop' && SceneKit.hashState(wG) === hG0, `type=${undoEmpty.type}`);
+  const undoSolo = SceneKit.applyCommand(wG, { type: 'instantiate', entities: [{ id: 'solo', name: 'Solo', transform: { x: 5, y: 5 }, components: [] }] });
+  ok('G30-G 단일 루트 instantiate(+1)', wG.entities.length === 1 && undoSolo.ids.length === 1, `count=${wG.entities.length}`);
+  ok('G30-G 단일 루트 parentId 없음(최상위)', SceneKit.findEntity(wG, undoSolo.ids[0]).parentId === undefined,
+    `parentId=${SceneKit.findEntity(wG, undoSolo.ids[0]).parentId}`);
+  const undoOrphan = SceneKit.applyCommand(wG, { type: 'instantiate', entities: [{ id: 'orphanRoot', name: 'X', transform: {}, components: [] }], parentId: 'NOPE' });
+  ok('G30-G 고아 드롭대상(없는 부모) 무시 → 루트 최상위', SceneKit.findEntity(wG, undoOrphan.ids[0]).parentId === undefined,
+    `parentId=${SceneKit.findEntity(wG, undoOrphan.ids[0]).parentId}`);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 결과 출력
 // ─────────────────────────────────────────────────────────────────────────────
