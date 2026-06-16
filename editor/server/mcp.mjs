@@ -560,6 +560,64 @@ const TOOLS = {
       if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError((r.json && r.json.error) || '임포트 실패', { status: r.status });
       return toolText({ ok: true, added: r.json.added, rejected: r.json.rejected, seq: r.json.seq });
     }
+  },
+
+  // ── 2D 프리팹(서브트리 깊은복제·id재발급·Variant금지, ADR-003) ──────────────────
+  scene_duplicate: {
+    description: '선택 엔티티의 서브트리(루트+자식 계층)를 즉석 복제한다(Ctrl+D 류). id 필수. 깊은복제 + 새 id 재발급 + 배치-내부 parentId 리맵을 한 원자 명령(단일 undo)으로 수행. parentId 미지정이면 루트의 현재 부모를 유지(같은 계층에 복제). 반환에 새 엔티티 id 목록(ids). Play 모드면 거부.',
+    inputSchema: OBJ({ id: { type: 'string' }, parentId: { type: ['string', 'null'] } }, ['id']),
+    async handler(args) {
+      if (!args || typeof args.id !== 'string') return toolError('id 필수');
+      const body = { id: args.id };
+      if (args.parentId != null) body.parentId = String(args.parentId);
+      const r = await bridgeRequest('POST', '/api/scene/duplicate', body);
+      if (r.status === 409) return toolError('Play 모드 — 씬 read-only(§4.9)', { status: 409 });
+      if (r.status === 404) return toolError('엔티티 없음: ' + args.id, { status: 404 });
+      if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError((r.json && r.json.error) || '복제 실패', { status: r.status });
+      return toolText({ ok: true, ids: r.json.ids, seq: r.json.seq });
+    }
+  },
+
+  scene_save_prefab: {
+    description: '엔티티 서브트리를 명명 프리팹으로 디스크에 저장한다(games/<slug>/prefabs/<name>.json). rootId(루트 엔티티) 필수, name 선택(기본 rootId). 프리팹은 일회성 깊은복제 템플릿(Variant·라이브 연결 없음). 현재 씬이 games/<slug> 가 아니면 거부.',
+    inputSchema: OBJ({ name: { type: 'string' }, rootId: { type: 'string' } }, ['rootId']),
+    async handler(args) {
+      if (!args || typeof args.rootId !== 'string') return toolError('rootId 필수');
+      const body = { rootId: args.rootId };
+      if (args.name != null) body.name = String(args.name);
+      const r = await bridgeRequest('POST', '/api/prefab/save', body);
+      if (r.status === 409) return toolError((r.json && r.json.error) || '프리팹 저장 대상 없음(games/<slug> 아님)', { status: 409 });
+      if (r.status === 404) return toolError('엔티티 없음: ' + args.rootId, { status: 404 });
+      if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError((r.json && r.json.error) || '프리팹 저장 실패', { status: r.status });
+      return toolText({ ok: true, name: r.json.name, root: r.json.root, count: r.json.count });
+    }
+  },
+
+  scene_list_prefabs: {
+    description: '현재 게임(games/<slug>)의 저장된 프리팹 목록을 반환한다 — prefabs:[{name, root, count}].',
+    inputSchema: OBJ({}),
+    async handler() {
+      const r = await bridgeRequest('GET', '/api/prefab/list');
+      if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError('프리팹 목록 조회 실패', { status: r.status });
+      return toolText({ ok: true, prefabs: r.json.prefabs });
+    }
+  },
+
+  scene_instantiate_prefab: {
+    description: '저장된 프리팹을 현재 씬에 인스턴스화한다(서브트리 깊은복제 + id 재발급, 단일 undo). name 필수. x·y(루트 배치 좌표)·parentId(부모 컨테이너) 선택. 반환에 새 엔티티 id 목록. Play 모드면 거부.',
+    inputSchema: OBJ({ name: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, parentId: { type: ['string', 'null'] } }, ['name']),
+    async handler(args) {
+      if (!args || typeof args.name !== 'string') return toolError('name 필수');
+      const body = { name: args.name };
+      if (typeof args.x === 'number') body.x = args.x;
+      if (typeof args.y === 'number') body.y = args.y;
+      if (args.parentId != null) body.parentId = String(args.parentId);
+      const r = await bridgeRequest('POST', '/api/prefab/instantiate', body);
+      if (r.status === 409) return toolError('Play 모드 — 씬 read-only(§4.9)', { status: 409 });
+      if (r.status === 404) return toolError('프리팹 없음: ' + args.name, { status: 404 });
+      if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError((r.json && r.json.error) || '인스턴스화 실패', { status: r.status });
+      return toolText({ ok: true, ids: r.json.ids, seq: r.json.seq, name: r.json.name });
+    }
   }
 };
 
