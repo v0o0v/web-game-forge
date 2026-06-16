@@ -150,7 +150,11 @@ export function Viewport({ controller, sceneDoc, paintMode, selectedTile, snapSi
   }
 
   function onDragOver(ev) {
-    if (ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes('application/wgf-asset')) {
+    if (!ev.dataTransfer) return;
+    // 에셋 드래그(application/wgf-asset) + 프리팹 카드 드래그(application/wgf-prefab) 모두 수용.
+    //  (getData 는 dragover 에서 빈 문자열이라 types 로만 판별 — 표준 보호모드.)
+    const types = Array.from(ev.dataTransfer.types || []);
+    if (types.includes('application/wgf-asset') || types.includes('application/wgf-prefab')) {
       ev.preventDefault();
       ev.dataTransfer.dropEffect = 'copy';
       if (!dragHover) setDragHover(true);
@@ -158,10 +162,33 @@ export function Viewport({ controller, sceneDoc, paintMode, selectedTile, snapSi
   }
   function onDragLeave() { if (dragHover) setDragHover(false); }
 
-  // 드롭: 페이로드 파싱 → (라이브러리면 use()로 assetId 회수 | 씬에셋이면 raw spriteId) →
-  //  드롭 위치 월드 좌표에 새 엔티티 생성(controller.createEntityAtFromAsset). 성공 시 자동 선택.
+  // 드롭: 페이로드 파싱 → (프리팹이면 instantiatePrefab | 라이브러리면 use()로 assetId 회수 |
+  //  씬에셋이면 raw spriteId) → 드롭 위치 월드 좌표에 배치/생성. 성공 시 자동 선택.
   async function onDrop(ev) {
     setDragHover(false);
+
+    // 프리팹 카드 드롭(application/wgf-prefab) 우선 분기 — 드롭 월드 좌표에 인스턴스화.
+    let prefabName = null;
+    try { prefabName = ev.dataTransfer.getData('application/wgf-prefab'); } catch (e) {}
+    if (prefabName) {
+      ev.preventDefault();
+      if (!controller.instantiatePrefab) return;
+      const world = toWorld(ev);
+      if (!world) {
+        if (typeof console !== 'undefined') console.warn('[Viewport] 캔버스 미준비 — 프리팹 드롭 무시');
+        return;
+      }
+      try {
+        const r = await controller.instantiatePrefab(prefabName, world.x, world.y, null);
+        if (!(r && r.ok) && typeof console !== 'undefined') {
+          console.warn('[Viewport] 프리팹 배치 실패:', (r && r.error) || '알 수 없음');
+        }
+      } catch (e) {
+        if (typeof console !== 'undefined') console.warn('[Viewport] 프리팹 드롭 처리 오류:', e);
+      }
+      return;
+    }
+
     let raw = null;
     try { raw = ev.dataTransfer.getData('application/wgf-asset'); } catch (e) {}
     if (!raw) return;
