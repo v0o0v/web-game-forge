@@ -768,21 +768,33 @@
   }
 
   // ── reparent(계층 2A) — 부모 변경. parentId=null/생략/빈문자열 = 루트로 승격. ─────
-  //   가드: 대상 없음·자기참조·존재하지 않는 부모(고아)·사이클(부모의 조상에 자신) → noop.
+  //   가드: 대상 없음·자기참조·존재하지 않는 부모(고아)·사이클(부모의 조상에 자신) → 거부.
+  //   거부는 reparentReject() 로 { type:'noop', rejected:true, reason } 을 돌려준다 — type 은
+  //   여전히 'noop'(applyUndo 무동작 보존)이되, 브리지/MCP 가 rejected/reason 으로 ok:false 를
+  //   노출해 "거부가 성공처럼 보이고 undo 스택이 오염되는" 버그를 막는다(상태 미변이라 골든
+  //   해시·결정론 불변 — undoDelta 는 world 가 아님). reparent 만 rejected 표시(다른 명령의
+  //   noop 은 기존 동작 유지 → 회귀 0).
   //   결정론: 무작위·시간 미사용. undoDelta = 역방향 reparent(이전 parentId 복원).
   //   합성(부모-따라가기 시각효과)은 코어가 아니라 어댑터(scenekit-phaser) translate-only.
   function cmdReparent(world, cmd) {
     var ent = findEntity(world, cmd.id);
-    if (!ent) return { type: 'noop' };
+    if (!ent) return reparentReject('no-entity');                          // 대상 없음
     var newParent = (cmd.parentId == null || String(cmd.parentId) === '') ? null : String(cmd.parentId);
     var before = (ent.parentId == null) ? null : ent.parentId;
     if (newParent !== null) {
-      if (newParent === ent.id) return { type: 'noop' };                 // 자기참조 금지
-      if (!findEntity(world, newParent)) return { type: 'noop' };        // 고아(부모 부재) 금지
-      if (wouldCycle(world, ent.id, newParent)) return { type: 'noop' }; // 사이클 금지
+      if (newParent === ent.id) return reparentReject('self-parent');      // 자기참조 금지
+      if (!findEntity(world, newParent)) return reparentReject('orphan-parent'); // 고아(부모 부재) 금지
+      if (wouldCycle(world, ent.id, newParent)) return reparentReject('cycle');  // 사이클 금지
     }
     if (newParent === null) delete ent.parentId; else ent.parentId = newParent;
     return { type: 'reparent', id: ent.id, parentId: before };
+  }
+
+  // reparent 거부 델타 — type:'noop'(applyUndo 의 case 'noop' 무동작 경로 그대로 사용) 위에
+  //  rejected/reason 메타를 얹는다. 호출자(브리지 pushCommand)는 rejected 면 undo/SSE/seq 를
+  //  건드리지 않고 사유만 회신한다. 상태를 바꾸지 않으므로 hashState·골든 해시에 영향 없음.
+  function reparentReject(reason) {
+    return { type: 'noop', rejected: true, reason: reason };
   }
 
   // 사이클 가드: newParentId 의 조상 체인을 타고 올라가다 childId 를 만나면 사이클.

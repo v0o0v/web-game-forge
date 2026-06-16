@@ -204,6 +204,7 @@ function lintScene(doc, report) {
     }
 
     const entityIds = new Set();
+    const parentOf = new Map();  // id → parentId(비어있지 않은 경우만) — 계층(2A) 고아·사이클 검증용
     let cameraFollowCount = 0;  // 씬 내 CameraFollow 보유 엔티티 수(다중 경고용)
 
     for (let ei = 0; ei < scene.entities.length; ei++) {
@@ -224,6 +225,11 @@ function lintScene(doc, report) {
             '씬 내 중복 entity id: "' + entity.id + '"', ePath + '.id');
         }
         entityIds.add(entity.id);
+        // 계층(2A) parentId 수집 — entityIds 가 완성된 뒤 고아·사이클을 판정한다(부모가 자식보다
+        // 뒤에 선언되는 전방 참조 허용). 비어있지 않은 parentId 만 등록(루트는 키 자체가 없음).
+        if (entity.parentId != null && String(entity.parentId) !== '') {
+          parentOf.set(entity.id, String(entity.parentId));
+        }
       }
 
       // transform 존재 확인
@@ -481,6 +487,39 @@ function lintScene(doc, report) {
             }
           }
         }
+      }
+    }
+
+    // 10. 계층(2A) parentId 검증 — load-time 고아·사이클(런타임 코어는 reparent 시 거부하지만,
+    //     손수 작성·외부 주입된 scene.json 은 load 시점에 이미 깨진 계층을 담을 수 있어 정적 검증).
+    //  - ORPHAN_PARENT(warn): parentId 가 가리키는 부모가 씬에 없음(런타임은 루트처럼 취급 — 비치명).
+    //  - PARENT_CYCLE(error): parentId 체인이 순환(유효 루트 없음 — 구조 손상). 자기참조 포함.
+    for (const [cid, pid] of parentOf) {
+      if (!entityIds.has(pid)) {
+        add('warn', 'ORPHAN_PARENT',
+          'entity "' + cid + '" 의 parentId "' + pid + '" 가 씬에 존재하지 않습니다(고아 — 런타임은 루트처럼 취급)',
+          sPath);
+      }
+    }
+    // 사이클: 각 노드에서 parentId 체인을 타고 올라가다 재방문하면 순환. 진입점부터 멤버를
+    //  모아 사이클당 1건만 보고(cycleSeen 으로 중복·재순회 방지). 단일 부모 그래프라 결정적.
+    const cycleSeen = new Set();
+    for (const startId of parentOf.keys()) {
+      if (cycleSeen.has(startId)) continue;
+      const walk = new Set();
+      let cur = startId;
+      while (cur != null && parentOf.has(cur) && !walk.has(cur)) {
+        walk.add(cur);
+        cur = parentOf.get(cur);
+      }
+      if (cur != null && walk.has(cur) && !cycleSeen.has(cur)) {
+        const members = [];
+        let node = cur;
+        do { members.push(node); cycleSeen.add(node); node = parentOf.get(node); }
+        while (node !== cur && node != null);
+        add('error', 'PARENT_CYCLE',
+          sPath + ' 의 parentId 체인에 사이클이 있습니다: ' + members.join(' → ') + ' → ' + cur,
+          sPath);
       }
     }
 

@@ -1271,16 +1271,32 @@ function ScenekitStep(w) { SceneKit.step(w, 1 / 60); }
   }
   const w = SceneKit.load(buildChain(), { mode: 'edit', seed: 1 });
   const h0 = SceneKit.hashState(w);
-  SceneKit.applyCommand(w, { type: 'reparent', id: 'a', parentId: 'c' });  // a←b←c←a 순환
+  const rejCycle = SceneKit.applyCommand(w, { type: 'reparent', id: 'a', parentId: 'c' });  // a←b←c←a 순환
   ok('G28-D 사이클 reparent 거부(a.parentId 불변)', SceneKit.findEntity(w, 'a').parentId === undefined,
     `parentId=${SceneKit.findEntity(w, 'a').parentId}`);
   ok('G28-D 사이클 거부 후 해시 불변', SceneKit.hashState(w) === h0, `h0=${h0} now=${SceneKit.hashState(w)}`);
-  SceneKit.applyCommand(w, { type: 'reparent', id: 'c', parentId: 'NOPE' });  // 고아
+  ok('G28-D 사이클 거부 델타 rejected+reason=cycle(거짓 성공 차단)',
+    rejCycle && rejCycle.type === 'noop' && rejCycle.rejected === true && rejCycle.reason === 'cycle',
+    `delta=${JSON.stringify(rejCycle)}`);
+  const rejOrphan = SceneKit.applyCommand(w, { type: 'reparent', id: 'c', parentId: 'NOPE' });  // 고아
   ok('G28-D 고아(없는 부모) 거부(c.parentId=b 유지)', SceneKit.findEntity(w, 'c').parentId === 'b',
     `parentId=${SceneKit.findEntity(w, 'c').parentId}`);
-  SceneKit.applyCommand(w, { type: 'reparent', id: 'b', parentId: 'b' });  // 자기참조
+  ok('G28-D 고아 거부 델타 reason=orphan-parent', rejOrphan && rejOrphan.rejected === true && rejOrphan.reason === 'orphan-parent',
+    `delta=${JSON.stringify(rejOrphan)}`);
+  const rejSelf = SceneKit.applyCommand(w, { type: 'reparent', id: 'b', parentId: 'b' });  // 자기참조
   ok('G28-D 자기참조 거부(b.parentId=a 유지)', SceneKit.findEntity(w, 'b').parentId === 'a',
     `parentId=${SceneKit.findEntity(w, 'b').parentId}`);
+  ok('G28-D 자기참조 거부 델타 reason=self-parent', rejSelf && rejSelf.rejected === true && rejSelf.reason === 'self-parent',
+    `delta=${JSON.stringify(rejSelf)}`);
+  // 없는 대상 reparent → reason=no-entity.
+  const rejNone = SceneKit.applyCommand(w, { type: 'reparent', id: 'ZZZ', parentId: 'a' });
+  ok('G28-D 없는 대상 거부 델타 reason=no-entity', rejNone && rejNone.rejected === true && rejNone.reason === 'no-entity',
+    `delta=${JSON.stringify(rejNone)}`);
+  // 거부 델타를 applyUndo 에 넘겨도 무동작(noop 경로) — undo 스택 오염 방지 계약(해시 불변).
+  SceneKit.applyUndo(w, rejCycle);
+  SceneKit.applyUndo(w, rejSelf);
+  ok('G28-D 거부 델타 applyUndo 무동작(해시 불변)', SceneKit.hashState(w) === h0,
+    `h0=${h0} now=${SceneKit.hashState(w)}`);
 }
 {
   // G28-E 부모삭제=자식 승격(ADR-002) + undo 정합.
@@ -1540,6 +1556,72 @@ function ScenekitStep(w) { SceneKit.step(w, 1 / 60); }
   ok('G30-K 3단계 리맵 정합(mid→root·leaf→mid·root 최상위)',
     nm.parentId === nr.id && nl.parentId === nm.id && nr.parentId == null,
     `mid=${nm.parentId} leaf=${nl.parentId} root=${nr.parentId}`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G31  lint-scene 계층(2A) parentId 검증 — 고아(warn)·사이클(error)·정상 무발화
+//   런타임 코어 reparent 가드와 별개로, load-time scene.json 의 깨진 계층(없는 부모 참조·
+//   parentId 순환)을 정적으로 잡는다. 고아=비치명 warn, 사이클=구조 손상 error.
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  const lintScene = resolve(root, 'skills/wgf-editor/tools/lint-scene.mjs');
+  const baseMeta = { title: 'H', genre: 'topdown', viewport: { w: 320, h: 240 } };
+  function lintHier(entities, tag) {
+    const doc = { format: 'wgf-scene@1', slug: 'h-' + tag, meta: baseMeta, assets: { sprites: [] }, walls: [],
+      scenes: [{ id: 'main', systems: {}, entities }], dataLayers: {} };
+    const tmp = resolve(root, 'games/_editor-samples/_hier-' + tag + '-tmp.json');
+    writeFileSync(tmp, JSON.stringify(doc, null, 2), 'utf8');
+    const res = spawnSync(process.execPath, [lintScene, '--file', tmp, '--json'], { encoding: 'utf8' });
+    let json = null;
+    const lines = (res.stdout || '').trim().split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) { try { json = JSON.parse(lines[i]); break; } catch (_) {} }
+    try { unlinkSync(tmp); } catch (_) {}
+    return { status: res.status, json };
+  }
+  const codes = (j) => (j && Array.isArray(j.findings)) ? j.findings.map((f) => f.code) : [];
+
+  // G31-A 정상 계층(부모+자식, 부모 실재·사이클 없음) → ORPHAN/CYCLE 무발화 + exit 0.
+  const okH = lintHier([
+    { id: 'p', name: 'P', transform: { x: 0, y: 0 }, components: [] },
+    { id: 'c', name: 'C', transform: { x: 0, y: 0 }, parentId: 'p', components: [] }
+  ], 'ok');
+  ok('G31-A 정상 계층 exit 0', okH.status === 0, `exit=${okH.status}`);
+  ok('G31-A 정상 계층 ORPHAN/CYCLE 무발화',
+    !codes(okH.json).includes('ORPHAN_PARENT') && !codes(okH.json).includes('PARENT_CYCLE'),
+    `codes=${codes(okH.json).join(',')}`);
+
+  // G31-B 전방 참조(부모가 자식보다 뒤에 선언) → 고아 아님(entityIds 완성 후 판정).
+  const fwd = lintHier([
+    { id: 'c', name: 'C', transform: { x: 0, y: 0 }, parentId: 'p', components: [] },
+    { id: 'p', name: 'P', transform: { x: 0, y: 0 }, components: [] }
+  ], 'fwd');
+  ok('G31-B 전방 참조 부모 → 고아 아님', !codes(fwd.json).includes('ORPHAN_PARENT'), `codes=${codes(fwd.json).join(',')}`);
+
+  // G31-C 고아(없는 부모) → ORPHAN_PARENT(warn), error 0, exit 0(비치명).
+  const orphan = lintHier([
+    { id: 'c', name: 'C', transform: { x: 0, y: 0 }, parentId: 'NOPE', components: [] }
+  ], 'orphan');
+  ok('G31-C 고아 부모 → ORPHAN_PARENT(warn)', codes(orphan.json).includes('ORPHAN_PARENT'), `codes=${codes(orphan.json).join(',')}`);
+  ok('G31-C 고아는 warn(error 0·exit 0)', orphan.status === 0 && orphan.json && orphan.json.counts.error === 0,
+    `exit=${orphan.status} error=${orphan.json && orphan.json.counts.error}`);
+
+  // G31-D 사이클(a→b→a) → PARENT_CYCLE(error), exit 1, 1건만 보고(중복 방지).
+  const cycle = lintHier([
+    { id: 'a', name: 'A', transform: { x: 0, y: 0 }, parentId: 'b', components: [] },
+    { id: 'b', name: 'B', transform: { x: 0, y: 0 }, parentId: 'a', components: [] }
+  ], 'cycle');
+  ok('G31-D 사이클 → PARENT_CYCLE(error) exit 1·error>0',
+    cycle.status === 1 && codes(cycle.json).includes('PARENT_CYCLE') && cycle.json && cycle.json.counts.error > 0,
+    `exit=${cycle.status} codes=${codes(cycle.json).join(',')} error=${cycle.json && cycle.json.counts.error}`);
+  const cycCount = codes(cycle.json).filter((c) => c === 'PARENT_CYCLE').length;
+  ok('G31-D 사이클 1건만 보고(중복 방지)', cycCount === 1, `cycCount=${cycCount}`);
+
+  // G31-E 자기참조(x→x) → PARENT_CYCLE(error) exit 1.
+  const self = lintHier([
+    { id: 'x', name: 'X', transform: { x: 0, y: 0 }, parentId: 'x', components: [] }
+  ], 'self');
+  ok('G31-E 자기참조 → PARENT_CYCLE(error) exit 1', self.status === 1 && codes(self.json).includes('PARENT_CYCLE'),
+    `exit=${self.status} codes=${codes(self.json).join(',')}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

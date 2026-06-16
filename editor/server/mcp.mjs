@@ -146,7 +146,8 @@ async function proxyCommand(command) {
   const r = await bridgeRequest('POST', '/api/command', { command });
   if (r.status === 409) return { rejected: true, status: 409, error: 'Play 모드 — 씬 read-only(§4.9)' };
   if (r.status !== 200 || !r.json || r.json.ok !== true) {
-    return { rejected: true, status: r.status, error: (r.json && r.json.error) || ('브리지 오류 status=' + r.status) };
+    // 422 = 코어 거부(reparent 자기참조·고아·사이클). reason 을 함께 회수해 호출자가 구조화 노출.
+    return { rejected: true, status: r.status, error: (r.json && r.json.error) || ('브리지 오류 status=' + r.status), reason: (r.json && r.json.reason) || null };
   }
   return { ok: true, seq: r.json.seq, newId: r.json.newId };
 }
@@ -228,13 +229,13 @@ const TOOLS = {
   },
 
   scene_reparent: {
-    description: '엔티티의 부모를 변경한다(계층 2A). parentId 생략/null = 루트로 승격. 자기참조·존재하지 않는 부모·사이클은 코어가 no-op 으로 거부(부모 불변). 부모-따라가기 시각합성은 어댑터 translate-only(코어 트랜스폼 불변·단일 진실). Play 모드면 409.',
+    description: '엔티티의 부모를 변경한다(계층 2A). parentId 생략/null = 루트로 승격. 자기참조·존재하지 않는 부모(고아)·사이클은 코어가 거부하며, 이 경우 ok:false + reason(self-parent·orphan-parent·cycle·no-entity)을 구조화 에러로 반환한다(부모 불변·거짓 성공 아님). 부모-따라가기 시각합성은 어댑터 translate-only(코어 트랜스폼 불변·단일 진실). Play 모드면 409.',
     inputSchema: OBJ({ id: { type: 'string' }, parentId: { type: ['string', 'null'] } }, ['id']),
     async handler(args) {
       if (!args || typeof args.id !== 'string') return toolError('id 필수');
       const parentId = (args.parentId == null) ? null : String(args.parentId);
       const r = await proxyCommand({ type: 'reparent', id: args.id, parentId });
-      if (r.rejected) return toolError(r.error, { status: r.status });
+      if (r.rejected) return toolError(r.error, { status: r.status, reason: r.reason });
       return toolText({ ok: true, seq: r.seq });
     }
   },

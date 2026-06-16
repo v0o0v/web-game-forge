@@ -564,6 +564,49 @@ async function main() {
       await sleep(50);
     }
 
+    // ── G7-REPARENT-REJECT 코어 거부(자기참조·고아·사이클) → 422 ok:false + reason ──
+    //  "거부가 성공처럼 보이고 undoStack 이 오염되는" 버그 회귀 가드. 핵심: 3회 거부 후 단 1회
+    //  undo 로 직전 성공 reparent 가 원복되면 거부들이 스택에 안 쌓인 것(미오염 증명).
+    {
+      const pAdd = JSON.parse((await api(info, 'POST', '/api/command', { command: { type: 'addEntity', entity: { name: 'rj-parent', transform: {}, components: [] } } })).body);
+      const cAdd = JSON.parse((await api(info, 'POST', '/api/command', { command: { type: 'addEntity', entity: { name: 'rj-child', transform: {}, components: [] } } })).body);
+      const pId = pAdd.newId, cId = cAdd.newId;
+      // c→p 성공(200).
+      const okRep = await api(info, 'POST', '/api/command', { command: { type: 'reparent', id: cId, parentId: pId } });
+      ok('G7-REPARENT-REJECT c→p 성공(200)', okRep.status === 200 && JSON.parse(okRep.body).ok === true, `status=${okRep.status}`);
+      const seqAfterOk = JSON.parse((await api(info, 'GET', '/api/scene')).body).seq;
+
+      // (1) 자기참조 → 422 ok:false reason=self-parent.
+      const selfR = await api(info, 'POST', '/api/command', { command: { type: 'reparent', id: cId, parentId: cId } });
+      const selfB = JSON.parse(selfR.body);
+      ok('G7-REPARENT-REJECT 자기참조 → 422 ok:false', selfR.status === 422 && selfB.ok === false, `status=${selfR.status} ok=${selfB.ok}`);
+      ok('G7-REPARENT-REJECT 자기참조 reason=self-parent', selfB.reason === 'self-parent', `reason=${selfB.reason}`);
+
+      // (2) 고아(없는 부모) → 422 reason=orphan-parent.
+      const orphanR = await api(info, 'POST', '/api/command', { command: { type: 'reparent', id: cId, parentId: 'NO_SUCH' } });
+      const orphanB = JSON.parse(orphanR.body);
+      ok('G7-REPARENT-REJECT 고아 → 422 reason=orphan-parent', orphanR.status === 422 && orphanB.reason === 'orphan-parent', `status=${orphanR.status} reason=${orphanB.reason}`);
+
+      // (3) 사이클(p→c, 이미 c→p) → 422 reason=cycle.
+      const cycleR = await api(info, 'POST', '/api/command', { command: { type: 'reparent', id: pId, parentId: cId } });
+      const cycleB = JSON.parse(cycleR.body);
+      ok('G7-REPARENT-REJECT 사이클 → 422 reason=cycle', cycleR.status === 422 && cycleB.reason === 'cycle', `status=${cycleR.status} reason=${cycleB.reason}`);
+
+      // 거부는 seq 를 올리지 않음 + 계층 불변(거짓 성공·로그 오염 차단).
+      const snapR = JSON.parse((await api(info, 'GET', '/api/scene')).body);
+      ok('G7-REPARENT-REJECT 거부는 seq 불변(상태 무변이)', snapR.seq === seqAfterOk, `before=${seqAfterOk} after=${snapR.seq}`);
+      const cEnt = snapR.scene.scenes[0].entities.find((e) => e.id === cId);
+      const pEnt = snapR.scene.scenes[0].entities.find((e) => e.id === pId);
+      ok('G7-REPARENT-REJECT 거부 후 계층 불변(c.parentId=p, p 루트)',
+        cEnt && cEnt.parentId === pId && pEnt && pEnt.parentId == null, `c.parentId=${cEnt && cEnt.parentId} p.parentId=${pEnt && pEnt.parentId}`);
+
+      // undo 미오염 증명: 거부가 스택에 안 쌓였다면 단 1회 undo 로 직전 성공 reparent 가 원복(c 루트).
+      await api(info, 'POST', '/api/undo');
+      const snapU = JSON.parse((await api(info, 'GET', '/api/scene')).body);
+      const cU = snapU.scene.scenes[0].entities.find((e) => e.id === cId);
+      ok('G7-REPARENT-REJECT 거부 미오염: 1회 undo 로 reparent 원복(c 루트)', cU && cU.parentId == null, `c.parentId=${cU && cU.parentId}`);
+    }
+
     // ── G8 멀티 씬(추가/전환/삭제/이름변경 + 모든 scenes 직렬화 보존) ─────────────
     //  전용 브리지를 띄워(앞 게이트 상태와 분리) E1 멀티씬 권위를 실제 실행 검증한다.
     {
