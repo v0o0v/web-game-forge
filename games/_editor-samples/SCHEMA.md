@@ -111,6 +111,7 @@ wgf-editor P0a 에서 사용하는 씬 문서 포맷 `wgf-scene@1` 의 전체 �
 | `name` | string | 선택 | 표시용 이름 |
 | `transform` | object | 필수 | 공간 변환 정보 |
 | `components` | array | 필수 | 컴포넌트 목록 |
+| `parentId` | string | 선택 | 부모 엔티티 id(1단계 계층, 2A). 생략/`null`/빈문자열이면 루트. 부모 삭제 시 자식은 루트로 **승격**(cascade 아님, ADR-002). 부모-따라가기는 어댑터 **translate-only 합성**(회전·스케일은 미합성). 코어 `hashState` 는 `parentId` 가 있을 때만 토큰화 → 없는 기존 씬은 해시 비트 불변. |
 
 ### transform
 
@@ -419,6 +420,24 @@ HUD 데이터 바인딩(데이터만, 렌더는 어댑터). `source` 경로에�
 | `items` | object | ItemKit `items.json` 인라인 데이터 |
 | `style` | object | StyleKit `style.json` 인라인 데이터 |
 | `audio` | object | SoundForge `audio.json` 인라인 데이터 |
+
+---
+
+## TilemapLayer 규약 (계층 컨테이너 패턴 — 2C)
+
+타일맵은 **새 컴포넌트가 아니라 `parentId` 계층의 사용 규약**이다. SceneKit 코어·컴포넌트 화이트리스트는 무수정 — 2A 계층(`parentId`)을 순수 소비한다.
+
+- **컨테이너 엔티티**: `name` 이 `"TilemapLayer:<레이어이름>"`(예: `"TilemapLayer:ground"`), 컴포넌트 0개(또는 식별 마커만), `transform` 이 레이어 원점, `parentId` 없음(루트). 어댑터는 Sprite 없는 엔티티를 마커로 렌더.
+- **타일 엔티티**: `parentId` = 컨테이너 id, `Sprite{ sprite:<타일셋 asset id>, frame:<셀 인덱스> }`, `transform` 이 컨테이너 기준 **로컬 격자 좌표**(`x = col*tileW`, `y = row*tileH`).
+- **타일셋 asset**: `assets.sprites[]` 에 `frameConfig{ frameWidth, frameHeight, margin?, spacing? }` 로 선언. 셀 인덱스 = `row*cols + col`(어댑터 `bakeSheetTexture` 와 정합), `cols = floor((imgW - margin + spacing)/(frameWidth + spacing))`.
+
+### 2A 계층 소비
+- 컨테이너를 옮기면(`setTransform`) 어댑터 translate-only 합성이 **모든 자식 타일을 함께 평행이동**(추가 코드 0). 회전·스케일은 합성하지 않음 — 타일맵 그리드 정렬 의미와 정합. **코어의 타일 로컬좌표는 컨테이너 이동에 불변**(단일 진실).
+- 타일을 다른 레이어로 옮기려면 `scene_reparent`(자기참조·고아·사이클 거부). 컨테이너 삭제 시 타일은 루트로 승격(데이터 손실 0).
+
+### 범위·권고
+- **1단계 계층만**(다단계 깊이·손자 승격은 ADR-002 한계 그대로). Isometric·hexagonal·오토타일(bitmask)·무한 청크는 범위 밖 — Phaser 런타임 타일맵 `engine/tiled.js`(TiledForge) 별개 시스템 소관.
+- **컨테이너당 타일 수 권고 상한 ~256**: 타일 1개 = 엔티티 1개라 대형 타일맵은 Hierarchy/렌더 비용. 초과 규모는 후속 컴포넌트화 재평가(OQ-2C-1).
 
 ---
 
