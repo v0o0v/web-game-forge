@@ -628,6 +628,20 @@ function pushCommand(command) {
   return { seq, newId, ids };
 }
 
+// pushCommand 실행 + 코어 거부 처리를 한곳에 묶은 공통 헬퍼. 거부({rejected,reason})면 res 에
+//  직접 422 ok:false + reason 을 써서 "거짓 성공"(seq:undefined 인데 ok:true)을 차단하고 null 을
+//  돌려준다 — 호출자는 null 이면 즉시 return. 정상이면 pushCommand 결과({seq,newId,ids})를 그대로
+//  반환해 호출자가 엔드포인트별 성공 응답을 구성한다. /api/command·instantiate 계열 4곳이 공유 —
+//  향후 instantiate 에 거부 가드(깊이·개수 상한 등)가 붙어도 거짓 성공 회귀가 원천 차단된다.
+function pushCommandOrReject(res, command) {
+  const r = pushCommand(command);
+  if (r && r.rejected) {
+    sendJSON(res, 422, { ok: false, error: '커맨드 거부: ' + r.reason, reason: r.reason });
+    return null;
+  }
+  return r;
+}
+
 function doUndo() {
   if (state.undoStack.length === 0) return null;
   const entry = state.undoStack.pop();
@@ -1249,9 +1263,9 @@ function handleApi(req, res, u, p) {
       const command = parsed && parsed.command;
       if (!command || typeof command !== 'object') { sendJSON(res, 400, { ok: false, error: 'command 누락' }); return; }
       if (state.mode === 'play') { sendJSON(res, 409, { ok: false, error: 'Play 모드 — 씬 read-only(§4.9)' }); return; }
-      const r = pushCommand(command);
-      // 코어 거부(현재 reparent 자기참조·고아·사이클) → 422 ok:false + reason(거짓 성공 차단).
-      if (r && r.rejected) { sendJSON(res, 422, { ok: false, error: '커맨드 거부: ' + r.reason, reason: r.reason }); return; }
+      // 코어 거부(현재 reparent 자기참조·고아·사이클) → 헬퍼가 422 ok:false + reason 으로 차단.
+      const r = pushCommandOrReject(res, command);
+      if (!r) return;
       sendJSON(res, 200, { ok: true, seq: r.seq, newId: r.newId, ids: r.ids });
     });
     return;
@@ -1401,7 +1415,9 @@ function handleApi(req, res, u, p) {
       if (!doc) { sendJSON(res, 400, { ok: false, error: '서브트리 직렬화 실패' }); return; }
       const parentId = (parsed && parsed.parentId != null) ? String(parsed.parentId)
         : (src.parentId != null ? String(src.parentId) : null);
-      const r = pushCommand({ type: 'instantiate', entities: doc.entities, parentId });
+      // 거부 가드 일원화(헬퍼) — instantiate 가 향후 거부를 낼 수 있어도 거짓 성공 차단.
+      const r = pushCommandOrReject(res, { type: 'instantiate', entities: doc.entities, parentId });
+      if (!r) return;
       sendJSON(res, 200, { ok: true, seq: r.seq, ids: r.ids });
     });
     return;
@@ -1417,7 +1433,9 @@ function handleApi(req, res, u, p) {
       if (!entities || !entities.length) { sendJSON(res, 400, { ok: false, error: 'entities 배열 필수' }); return; }
       if (entities.length > MAX_INSTANTIATE) { sendJSON(res, 400, { ok: false, error: '엔티티 수 상한 초과(최대 ' + MAX_INSTANTIATE + ')' }); return; }
       const parentId = (parsed && parsed.parentId != null) ? String(parsed.parentId) : null;
-      const r = pushCommand({ type: 'instantiate', entities, parentId });
+      // 거부 가드 일원화(헬퍼) — instantiate 가 향후 거부를 낼 수 있어도 거짓 성공 차단.
+      const r = pushCommandOrReject(res, { type: 'instantiate', entities, parentId });
+      if (!r) return;
       sendJSON(res, 200, { ok: true, seq: r.seq, ids: r.ids });
     });
     return;
@@ -1499,7 +1517,9 @@ function handleApi(req, res, u, p) {
         });
       }
       const parentId = (parsed && parsed.parentId != null) ? String(parsed.parentId) : null;
-      const r = pushCommand({ type: 'instantiate', entities, parentId });
+      // 거부 가드 일원화(헬퍼) — instantiate 가 향후 거부를 낼 수 있어도 거짓 성공 차단.
+      const r = pushCommandOrReject(res, { type: 'instantiate', entities, parentId });
+      if (!r) return;
       sendJSON(res, 200, { ok: true, seq: r.seq, ids: r.ids, name: target.safe });
     });
     return;
