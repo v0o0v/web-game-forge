@@ -599,6 +599,13 @@ function applyAndBroadcast(kind, command, undoDelta) {
 // 반환 {seq, newId} — addEntity 면 newId = 브리지가 발급한 확정 id(remote 클라가 즉시 회수).
 function pushCommand(command) {
   const undoDelta = SceneKit.applyCommand(state.world, command);
+  // 코어가 거부(rejected)로 표시한 커맨드(현재 reparent 가드: 자기참조·고아·사이클)는 씬 상태를
+  //  전혀 바꾸지 않으므로 undo 스택·SSE·seq 를 건드리지 않고 거부 사유만 회신한다. 이게 없으면
+  //  거부가 ok:true 성공으로 보이고(거짓 성공) undoStack 에 무의미한 noop 이 쌓여 오염된다.
+  //  다른 명령의 noop(예: 없는 엔티티 setTransform)은 rejected 미표시라 기존 동작(seq 발급) 유지 — 회귀 0.
+  if (undoDelta && undoDelta.rejected === true) {
+    return { rejected: true, reason: undoDelta.reason || 'rejected' };
+  }
   // addEntity 의 새 id 를 커맨드에 박아 redo/미러 재적용 시 같은 id 가 나오게(§ editorController 패턴).
   let stored = command;
   let newId = null;
@@ -1243,6 +1250,8 @@ function handleApi(req, res, u, p) {
       if (!command || typeof command !== 'object') { sendJSON(res, 400, { ok: false, error: 'command 누락' }); return; }
       if (state.mode === 'play') { sendJSON(res, 409, { ok: false, error: 'Play 모드 — 씬 read-only(§4.9)' }); return; }
       const r = pushCommand(command);
+      // 코어 거부(현재 reparent 자기참조·고아·사이클) → 422 ok:false + reason(거짓 성공 차단).
+      if (r && r.rejected) { sendJSON(res, 422, { ok: false, error: '커맨드 거부: ' + r.reason, reason: r.reason }); return; }
       sendJSON(res, 200, { ok: true, seq: r.seq, newId: r.newId, ids: r.ids });
     });
     return;

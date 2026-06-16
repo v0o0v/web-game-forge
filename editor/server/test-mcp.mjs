@@ -338,6 +338,61 @@ async function main() {
       await mcp.rpc('tools/call', { name: 'scene_delete_entity', arguments: { id: pId } });
     }
 
+    // ── G-REPARENT-REJECT: 거부(자기참조·고아·사이클)는 ok:false + reason(거짓 성공·undo 오염 차단) ──
+    {
+      const findEnt = (snap, id) => {
+        if (!snap || !snap.scene || !Array.isArray(snap.scene.scenes)) return null;
+        for (const s of snap.scene.scenes) {
+          if (Array.isArray(s.entities)) { const e = s.entities.find((x) => x && x.id === id); if (e) return e; }
+        }
+        return null;
+      };
+      // 부모·자식 추가 후 c→p 계층 형성.
+      const pRes = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_add_entity', arguments: { name: 'RJ부모', transform: {}, components: [] } }));
+      const cRes = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_add_entity', arguments: { name: 'RJ자식', transform: {}, components: [] } }));
+      const pId = pRes && pRes.id, cId = cRes && cRes.id;
+      await mcp.rpc('tools/call', { name: 'scene_reparent', arguments: { id: cId, parentId: pId } });
+
+      const seqBefore = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_get', arguments: {} })).seq;
+
+      // (1) 자기참조 → isError(ok:false) + reason=self-parent. (isError 는 raw result, 데이터는 parseToolResult.)
+      const selfRaw = await mcp.rpc('tools/call', { name: 'scene_reparent', arguments: { id: cId, parentId: cId } });
+      const selfR = parseToolResult(selfRaw);
+      ok('G-REPARENT-REJECT 자기참조 → isError(ok:false)',
+        !!(selfRaw.result && selfRaw.result.isError) && selfR && selfR.ok === false, `isError=${selfRaw.result && selfRaw.result.isError}`);
+      ok('G-REPARENT-REJECT 자기참조 reason=self-parent',
+        selfR && selfR.detail && selfR.detail.reason === 'self-parent', `detail=${JSON.stringify(selfR && selfR.detail)}`);
+
+      // (2) 고아(없는 부모) → isError + reason=orphan-parent.
+      const orphanRaw = await mcp.rpc('tools/call', { name: 'scene_reparent', arguments: { id: cId, parentId: 'NO_SUCH_PARENT' } });
+      const orphanR = parseToolResult(orphanRaw);
+      ok('G-REPARENT-REJECT 고아 → isError',
+        !!(orphanRaw.result && orphanRaw.result.isError) && orphanR && orphanR.ok === false, `isError=${orphanRaw.result && orphanRaw.result.isError}`);
+      ok('G-REPARENT-REJECT 고아 reason=orphan-parent',
+        orphanR && orphanR.detail && orphanR.detail.reason === 'orphan-parent', `detail=${JSON.stringify(orphanR && orphanR.detail)}`);
+
+      // (3) 사이클(p→c, 이미 c→p) → isError + reason=cycle.
+      const cycleRaw = await mcp.rpc('tools/call', { name: 'scene_reparent', arguments: { id: pId, parentId: cId } });
+      const cycleR = parseToolResult(cycleRaw);
+      ok('G-REPARENT-REJECT 사이클 → isError',
+        !!(cycleRaw.result && cycleRaw.result.isError) && cycleR && cycleR.ok === false, `isError=${cycleRaw.result && cycleRaw.result.isError}`);
+      ok('G-REPARENT-REJECT 사이클 reason=cycle',
+        cycleR && cycleR.detail && cycleR.detail.reason === 'cycle', `detail=${JSON.stringify(cycleR && cycleR.detail)}`);
+
+      // 거부는 씬을 바꾸지 않음(c.parentId=p, p 루트) + seq 불변(거짓 성공·로그 오염 차단).
+      const snapAfter = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_get', arguments: {} }));
+      const cEnt = findEnt(snapAfter, cId), pEnt = findEnt(snapAfter, pId);
+      ok('G-REPARENT-REJECT 거부 후 계층 불변(c.parentId=p, p 루트)',
+        cEnt && cEnt.parentId === pId && pEnt && pEnt.parentId == null,
+        `c.parentId=${cEnt && cEnt.parentId} p.parentId=${pEnt && pEnt.parentId}`);
+      ok('G-REPARENT-REJECT 거부는 seq 불변(상태 무변이)',
+        snapAfter && snapAfter.seq === seqBefore, `before=${seqBefore} after=${snapAfter && snapAfter.seq}`);
+
+      // 정리.
+      await mcp.rpc('tools/call', { name: 'scene_delete_entity', arguments: { id: cId } });
+      await mcp.rpc('tools/call', { name: 'scene_delete_entity', arguments: { id: pId } });
+    }
+
     // ── G-PREFAB: 2D 프리팹(scene_duplicate·save·list·instantiate_prefab, ADR-003) ──
     {
       const findEnt2 = (snap, id) => {
