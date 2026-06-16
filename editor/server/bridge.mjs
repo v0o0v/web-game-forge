@@ -216,6 +216,7 @@ function currentGameDir() {
 //  깊은복제). 쓰기 경로는 resolveScopedPath('games') 이중검증(traversal 차단, vendorFile 패턴).
 const PREFAB_FORMAT = 'wgf-prefab@1';
 const MAX_PREFABS = 256;
+const MAX_INSTANTIATE = 1024;   // 한 인스턴스화 요청의 엔티티 수 상한(DoS — MAX_SCENES·MAX_PREFABS 정합).
 
 // 프리팹 파일 경로 도출 — 이름 위생화(sanitizeSceneId 재사용: 영숫자._- 64자) + games/ 이중검증.
 function prefabFileFor(name) {
@@ -1405,6 +1406,7 @@ function handleApi(req, res, u, p) {
       if (state.mode === 'play') { sendJSON(res, 409, { ok: false, error: 'Play 모드 — 씬 read-only(§4.9)' }); return; }
       const entities = parsed && Array.isArray(parsed.entities) ? parsed.entities : null;
       if (!entities || !entities.length) { sendJSON(res, 400, { ok: false, error: 'entities 배열 필수' }); return; }
+      if (entities.length > MAX_INSTANTIATE) { sendJSON(res, 400, { ok: false, error: '엔티티 수 상한 초과(최대 ' + MAX_INSTANTIATE + ')' }); return; }
       const parentId = (parsed && parsed.parentId != null) ? String(parsed.parentId) : null;
       const r = pushCommand({ type: 'instantiate', entities, parentId });
       sendJSON(res, 200, { ok: true, seq: r.seq, ids: r.ids });
@@ -1474,6 +1476,7 @@ function handleApi(req, res, u, p) {
       try { doc = JSON.parse(fs.readFileSync(target.abs, 'utf8')); }
       catch (e) { sendJSON(res, 404, { ok: false, error: '프리팹 없음: ' + target.safe }); return; }
       if (!doc || !Array.isArray(doc.entities) || !doc.entities.length) { sendJSON(res, 400, { ok: false, error: '프리팹 손상' }); return; }
+      if (doc.entities.length > MAX_INSTANTIATE) { sendJSON(res, 400, { ok: false, error: '프리팹 엔티티 수 상한 초과(최대 ' + MAX_INSTANTIATE + ')' }); return; }
       let entities = doc.entities;
       const hasX = parsed && typeof parsed.x === 'number' && isFinite(parsed.x);
       const hasY = parsed && typeof parsed.y === 'number' && isFinite(parsed.y);

@@ -820,11 +820,17 @@
     var idMap = isObj(cmd.idMap) ? cmd.idMap : {};
     // 1차: oldId→newId 맵 구축(박힌 idMap 재사용 우선, 없으면 allocId 신규 발급).
     var recs = [];
+    var usedNew = {};   // 이번 배치에서 사용한 newId 추적 — 박힌 idMap 중복·기존 충돌 차단.
     for (var i = 0; i < srcList.length; i++) {
       var src = srcList[i];
       if (!isObj(src)) continue;
       var oldId = (src.id != null) ? String(src.id) : ('_p' + i);
       var newId = has(idMap, oldId) ? String(idMap[oldId]) : allocId(world);
+      // 박힌 idMap(미러/redo) 의 newId 라도 현 world 또는 같은 배치와 충돌하면 재발급 —
+      // cmdAddEntity 충돌 가드와 동형. 정규 redo 는 removeEntities 로 제거 후 재적용이라 충돌이
+      // 없어 같은 id 를 재현하고, 조작된 idMap(raw 명령)만 단조 재발급(중복 id·undo 오염 차단).
+      if (findEntity(world, newId) || has(usedNew, newId)) newId = allocId(world);
+      usedNew[newId] = true;
       idMap[oldId] = newId;
       recs.push({ newId: newId, src: src });
     }

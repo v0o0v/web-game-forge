@@ -1488,6 +1488,18 @@ function ScenekitStep(w) { SceneKit.step(w, 1 / 60); }
   const undoOrphan = SceneKit.applyCommand(wG, { type: 'instantiate', entities: [{ id: 'orphanRoot', name: 'X', transform: {}, components: [] }], parentId: 'NOPE' });
   ok('G30-G 고아 드롭대상(없는 부모) 무시 → 루트 최상위', SceneKit.findEntity(wG, undoOrphan.ids[0]).parentId === undefined,
     `parentId=${SceneKit.findEntity(wG, undoOrphan.ids[0]).parentId}`);
+
+  // G30-H 박힌 idMap 충돌 방어(조작/중복 idMap → 재발급, 중복 id·undo 오염 차단; code/security 리뷰 MEDIUM).
+  const wH = SceneKit.load({ walls: [], entities: [{ id: 'e1', name: 'pre', transform: {}, components: [] }] }, { mode: 'edit', seed: 1 });
+  // 조작: idMap 이 src 'x' → 기존 'e1' 로 박힘(충돌 유도) → 코어가 재발급해야 함.
+  const undoH = SceneKit.applyCommand(wH, { type: 'instantiate', entities: [{ id: 'x', name: 'inj', transform: {}, components: [] }], idMap: { x: 'e1' } });
+  const allIdsH = wH.entities.map((e) => e.id);
+  ok('G30-H 박힌 idMap 충돌 시 재발급(중복 id 없음)',
+    new Set(allIdsH).size === allIdsH.length && wH.entities.length === 2, `ids=${allIdsH.join(',')}`);
+  SceneKit.applyUndo(wH, undoH);
+  const e1H = SceneKit.findEntity(wH, 'e1');
+  ok('G30-H 충돌방어 undo → 기존 e1 보존(주입본만 제거)',
+    wH.entities.length === 1 && e1H && e1H.name === 'pre', `count=${wH.entities.length} name=${e1H && e1H.name}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
