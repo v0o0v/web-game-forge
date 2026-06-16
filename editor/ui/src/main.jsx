@@ -32,6 +32,7 @@ import {
 import { MenuBar } from './menu/MenuBar.jsx';
 import { buildMenus } from './menu/menuModel.js';
 import { createEditorSettings } from './editorSettings.js';
+import { TilePalette } from './TilePalette.jsx';
 
 // 기본 자동 로드 씬 경로(dev 서버 루트 기준).
 const DEFAULT_SCENE_URL = '/games/_editor-samples/topdown-min/scene.json';
@@ -70,6 +71,10 @@ function App({ controller, settings }) {
   const [selection, setSelection] = useState([]);
   const [gizmoMode, setGizmoMode] = useState('move');
   const [mode, setMode] = useState('edit');
+  // 타일 페인팅 상태(2C 규약).
+  const [paintMode, setPaintMode] = useState(false);
+  const [selectedTile, setSelectedTile] = useState(null);   // {assetId, frame} | null
+  const [activeLayerId, setActiveLayerId] = useState(null); // TilemapLayer 컨테이너 id
   const [undoDepth, setUndoDepth] = useState(0);
   const [redoDepth, setRedoDepth] = useState(0);
   const [docState, setDocState] = useState(null);
@@ -236,7 +241,12 @@ function App({ controller, settings }) {
   // 패널 레지스트리 — 매 렌더 최신 props 클로저(prop 구동). DockLayout 이 render() 호출.
   const panels = {
     hierarchy: { title: '계층', icon: '🗂', render: () => <Hierarchy controller={controller} world={world} selection={selection} /> },
-    viewport: { title: '뷰포트', icon: '🎬', render: () => <Viewport controller={controller} sceneDoc={docState} /> },
+    viewport: { title: '뷰포트', icon: '🎬', render: () => (
+      <Viewport controller={controller} sceneDoc={docState}
+                paintMode={paintMode} selectedTile={selectedTile}
+                snapSize={snapSize} activeLayerId={activeLayerId}
+                onLayerCreated={(id) => setActiveLayerId(id)} />
+    ) },
     inspector: { title: '속성', icon: '🔧', render: () => <Inspector controller={controller} world={world} selection={selection} /> },
     assets: { title: '에셋', icon: '🖼', render: () => <AssetBrowser controller={controller} selection={selection} /> },
     skills: { title: '스킬', icon: '✨', render: () => <SkillMenu controller={controller} /> },
@@ -253,7 +263,13 @@ function App({ controller, settings }) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <MenuBar menus={menus} />
       <Toolbar controller={controller} gizmoMode={gizmoMode} snap={snap} snapSize={snapSize}
-               mode={mode} undoDepth={undoDepth} redoDepth={redoDepth} onSnapChange={onSnapChange} />
+               mode={mode} undoDepth={undoDepth} redoDepth={redoDepth} onSnapChange={onSnapChange}
+               paintMode={paintMode}
+               onPaintToggle={() => setPaintMode((p) => !p)} />
+      {paintMode && (
+        <TilePalette controller={controller} selectedTile={selectedTile}
+                     onSelect={setSelectedTile} />
+      )}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <DockLayout panels={panels} layout={layout} onLayoutChange={updateLayout} />
       </div>

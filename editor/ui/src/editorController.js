@@ -280,6 +280,9 @@ export function createController(opts) {
       transform: partial.transform || { x: 160, y: 120 },
       components: partial.components || []
     };
+    // parentId 지원(TilemapLayer 타일 배치용 — 2C 규약).
+    // 코어 normalizeEntity 가 parentId 를 보존하므로 entity 에 넣기만 하면 됨.
+    if (partial.parentId != null) entity.parentId = partial.parentId;
     if (isRemote) {
       // remote: 브리지가 id 발급 → POST 응답 newId 회수 후 select. Promise<newId> 반환.
       return Promise.resolve(applyCommand({ type: 'addEntity', entity: entity })).then((r) => {
@@ -294,6 +297,13 @@ export function createController(opts) {
     const newId = (undoDelta && undoDelta.type === 'removeEntity') ? undoDelta.id : null;
     if (newId) select([newId]);
     return newId;
+  }
+
+  // ── reparent ────────────────────────────────────────────────────────────────
+  // 엔티티의 parentId 를 변경(2A 계층 소비). 코어 'reparent' 커맨드 위임.
+  // (현재 editor/ui 미사용 — 향후 타일 이동·레이어 편입 UI 의 확장점. MCP scene_reparent 와 별개 경로.)
+  function reparent(id, parentId) {
+    return applyCommand({ type: 'reparent', id: id, parentId: parentId });
   }
 
   // ── 트랜스폼 편집 ───────────────────────────────────────────────────────────
@@ -701,7 +711,7 @@ export function createController(opts) {
   return {
     mount, applyCommand, undo, redo, undoDepth, redoDepth,
     select, getSelection, addEntity, setTransform,
-    updateComponent, addComponent, removeComponent, removeEntity,
+    updateComponent, addComponent, removeComponent, removeEntity, reparent,
     getWorld, serialize, hash, entityCount,
     save, reloadFromSaved, loadScene,
     setSnap, setGizmoMode, getGizmoMode, setMode, getMode,

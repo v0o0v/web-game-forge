@@ -2,7 +2,8 @@
  *           Claude 연결 하트비트 인디케이터(P3). */
 import { useState, useEffect } from 'preact/hooks';
 
-export function Toolbar({ controller, gizmoMode, snap, snapSize, mode, undoDepth, redoDepth, onSnapChange }) {
+export function Toolbar({ controller, gizmoMode, snap, snapSize, mode, undoDepth, redoDepth, onSnapChange,
+                          paintMode, onPaintToggle }) {
   const [savedMsg, setSavedMsg] = useState('');
   const [claudeStatus, setClaudeStatus] = useState(
     controller.getClaudeStatus ? controller.getClaudeStatus() : 'local');
@@ -60,6 +61,10 @@ export function Toolbar({ controller, gizmoMode, snap, snapSize, mode, undoDepth
         <Btn disabled={undoDepth === 0} onClick={() => controller.undo()} title={'실행 취소 (' + undoDepth + ')'}>↶ Undo</Btn>
         <Btn disabled={redoDepth === 0} onClick={() => controller.redo()} title={'다시 실행 (' + redoDepth + ')'}>↷ Redo</Btn>
         <Btn onClick={addEntity} title="엔티티 추가">＋ 엔티티</Btn>
+      </Group>
+
+      <Group label="타일">
+        <Btn active={paintMode} onClick={onPaintToggle} title="타일 페인트 모드 ON/OFF">🎨 페인트</Btn>
       </Group>
 
       <Group label="씬">

@@ -5,10 +5,17 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { spriteApi } from './sprite/spriteApi.js';
 
-export function Viewport({ controller, sceneDoc }) {
+export function Viewport({ controller, sceneDoc, paintMode, selectedTile, snapSize, activeLayerId, onLayerCreated }) {
   const hostRef = useRef(null);
   const mountedRef = useRef(false);
   const [dragHover, setDragHover] = useState(false);
+  // 페인팅 중 마우스 버튼 눌림 추적 + 마지막 페인트된 격자(중복 skip 용).
+  const paintingRef = useRef(false);
+  const lastGridRef = useRef(null); // 'x,y' 문자열 키
+  // 결함 2 수정: activeLayerId prop 을 ref 에 미러 — Preact 비동기 setState 보다
+  // ref 갱신이 선행되므로 연속 드래그 시 컨테이너 중복 생성 race 를 차단한다.
+  const activeLayerRef = useRef(activeLayerId);
+  useEffect(() => { activeLayerRef.current = activeLayerId; }, [activeLayerId]);
 
   useEffect(() => {
     if (!hostRef.current || mountedRef.current) return;
@@ -39,6 +46,107 @@ export function Viewport({ controller, sceneDoc }) {
     const worldX = (ev.clientX - rect.left) * scaleX;
     const worldY = (ev.clientY - rect.top) * scaleY;
     return { x: worldX, y: worldY };
+  }
+
+  // ── 타일 페인팅 ─────────────────────────────────────────────────────────────
+  // snapSize(격자 크기)로 월드 좌표를 격자에 스냅.
+  function snapToGrid(v, size) {
+    const s = (size && size > 0) ? size : 16;
+    return Math.round(v / s) * s;
+  }
+
+  // 격자 위치에 타일이 이미 있는지 검사(같은 parentId·같은 로컬 x,y).
+  function tileExistsAt(parentId, localX, localY) {
+    const world = controller.getWorld ? controller.getWorld() : null;
+    if (!world || !Array.isArray(world.entities)) return false;
+    return world.entities.some((e) =>
+      e.parentId === parentId &&
+      e.transform && e.transform.x === localX && e.transform.y === localY
+    );
+  }
+
+  // 컨테이너 엔티티의 월드 transform 회수(로컬좌표 계산용).
+  function containerTransform(parentId) {
+    const world = controller.getWorld ? controller.getWorld() : null;
+    if (!world || !Array.isArray(world.entities)) return { x: 0, y: 0 };
+    const c = world.entities.find((e) => e.id === parentId);
+    return (c && c.transform) ? c.transform : { x: 0, y: 0 };
+  }
+
+  // 단일 격자에 타일 배치. 비동기(remote) + 동기(local) 양 경로 지원.
+  async function paintAt(worldX, worldY) {
+    if (!selectedTile) return;
+    const snap = (snapSize && snapSize > 0) ? snapSize : 16;
+    const gridX = snapToGrid(worldX, snap);
+    const gridY = snapToGrid(worldY, snap);
+    const gridKey = gridX + ',' + gridY;
+
+    // 연속 드래그 중 같은 격자 재진입 skip.
+    if (lastGridRef.current === gridKey) return;
+    lastGridRef.current = gridKey;
+
+    // 활성 레이어 없으면 컨테이너 생성.
+    // 결함(MED, code-review): in-flight Promise 자체를 ref 에 *await 전에* 즉시 저장한다.
+    //  remote(POST 왕복) addEntity 의 await 동안 다음 paintAt 이 재진입해도, ref 가 이미
+    //  pending Promise 라 그것을 공유 await 하여 컨테이너를 1개만 만든다(중복생성 race 차단).
+    //  TilePalette.getOrUseSheet 의 검증된 in-flight 캐시 패턴과 동일.
+    let lid = activeLayerRef.current;
+    if (lid && typeof lid.then === 'function') lid = await lid;   // ref 가 in-flight Promise 면 공유 대기
+    if (!lid) {
+      const pending = Promise.resolve(controller.addEntity({
+        name: 'TilemapLayer:layer1',
+        transform: { x: 0, y: 0 },
+        components: []
+      }));
+      activeLayerRef.current = pending;          // await 전에 즉시 점유 — 재진입이 이 Promise 를 공유
+      lid = await pending;
+      if (lid != null) {
+        activeLayerRef.current = lid;            // 확정 id 로 교체
+        if (typeof onLayerCreated === 'function') onLayerCreated(lid);
+      } else {
+        activeLayerRef.current = null;           // 실패 시 해제(재시도 허용)
+        return;
+      }
+    }
+
+    // 컨테이너 월드 transform → 로컬 좌표 계산.
+    const ct = containerTransform(lid);
+    const localX = gridX - (ct.x || 0);
+    const localY = gridY - (ct.y || 0);
+
+    // 중복 격자 skip.
+    if (tileExistsAt(lid, localX, localY)) return;
+
+    // 타일 엔티티 생성.
+    await Promise.resolve(controller.addEntity({
+      name: 'tile',
+      parentId: lid,
+      transform: { x: localX, y: localY },
+      components: [{ type: 'Sprite', sprite: selectedTile.assetId, frame: selectedTile.frame }]
+    }));
+  }
+
+  function onPaintMouseDown(ev) {
+    if (!paintMode || !selectedTile) return;
+    if (ev.button !== 0) return; // 좌클릭만
+    ev.preventDefault();
+    paintingRef.current = true;
+    lastGridRef.current = null;
+    const world = toWorld(ev);
+    if (world) paintAt(world.x, world.y);
+  }
+
+  function onPaintMouseMove(ev) {
+    if (!paintMode || !paintingRef.current || !selectedTile) return;
+    ev.preventDefault();
+    const world = toWorld(ev);
+    if (world) paintAt(world.x, world.y);
+  }
+
+  function onPaintMouseUp(ev) {
+    if (!paintMode) return;
+    paintingRef.current = false;
+    lastGridRef.current = null;
   }
 
   function onDragOver(ev) {
@@ -112,11 +220,18 @@ export function Viewport({ controller, sceneDoc }) {
   }
 
   return (
-    <div onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}
+    <div onDragOver={paintMode ? undefined : onDragOver}
+         onDragLeave={paintMode ? undefined : onDragLeave}
+         onDrop={paintMode ? undefined : onDrop}
+         onMouseDown={paintMode ? onPaintMouseDown : undefined}
+         onMouseMove={paintMode ? onPaintMouseMove : undefined}
+         onMouseUp={paintMode ? onPaintMouseUp : undefined}
+         onMouseLeave={paintMode ? onPaintMouseUp : undefined}
          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
                   background: 'var(--viewport-bg, #0e1016)', overflow: 'auto', padding: '12px',
                   outline: dragHover ? '2px dashed var(--accent, #4a9eff)' : 'none',
-                  outlineOffset: '-4px' }}>
+                  outlineOffset: '-4px',
+                  cursor: paintMode ? (selectedTile ? 'crosshair' : 'not-allowed') : 'default' }}>
       <div ref={hostRef} id="wgf-viewport"
            style={{ boxShadow: '0 0 0 1px #2c3346', lineHeight: 0 }} />
     </div>

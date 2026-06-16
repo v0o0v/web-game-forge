@@ -1324,6 +1324,72 @@ function ScenekitStep(w) { SceneKit.step(w, 1 / 60); }
     `h0=${h0} reload=${SceneKit.hashState(w2)}`);
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// G29  묶음H 2C 타일맵 — TilemapLayer 컨테이너 규약(parentId 순수소비·코어 무수정)
+//   A 회귀앵커: 코어 무수정 → G28-A 골든 해시 불변(기계증명)
+//   B 컨테이너+다중타일 결정성 + 전 타일 parentId 연결
+//   C 컨테이너 이동 → 코어 타일 로컬좌표 불변(translate 합성은 어댑터 전용·단일진실)
+//   D 컨테이너 삭제 → 전 타일 루트 승격 + undo 원복
+//   E serialize→재load 타일맵 동형(parentId 보존)
+// ═════════════════════════════════════════════════════════════════════════════
+{
+  // G29-A: 2C 는 코어를 한 줄도 안 건드린다 → flat 골든 해시가 여전히 불변(코어 무수정 기계증명).
+  const GOLD_T0 = '4f7683f9';
+  const wf = SceneKit.load(SCENE_DOC, { mode: 'play', seed: 42 });
+  const a0 = SceneKit.hashState(wf);
+  ok('G29-A 코어 무수정 — flat 골든 해시 불변(2C 회귀앵커)', a0 === GOLD_T0, `actual=${a0} gold=${GOLD_T0}`);
+}
+{
+  // 타일맵 픽스처: 컨테이너 1 + 타일 4개(2×2 격자, parentId=컨테이너, frame=row*cols+col).
+  function buildTilemap() {
+    return { walls: [], entities: [
+      { id: 'layer_ground', name: 'TilemapLayer:ground', transform: { x: 100, y: 80 }, components: [] },
+      { id: 't00', name: '타일0', transform: { x: 0,  y: 0  }, parentId: 'layer_ground', components: [{ type: 'Sprite', sprite: 'tileset', frame: 0 }] },
+      { id: 't10', name: '타일1', transform: { x: 16, y: 0  }, parentId: 'layer_ground', components: [{ type: 'Sprite', sprite: 'tileset', frame: 1 }] },
+      { id: 't01', name: '타일2', transform: { x: 0,  y: 16 }, parentId: 'layer_ground', components: [{ type: 'Sprite', sprite: 'tileset', frame: 4 }] },
+      { id: 't11', name: '타일3', transform: { x: 16, y: 16 }, parentId: 'layer_ground', components: [{ type: 'Sprite', sprite: 'tileset', frame: 5 }] }
+    ] };
+  }
+  const tiles = ['t00', 't10', 't01', 't11'];
+
+  // G29-B 결정성 + 전 타일 parentId 연결.
+  const wa = SceneKit.load(buildTilemap(), { mode: 'edit', seed: 1 });
+  const wb = SceneKit.load(buildTilemap(), { mode: 'edit', seed: 1 });
+  ok('G29-B 타일맵 씬 결정성(2회 hashState 일치)', SceneKit.hashState(wa) === SceneKit.hashState(wb),
+    `ha=${SceneKit.hashState(wa)} hb=${SceneKit.hashState(wb)}`);
+  ok('G29-B 전 타일 parentId=컨테이너', tiles.every(id => SceneKit.findEntity(wa, id).parentId === 'layer_ground'),
+    `linked=${tiles.map(id => SceneKit.findEntity(wa, id).parentId).join(',')}`);
+
+  // G29-C 컨테이너 이동 → 코어 타일 로컬좌표 불변(translate 합성은 어댑터 전용·단일진실).
+  const before = tiles.map(id => { const t = SceneKit.findEntity(wa, id).transform; return { id, x: t.x, y: t.y }; });
+  SceneKit.applyCommand(wa, { type: 'setTransform', id: 'layer_ground', transform: { x: 999, y: 555 } });
+  const after = tiles.map(id => { const t = SceneKit.findEntity(wa, id).transform; return { id, x: t.x, y: t.y }; });
+  ok('G29-C 컨테이너 이동 — 코어 타일 로컬좌표 불변(어댑터만 합성)',
+    JSON.stringify(before) === JSON.stringify(after), `before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
+
+  // G29-D 컨테이너 삭제 → 타일 승격 + undo 원복.
+  const w2 = SceneKit.load(buildTilemap(), { mode: 'edit', seed: 1 });
+  const h0 = SceneKit.hashState(w2);
+  const undo = SceneKit.applyCommand(w2, { type: 'removeEntity', id: 'layer_ground' });
+  ok('G29-D 컨테이너 삭제 → 전 타일 루트 승격',
+    SceneKit.findEntity(w2, 'layer_ground') === null && tiles.every(id => { const e = SceneKit.findEntity(w2, id); return e && e.parentId === undefined; }),
+    `promoted=${tiles.map(id => { const e = SceneKit.findEntity(w2, id); return e && e.parentId; }).join(',')}`);
+  SceneKit.applyUndo(w2, undo);
+  ok('G29-D 삭제 undo → 해시 원복 + 타일 parentId 복원',
+    SceneKit.hashState(w2) === h0 && tiles.every(id => SceneKit.findEntity(w2, id).parentId === 'layer_ground'),
+    `h0=${h0} now=${SceneKit.hashState(w2)}`);
+
+  // G29-E serialize → 재load 동형성(타일 parentId 보존).
+  const w3 = SceneKit.load(buildTilemap(), { mode: 'edit', seed: 1 });
+  const ser = SceneKit.serialize(w3);
+  const w4 = SceneKit.load(ser, { mode: 'edit', seed: 1 });
+  ok('G29-E serialize→재load 타일맵 동형(parentId 보존)', SceneKit.hashState(w4) === SceneKit.hashState(w3),
+    `orig=${SceneKit.hashState(w3)} reload=${SceneKit.hashState(w4)}`);
+  const tileSer = ser.entities.find(e => e.id === 't11');
+  ok('G29-E serialize 타일 parentId 보존(=layer_ground)', tileSer && tileSer.parentId === 'layer_ground',
+    `parentId=${tileSer && tileSer.parentId}`);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 결과 출력
 // ─────────────────────────────────────────────────────────────────────────────
