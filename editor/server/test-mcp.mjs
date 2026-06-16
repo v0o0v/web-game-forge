@@ -7,8 +7,9 @@
  * 클라이언트를 시뮬레이션).
  *
  * 게이트:
- *   G-MCP   MCP JSON-RPC: initialize → tools/list(22종) → tools/call 동작.
+ *   G-MCP   MCP JSON-RPC: initialize → tools/list(29종) → tools/call 동작.
  *           newline-delimited 프레이밍 파싱 검증.
+ *   G-SCENE 멀티 씬 MCP 도구 e2e: scene_list/add/switch(멱등·없는씬 에러)/rename/remove.
  *   G-CHAT  챗 "적 3마리 추가" e2e(메커니즘): POST /api/chat → editor_next_message
  *           디큐 → scene_add_entity ×3(MCP→브리지) → 엔티티 +3 → editor_reply →
  *           에디터 SSE 구독자가 reply 수신.
@@ -214,13 +215,14 @@ async function main() {
 
       const listRes = await mcp.rpc('tools/list', {});
       const tools = listRes.result && listRes.result.tools;
-      ok('G-MCP tools/list 도구 목록(24종 — P4 4종 + P6 unity 2종 추가)',
-        Array.isArray(tools) && tools.length === 24,
+      ok('G-MCP tools/list 도구 목록(29종 — P4 4종 + P6 unity 2종 + 멀티씬 5종 추가)',
+        Array.isArray(tools) && tools.length === 29,
         `count=${tools && tools.length}`);
       // 핵심 도구 존재 단언(P4 추가 4종 포함).
       const names = (tools || []).map((t) => t.name);
       const required = ['scene_get', 'scene_add_entity', 'scene_set_transform', 'editor_next_message', 'editor_reply', 'undo', 'redo', 'project_list',
-        'skill_run_tool', 'asset_list', 'asset_add_procedural', 'asset_add_cc0'];
+        'skill_run_tool', 'asset_list', 'asset_add_procedural', 'asset_add_cc0',
+        'scene_list', 'scene_switch', 'scene_add', 'scene_rename', 'scene_remove'];
       const allPresent = required.every((n) => names.includes(n));
       ok('G-MCP 필수 도구 스키마 노출', allPresent, `missing=${required.filter((n) => !names.includes(n)).join(',') || 'none'}`);
       // 스키마 형태(각 도구 inputSchema.type === object).
@@ -243,6 +245,54 @@ async function main() {
       // 미지원 메서드 → -32601.
       const badMethod = await mcp.rpc('no/such/method', {});
       ok('G-MCP 미지원 메서드 → -32601', badMethod.error && badMethod.error.code === -32601, `code=${badMethod.error && badMethod.error.code}`);
+    }
+
+    // ── G-SCENE: 멀티 씬 MCP 도구(list/add/switch/rename/remove) e2e ────────────
+    {
+      // 초기 목록 — 최소 1개 씬 + activeSceneId.
+      const list0 = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_list', arguments: {} }));
+      ok('G-SCENE scene_list 초기',
+        list0 && list0.ok === true && Array.isArray(list0.scenes) && list0.scenes.length >= 1 && typeof list0.activeSceneId === 'string',
+        `count=${list0 && list0.scenes && list0.scenes.length} active=${list0 && list0.activeSceneId}`);
+      const n0 = list0.scenes.length;
+      const firstId = list0.activeSceneId;
+
+      // scene_add — 새 씬 추가(전환 안 함 → activeSceneId 불변).
+      const addOut = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_add', arguments: { name: 'Level 2' } }));
+      ok('G-SCENE scene_add 새 씬(active 불변)',
+        addOut && addOut.ok === true && addOut.scene && typeof addOut.scene.id === 'string' && addOut.activeSceneId === firstId,
+        `newId=${addOut && addOut.scene && addOut.scene.id}`);
+      const newId = addOut && addOut.scene && addOut.scene.id;
+
+      // scene_list — 개수 +1.
+      const list1 = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_list', arguments: {} }));
+      ok('G-SCENE scene_list 추가 반영(+1)', list1 && list1.scenes.length === n0 + 1, `count=${list1 && list1.scenes && list1.scenes.length}`);
+
+      // scene_switch — 새 씬으로 전환.
+      const swOut = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_switch', arguments: { id: newId } }));
+      ok('G-SCENE scene_switch 활성 전환', swOut && swOut.ok === true && swOut.activeSceneId === newId, `active=${swOut && swOut.activeSceneId}`);
+
+      // scene_switch 멱등(이미 활성) — 에러 아님.
+      const swIdem = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_switch', arguments: { id: newId } }));
+      ok('G-SCENE scene_switch 멱등(이미 활성)', swIdem && swIdem.ok === true && swIdem.activeSceneId === newId);
+
+      // scene_switch 없는 씬 → 구조화 에러(isError).
+      const swBad = await mcp.rpc('tools/call', { name: 'scene_switch', arguments: { id: 'no-such-scene' } });
+      const swBadOut = parseToolResult(swBad);
+      ok('G-SCENE scene_switch 없는 씬 → 구조화 에러',
+        swBad.result && swBad.result.isError === true && swBadOut && swBadOut.ok === false,
+        `isError=${swBad.result && swBad.result.isError}`);
+
+      // scene_rename — 추가한 씬 이름 변경.
+      const rnOut = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_rename', arguments: { id: newId, name: 'Renamed' } }));
+      const renamed = rnOut && rnOut.scenes && rnOut.scenes.find((s) => s.id === newId);
+      ok('G-SCENE scene_rename', rnOut && rnOut.ok === true && renamed && renamed.name === 'Renamed', `name=${renamed && renamed.name}`);
+
+      // scene_remove — 활성(추가) 씬 제거 → 남은 첫 씬으로 복귀, 개수 원복.
+      const rmOut = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_remove', arguments: { id: newId } }));
+      ok('G-SCENE scene_remove(활성 제거→첫 씬 복귀)',
+        rmOut && rmOut.ok === true && rmOut.scenes.length === n0 && rmOut.activeSceneId === firstId,
+        `count=${rmOut && rmOut.scenes && rmOut.scenes.length} active=${rmOut && rmOut.activeSceneId}`);
     }
 
     // ── G-CHAT: "적 3마리 추가" e2e(메커니즘) ──────────────────────────────────
