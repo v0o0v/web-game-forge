@@ -207,7 +207,7 @@ function AnimatedSpritePreview({ world, comp }) {
       </div>
       <div style={{ marginTop: '6px', display: 'flex', justifyContent: 'center' }}>
         {!img
-          ? <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>미리보기 로딩…</span>
+          ? <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{!url ? '스프라이트 자산 없음' : '미리보기 로딩…'}</span>
           : (playing && frameSeq.length > 0)
             ? <AnimPreview img={img} frameSeq={frameSeq} fps={fps} pixel={pixel} loop={loop} size={80} />
             : <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
