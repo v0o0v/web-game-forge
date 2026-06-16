@@ -706,7 +706,22 @@
       var go = spriteByEntity[ent.id];
       if (!go) return;
       var t = ent.transform;
-      go.setPosition(toScreenX(num(t.x, 0)), toScreenY(num(t.y, 0)));
+      // 계층(2A): 부모 체인 translate-only 합성(read-only — 코어 ent.transform 불변·단일 진실).
+      //   회전·스케일은 합성하지 않는다(과설계 경계, OQ5). 부모 없으면 오프셋 0 = 기존과 동일.
+      //   사이클 방어(seen) + 깊이 가드. 코어가 사이클을 거부하므로 정상 데이터엔 영향 없음.
+      var ox = 0, oy = 0;
+      if (ent.parentId != null && state.world) {
+        var seen = {}, pid = ent.parentId, guard = 0;
+        while (pid != null && !seen[pid] && guard++ < 10000) {
+          seen[pid] = true;
+          var p = SceneKit.findEntity(state.world, pid);
+          if (!p) break;
+          ox += num(p.transform.x, 0);
+          oy += num(p.transform.y, 0);
+          pid = (p.parentId != null) ? p.parentId : null;
+        }
+      }
+      go.setPosition(toScreenX(num(t.x, 0) + ox), toScreenY(num(t.y, 0) + oy));
       go.setRotation(num(t.rotation, 0));
       go.setScale(num(t.scaleX, 1), num(t.scaleY, 1));
       go.setDepth(num(t.depth, 0));

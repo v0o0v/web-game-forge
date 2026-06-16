@@ -1,0 +1,29 @@
+{
+  "format": "wgf-scene@1",
+  "slug": "hierarchy-demo",
+  "meta": { "title": "계층 데모(2A reparent)", "genre": "topdown", "viewport": { "w": 320, "h": 240 } },
+  "assets": { "sprites": [] },
+  "walls": [],
+  "scenes": [
+    {
+      "id": "main",
+      "systems": {},
+      "entities": [
+        {
+          "id": "parent",
+          "name": "부모박스",
+          "transform": { "x": 120, "y": 120, "rotation": 0, "scaleX": 1, "scaleY": 1, "depth": 0 },
+          "components": [{ "type": "Body", "shape": "aabb", "w": 48, "h": 48, "isStatic": true }]
+        },
+        {
+          "id": "child",
+          "name": "자식원",
+          "transform": { "x": 60, "y": 0, "rotation": 0, "scaleX": 1, "scaleY": 1, "depth": 1 },
+          "parentId": "parent",
+          "components": [{ "type": "Body", "shape": "circle", "radius": 12, "isStatic": true }]
+        }
+      ]
+    }
+  ],
+  "dataLayers": {}
+}

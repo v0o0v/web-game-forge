@@ -181,6 +181,9 @@
     for (var i = 0; i < comps.length; i++) {
       ent.components.push(cloneComponent(comps[i]));
     }
+    // 계층(2A·OQ5=(b)): parentId 는 비어있지 않을 때만 보존 — 없으면 키 자체를 만들지
+    // 않아 flat 엔티티의 hashState/serialize 입력이 비트 단위로 불변(회귀 0 구조보장).
+    if (raw.parentId != null && String(raw.parentId) !== '') ent.parentId = String(raw.parentId);
     return ent;
   }
 
@@ -550,6 +553,7 @@
         components: []
       };
       for (var c = 0; c < ent.components.length; c++) out.components.push(cloneComponent(ent.components[c]));
+      if (ent.parentId != null) out.parentId = ent.parentId;   // 계층(2A) — parentId 가 있을 때(!= null)만 보존
       doc.entities.push(out);
     }
     return doc;
@@ -573,6 +577,10 @@
         ':', round6(num(t.x, 0)), round6(num(t.y, 0)), round6(num(t.rotation, 0)),
         round6(num(t.scaleX, 1)), round6(num(t.scaleY, 1)), round6(num(t.depth, 0))
       );
+      // 계층(2A·OQ5=(b)): parentId 가 있을 때(!= null)만 토큰 추가 → parentId 없는 기존
+      // flat 씬의 해시 입력 문자열이 비트 단위로 불변(회귀 0 구조보장).
+      // (normalizeEntity 가 빈 문자열 parentId 를 애초에 키로 만들지 않아 != null = non-empty.)
+      if (e.parentId != null) parts.push(':p', e.parentId);
       // 컴포넌트 — 선언 순서 유지(같은 type 다중 컴포넌트 구분), 필드는 키 정렬.
       for (var c = 0; c < e.components.length; c++) {
         parts.push(';', stableComponent(e.components[c]));
@@ -651,6 +659,7 @@
       case 'removeComponent': return cmdRemoveComponent(world, cmd);
       case 'addEntity': return cmdAddEntity(world, cmd);
       case 'removeEntity': return cmdRemoveEntity(world, cmd);
+      case 'reparent': return cmdReparent(world, cmd);
       default: return { type: 'noop' };
     }
   }
@@ -729,6 +738,35 @@
     return { type: '__insertComponentAt', id: ent.id, index: idx, component: removed };
   }
 
+  // ── reparent(계층 2A) — 부모 변경. parentId=null/생략/빈문자열 = 루트로 승격. ─────
+  //   가드: 대상 없음·자기참조·존재하지 않는 부모(고아)·사이클(부모의 조상에 자신) → noop.
+  //   결정론: 무작위·시간 미사용. undoDelta = 역방향 reparent(이전 parentId 복원).
+  //   합성(부모-따라가기 시각효과)은 코어가 아니라 어댑터(scenekit-phaser) translate-only.
+  function cmdReparent(world, cmd) {
+    var ent = findEntity(world, cmd.id);
+    if (!ent) return { type: 'noop' };
+    var newParent = (cmd.parentId == null || String(cmd.parentId) === '') ? null : String(cmd.parentId);
+    var before = (ent.parentId == null) ? null : ent.parentId;
+    if (newParent !== null) {
+      if (newParent === ent.id) return { type: 'noop' };                 // 자기참조 금지
+      if (!findEntity(world, newParent)) return { type: 'noop' };        // 고아(부모 부재) 금지
+      if (wouldCycle(world, ent.id, newParent)) return { type: 'noop' }; // 사이클 금지
+    }
+    if (newParent === null) delete ent.parentId; else ent.parentId = newParent;
+    return { type: 'reparent', id: ent.id, parentId: before };
+  }
+
+  // 사이클 가드: newParentId 의 조상 체인을 타고 올라가다 childId 를 만나면 사이클.
+  function wouldCycle(world, childId, newParentId) {
+    var cur = newParentId, guard = 0;
+    while (cur != null && guard++ < 100000) {
+      if (cur === childId) return true;
+      var p = findEntity(world, cur);
+      cur = (p && p.parentId != null) ? p.parentId : null;
+    }
+    return false;
+  }
+
   function cmdAddEntity(world, cmd) {
     var ent = normalizeEntity(cmd.entity, world);
     // id 충돌 방지: 이미 있으면 새 id 발급.
@@ -742,16 +780,30 @@
   function cmdRemoveEntity(world, cmd) {
     var idx = findEntityIndex(world, cmd.id);
     if (idx < 0) return { type: 'noop' };
+    var removedId = world.entities[idx].id;
     var removed = serializeEntity(world.entities[idx]);
     world.entities.splice(idx, 1);
-    // undo: 같은 위치에 복원.
-    return { type: '__insertEntityAt', index: idx, entity: removed };
+    // 계층(2A·ADR-002): 부모 삭제 = 자식 승격(cascade 아님). parentId===삭제대상인
+    // 엔티티의 parentId 만 제거해 루트로 승격하고, 승격분을 undoDelta 에 복합 포함한다.
+    var promoted = [];
+    for (var i = 0; i < world.entities.length; i++) {
+      var ce = world.entities[i];
+      if (ce.parentId != null && ce.parentId === removedId) {
+        promoted.push(ce.id);
+        delete ce.parentId;
+      }
+    }
+    // undo: 같은 위치에 복원 + 승격 자식 parentId 되돌림.
+    var undo = { type: '__insertEntityAt', index: idx, entity: removed };
+    if (promoted.length) { undo._promotedChildren = promoted; undo._formerParent = removedId; }
+    return undo;
   }
 
   // 엔티티 1개 깊은 복제(직렬화 형태).
   function serializeEntity(ent) {
     var out = { id: ent.id, name: ent.name, transform: normalizeTransform(ent.transform), components: [] };
     for (var c = 0; c < ent.components.length; c++) out.components.push(cloneComponent(ent.components[c]));
+    if (ent.parentId != null) out.parentId = ent.parentId;   // 계층(2A) — parentId 가 있을 때(!= null)만 보존
     return out;
   }
 
@@ -777,6 +829,13 @@
         world.entities.splice(at, 0, ent2);
         bumpIdSeq(world);
         initEntity(ent2, world);
+        // 계층(2A·ADR-002): 삭제 시 승격됐던 자식들의 parentId 를 원래 부모로 복원.
+        if (undoDelta._promotedChildren && undoDelta._formerParent != null) {
+          for (var pi = 0; pi < undoDelta._promotedChildren.length; pi++) {
+            var ch = findEntity(world, undoDelta._promotedChildren[pi]);
+            if (ch) ch.parentId = undoDelta._formerParent;
+          }
+        }
         return;
       }
       case 'updateComponent': {

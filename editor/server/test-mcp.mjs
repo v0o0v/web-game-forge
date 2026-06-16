@@ -222,7 +222,7 @@ async function main() {
       const names = (tools || []).map((t) => t.name);
       const required = ['scene_get', 'scene_add_entity', 'scene_set_transform', 'editor_next_message', 'editor_reply', 'undo', 'redo', 'project_list',
         'skill_run_tool', 'asset_list', 'asset_add_procedural', 'asset_add_cc0',
-        'scene_list', 'scene_switch', 'scene_add', 'scene_rename', 'scene_remove'];
+        'scene_list', 'scene_switch', 'scene_add', 'scene_rename', 'scene_remove', 'scene_reparent'];
       const allPresent = required.every((n) => names.includes(n));
       ok('G-MCP 필수 도구 스키마 노출', allPresent, `missing=${required.filter((n) => !names.includes(n)).join(',') || 'none'}`);
       // 스키마 형태(각 도구 inputSchema.type === object).
@@ -295,6 +295,46 @@ async function main() {
       ok('G-SCENE scene_remove(활성 제거→첫 씬 복귀)',
         rmOut && rmOut.ok === true && rmOut.scenes.length === n0 && rmOut.activeSceneId === firstId,
         `count=${rmOut && rmOut.scenes && rmOut.scenes.length} active=${rmOut && rmOut.activeSceneId}`);
+    }
+
+    // ── G-REPARENT: 계층 reparent MCP 도구(2A) 성공 경로 + 루트 승격 ─────────────
+    {
+      // 어느 씬에서든 id 로 엔티티를 찾는 헬퍼(scene_get 스냅샷).
+      const findEnt = (snap, id) => {
+        if (!snap || !snap.scene || !Array.isArray(snap.scene.scenes)) return null;
+        for (const s of snap.scene.scenes) {
+          if (Array.isArray(s.entities)) {
+            const e = s.entities.find((x) => x && x.id === id);
+            if (e) return e;
+          }
+        }
+        return null;
+      };
+
+      // 부모·자식 엔티티 추가(MCP→브리지). 응답 = { ok, id, seq }.
+      const pRes = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_add_entity', arguments: { name: 'H부모', transform: { x: 100, y: 50 }, components: [] } }));
+      const cRes = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_add_entity', arguments: { name: 'H자식', transform: { x: 10, y: 0 }, components: [] } }));
+      const pId = pRes && pRes.id, cId = cRes && cRes.id;
+      ok('G-REPARENT 부모·자식 추가', typeof pId === 'string' && typeof cId === 'string', `pId=${pId} cId=${cId}`);
+
+      // scene_reparent(자식→부모) 성공.
+      const rpOut = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_reparent', arguments: { id: cId, parentId: pId } }));
+      ok('G-REPARENT scene_reparent 성공(seq 반환)', rpOut && rpOut.ok === true && typeof rpOut.seq === 'number',
+        `ok=${rpOut && rpOut.ok} seq=${rpOut && rpOut.seq}`);
+
+      // scene_get 으로 자식 parentId 반영 확인.
+      const child1 = findEnt(parseToolResult(await mcp.rpc('tools/call', { name: 'scene_get', arguments: {} })), cId);
+      ok('G-REPARENT 자식 parentId=부모 반영(브리지 단일 진실)', child1 && child1.parentId === pId, `parentId=${child1 && child1.parentId}`);
+
+      // scene_reparent(parentId=null) → 루트 승격.
+      const rpRoot = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_reparent', arguments: { id: cId, parentId: null } }));
+      ok('G-REPARENT 루트 승격(parentId=null) 성공', rpRoot && rpRoot.ok === true, `ok=${rpRoot && rpRoot.ok}`);
+      const child2 = findEnt(parseToolResult(await mcp.rpc('tools/call', { name: 'scene_get', arguments: {} })), cId);
+      ok('G-REPARENT 루트 승격 후 parentId 부재', child2 && child2.parentId == null, `parentId=${child2 && child2.parentId}`);
+
+      // 정리: 추가한 엔티티 제거(상태 누수 방지).
+      await mcp.rpc('tools/call', { name: 'scene_delete_entity', arguments: { id: cId } });
+      await mcp.rpc('tools/call', { name: 'scene_delete_entity', arguments: { id: pId } });
     }
 
     // ── G-CHAT: "적 3마리 추가" e2e(메커니즘) ──────────────────────────────────
