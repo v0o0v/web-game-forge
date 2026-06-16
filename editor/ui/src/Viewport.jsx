@@ -172,7 +172,8 @@ export function Viewport({ controller, sceneDoc, paintMode, selectedTile, snapSi
     try { prefabName = ev.dataTransfer.getData('application/wgf-prefab'); } catch (e) {}
     if (prefabName) {
       ev.preventDefault();
-      if (!controller.instantiatePrefab) return;
+      // 프리팹 인스턴스화는 브리지(remote) 권위 전용 — local 은 무동작(드롭 소스도 remote 에서만 렌더).
+      if (!controller.isRemote || !controller.instantiatePrefab) return;
       const world = toWorld(ev);
       if (!world) {
         if (typeof console !== 'undefined') console.warn('[Viewport] 캔버스 미준비 — 프리팹 드롭 무시');

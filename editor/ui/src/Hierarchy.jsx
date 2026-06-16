@@ -123,11 +123,11 @@ export function Hierarchy({ controller, world, selection }) {
     catch (e) { flash('삭제 실패'); }
   }
   function menuItems(id) {
-    return [
-      { label: '⧉  복제', onClick: () => doDuplicate(id) },
-      { label: '📦  프리팹으로 저장…', onClick: () => doSavePrefab(id) },
-      { label: '🗑  삭제', danger: true, onClick: () => doDelete(id) }
-    ];
+    const items = [{ label: '⧉  복제', onClick: () => doDuplicate(id) }];
+    // 프리팹 저장은 브리지(remote) 전용 — local 모드에선 메뉴바(menuModel)·PrefabPanel 과 동일하게 숨긴다.
+    if (controller.isRemote) items.push({ label: '📦  프리팹으로 저장…', onClick: () => doSavePrefab(id) });
+    items.push({ label: '🗑  삭제', danger: true, onClick: () => doDelete(id) });
+    return items;
   }
 
   return (
