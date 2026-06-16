@@ -1,10 +1,28 @@
 /* Hierarchy — 엔티티 트리(선택·다중선택 연동). 최상단에 멀티씬 셀렉터 바(ScenePanel) 통합. */
+import { useState, useRef, useEffect } from 'preact/hooks';
 import { spriteApi } from './sprite/spriteApi.js';
 import { ScenePanel } from './ScenePanel.jsx';
+import { ContextMenu } from './ContextMenu.jsx';
 
 export function Hierarchy({ controller, world, selection }) {
   const entities = world ? world.entities : [];
   const selSet = new Set(selection);
+
+  // 우클릭 컨텍스트 메뉴 상태 {x,y,id}|null + 비-시각 동작(프리팹 저장) 피드백 메시지.
+  const [menu, setMenu] = useState(null);
+  const [msg, setMsg] = useState('');
+  const msgTimer = useRef(null);
+  function flash(text) {
+    setMsg(text);
+    if (msgTimer.current) clearTimeout(msgTimer.current);
+    msgTimer.current = setTimeout(() => setMsg(''), 3000);
+  }
+  useEffect(() => () => { if (msgTimer.current) clearTimeout(msgTimer.current); }, []);
+
+  function entityName(id) {
+    const e = entities.find((x) => x.id === id);
+    return e ? (e.name || e.id) : null;
+  }
 
   function onClick(id, ev) {
     if (ev.shiftKey || ev.ctrlKey || ev.metaKey) {
@@ -78,6 +96,40 @@ export function Hierarchy({ controller, world, selection }) {
     controller.assignAssetToEntity(id, raw);
   }
 
+  // ── 우클릭 컨텍스트 메뉴(2D 프리팹 UI) ─────────────────────────────────────────
+  // 엔티티 행 우클릭 → 그 엔티티 선택 + 메뉴 표시. 동작은 모두 controller 단일 경로
+  //  (복제=duplicateEntity / 프리팹저장=savePrefab[prompt 이름] / 삭제=removeEntity).
+  function onContext(id, ev) {
+    ev.preventDefault();
+    controller.select([id]);
+    setMenu({ x: ev.clientX, y: ev.clientY, id });
+  }
+  async function doDuplicate(id) {
+    try { await Promise.resolve(controller.duplicateEntity(id)); }
+    catch (e) { flash('복제 실패'); }
+  }
+  async function doSavePrefab(id) {
+    const name = (typeof window !== 'undefined' && window.prompt)
+      ? window.prompt('프리팹 이름(영숫자 . _ - 만):', entityName(id) || id) : null;
+    if (!name) return;
+    try {
+      const r = await controller.savePrefab(name, id);
+      if (r && r.ok) flash(`프리팹 "${r.name}" 저장(엔티티 ${r.count}개)`);
+      else flash('저장 실패: ' + ((r && r.error) || '알 수 없음'));
+    } catch (e) { flash('저장 실패'); }
+  }
+  function doDelete(id) {
+    try { controller.removeEntity(id); controller.select([]); }
+    catch (e) { flash('삭제 실패'); }
+  }
+  function menuItems(id) {
+    const items = [{ label: '⧉  복제', onClick: () => doDuplicate(id) }];
+    // 프리팹 저장은 브리지(remote) 전용 — local 모드에선 메뉴바(menuModel)·PrefabPanel 과 동일하게 숨긴다.
+    if (controller.isRemote) items.push({ label: '📦  프리팹으로 저장…', onClick: () => doSavePrefab(id) });
+    items.push({ label: '🗑  삭제', danger: true, onClick: () => doDelete(id) });
+    return items;
+  }
+
   return (
     <div style={panel}>
       <ScenePanel controller={controller} />
@@ -90,6 +142,7 @@ export function Hierarchy({ controller, world, selection }) {
           return (
             <div key={e.id}
                  onClick={(ev) => onClick(e.id, ev)}
+                 onContextMenu={(ev) => onContext(e.id, ev)}
                  onDragOver={onDragOver}
                  onDrop={(ev) => onDrop(e.id, ev)}
                  style={{
@@ -105,6 +158,11 @@ export function Hierarchy({ controller, world, selection }) {
           );
         })}
       </div>
+      {msg && <div style={msgBar}>{msg}</div>}
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.id)}
+                     onClose={() => setMenu(null)} />
+      )}
     </div>
   );
 }
@@ -114,3 +172,4 @@ const panel = { display: 'flex', flexDirection: 'column', height: '100%',
 const header = { padding: '8px 10px', fontWeight: 600, fontSize: '12px',
   color: 'var(--text-dim)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.5px' };
 const empty = { padding: '12px 10px', color: 'var(--text-dim)' };
+const msgBar = { padding: '6px 10px', fontSize: '11px', color: 'var(--accent)', borderTop: '1px solid var(--border)' };

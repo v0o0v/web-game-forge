@@ -62,6 +62,16 @@ export function PrefabPanel({ controller, world, selection }) {
     setBusy(false);
   }
 
+  // 프리팹 카드 드래그 시작 — 뷰포트로 드래그·드롭해 드롭 위치(월드 좌표)에 인스턴스화.
+  //  페이로드 MIME = application/wgf-prefab(에셋 드래그 application/wgf-asset 와 구분),
+  //  내용 = 프리팹 이름. 클릭(onPlace)=중앙 배치, 드래그=원하는 위치 배치로 병존.
+  function onDragStart(ev, name) {
+    try {
+      ev.dataTransfer.setData('application/wgf-prefab', name);
+      ev.dataTransfer.effectAllowed = 'copy';
+    } catch (e) { /* 격리 */ }
+  }
+
   if (!remote) {
     return (
       <div style={panel}>
@@ -83,7 +93,10 @@ export function PrefabPanel({ controller, world, selection }) {
       <div style={{ overflowY: 'auto', flex: 1 }}>
         {prefabs.length === 0 && <div style={empty}>저장된 프리팹 없음</div>}
         {prefabs.map((p) => (
-          <div key={p.name} style={card} onClick={() => onPlace(p.name)} title="클릭해 씬에 배치">
+          <div key={p.name} style={card} draggable
+               onDragStart={(ev) => onDragStart(ev, p.name)}
+               onClick={() => onPlace(p.name)}
+               title="클릭=뷰포트 중앙 배치 · 드래그=원하는 위치에 배치">
             <div style={{ color: 'var(--text)' }}>📦 {p.name}</div>
             <div style={{ color: 'var(--text-dim)', fontSize: '11px' }}>
               엔티티 {p.count}개{p.root ? ` · 루트 ${p.root}` : ''}
