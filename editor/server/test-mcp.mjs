@@ -272,9 +272,11 @@ async function main() {
       const swOut = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_switch', arguments: { id: newId } }));
       ok('G-SCENE scene_switch 활성 전환', swOut && swOut.ok === true && swOut.activeSceneId === newId, `active=${swOut && swOut.activeSceneId}`);
 
-      // scene_switch 멱등(이미 활성) — 에러 아님.
+      // scene_switch 멱등(이미 활성) — 에러 아님 + seq 미증가(멱등 계약: 무변경).
       const swIdem = parseToolResult(await mcp.rpc('tools/call', { name: 'scene_switch', arguments: { id: newId } }));
-      ok('G-SCENE scene_switch 멱등(이미 활성)', swIdem && swIdem.ok === true && swIdem.activeSceneId === newId);
+      ok('G-SCENE scene_switch 멱등(이미 활성·seq 불변)',
+        swIdem && swIdem.ok === true && swIdem.activeSceneId === newId && swIdem.seq === swOut.seq,
+        `seq=${swIdem && swIdem.seq} vs ${swOut && swOut.seq}`);
 
       // scene_switch 없는 씬 → 구조화 에러(isError).
       const swBad = await mcp.rpc('tools/call', { name: 'scene_switch', arguments: { id: 'no-such-scene' } });
