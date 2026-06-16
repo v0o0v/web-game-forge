@@ -9,6 +9,7 @@
 import { spriteApi } from './sprite/spriteApi.js';
 import { rectOf, AnimPreview } from './sprite/frameAnim.jsx';
 import { useState, useEffect, useMemo } from 'preact/hooks';
+import { listTilemapContainers } from './tilemap.js';
 
 export function Inspector({ controller, world, selection }) {
   if (!world || selection.length === 0) {
@@ -45,11 +46,43 @@ export function Inspector({ controller, world, selection }) {
         <Section title="Transform" />
         <TransformEditor controller={controller} ent={ent} />
 
+        {/* ── TilemapLayer 이동(2C) — 선택 엔티티가 타일일 때만 표시 ── */}
+        <TilemapLayerSelect controller={controller} world={world} ent={ent} />
+
         {/* ── 컴포넌트들 ── */}
         {ent.components.map((comp, idx) => (
           <ComponentEditor key={idx} controller={controller} world={world} ent={ent} comp={comp} index={idx} />
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── TilemapLayer 이동(2C reparent UI) ─────────────────────────────────────────
+//  선택 엔티티가 *타일*(parentId 가 TilemapLayer 컨테이너를 가리킴)일 때만 표시한다. 드롭다운으로
+//  다른 TilemapLayer 컨테이너로 편입(controller.reparent)하거나 "(레이어에서 제거)"로 루트 승격한다.
+//  reparent 는 parentId 만 바꾸고 로컬 transform 은 보존 — 타일이 새 레이어 좌표계에서 같은 격자
+//  로컬좌표를 유지한다(코어 cmdReparent 의미와 정합). 코어 무수정 — 기존 controller.reparent 위임.
+function TilemapLayerSelect({ controller, world, ent }) {
+  const containers = listTilemapContainers(world);
+  // 현재 부모가 TilemapLayer 컨테이너가 아니면(=타일이 아니면) 섹션 자체를 숨긴다.
+  const parent = (ent.parentId != null) ? containers.find((c) => c.id === ent.parentId) : null;
+  if (!parent) return null;
+  return (
+    <div>
+      <Section title="TilemapLayer" />
+      <Field label="레이어">
+        <select style={inp} value={ent.parentId}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  controller.reparent(ent.id, v === '' ? null : v);
+                }}>
+          {containers.map((c) => (
+            <option key={c.id} value={c.id}>{c.name || c.id}</option>
+          ))}
+          <option value="">(레이어에서 제거)</option>
+        </select>
+      </Field>
     </div>
   );
 }

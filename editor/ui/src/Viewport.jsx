@@ -4,6 +4,7 @@
  *    → 월드 좌표(엔진 1:1). gameW/gameH = sceneDoc.meta.viewport.{w,h}. */
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { spriteApi } from './sprite/spriteApi.js';
+import { findTopTileAtCell, snapToGrid } from './tilemap.js';
 
 export function Viewport({ controller, sceneDoc, paintMode, selectedTile, snapSize, activeLayerId, onLayerCreated }) {
   const hostRef = useRef(null);
@@ -49,11 +50,7 @@ export function Viewport({ controller, sceneDoc, paintMode, selectedTile, snapSi
   }
 
   // ── 타일 페인팅 ─────────────────────────────────────────────────────────────
-  // snapSize(격자 크기)로 월드 좌표를 격자에 스냅.
-  function snapToGrid(v, size) {
-    const s = (size && size > 0) ? size : 16;
-    return Math.round(v / s) * s;
-  }
+  // snapToGrid 는 tilemap.js 공유 헬퍼(페인팅·우클릭 지우개가 동일 격자 규칙을 쓰도록).
 
   // 격자 위치에 타일이 이미 있는지 검사(같은 parentId·같은 로컬 x,y).
   function tileExistsAt(parentId, localX, localY) {
@@ -149,6 +146,20 @@ export function Viewport({ controller, sceneDoc, paintMode, selectedTile, snapSi
     lastGridRef.current = null;
   }
 
+  // 우클릭 지우개 — paint 모드에서 타일 우클릭 시 그 격자 셀의 *최상단* 타일을 삭제(좌클릭=칠하기).
+  //  selectedTile 불필요(빈 손으로도 지움). 컨테이너(TilemapLayer)는 자식이 아니라 매치 대상에서
+  //  제외되므로 실수로 레이어가 통째 삭제되지 않는다. 코어 removeEntity(단일 undo) 단일 경로 경유.
+  function onPaintContextMenu(ev) {
+    if (!paintMode) return;
+    ev.preventDefault();                 // 브라우저 컨텍스트 메뉴 억제
+    const world = toWorld(ev);
+    if (!world) return;
+    const snap = (snapSize && snapSize > 0) ? snapSize : 16;
+    const w = controller.getWorld ? controller.getWorld() : null;
+    const tile = findTopTileAtCell(w, world.x, world.y, snap);
+    if (tile && tile.id != null) controller.removeEntity(tile.id);
+  }
+
   function onDragOver(ev) {
     if (ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes('application/wgf-asset')) {
       ev.preventDefault();
@@ -227,6 +238,7 @@ export function Viewport({ controller, sceneDoc, paintMode, selectedTile, snapSi
          onMouseMove={paintMode ? onPaintMouseMove : undefined}
          onMouseUp={paintMode ? onPaintMouseUp : undefined}
          onMouseLeave={paintMode ? onPaintMouseUp : undefined}
+         onContextMenu={paintMode ? onPaintContextMenu : undefined}
          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
                   background: 'var(--viewport-bg, #0e1016)', overflow: 'auto', padding: '12px',
                   outline: dragHover ? '2px dashed var(--accent, #4a9eff)' : 'none',
