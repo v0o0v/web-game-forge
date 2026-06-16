@@ -310,6 +310,74 @@ const TOOLS = {
     }
   },
 
+  // ── E1 멀티 씬(목록/전환/추가/이름변경/삭제) — /api/scene/* 얇은 래퍼 ──────────
+  //  baseDoc.scenes[] 가 권위. Claude 가 멀티씬 워크플로(레벨 추가·전환)를 구동.
+  //  Play 모드 중 구조 변경(add/rename/remove/switch)은 브리지가 409 거부(§4.9 — 씬 read-only).
+  //  ※ 인게임(play-runtime) SceneTrigger/requestScene 는 미구현(OQ4 결정론 계약은 open-questions 참조).
+  scene_list: {
+    description: '씬 목록을 반환한다 — scenes:[{id,name,entityCount}] + activeSceneId. read-only(권위 문서 무변이).',
+    inputSchema: OBJ({}),
+    async handler() {
+      const r = await bridgeRequest('GET', '/api/scene/list');
+      if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError('씬 목록 조회 실패', { status: r.status });
+      return toolText({ ok: true, scenes: r.json.scenes, activeSceneId: r.json.activeSceneId, seq: r.json.seq });
+    }
+  },
+
+  scene_switch: {
+    description: '활성 씬을 전환한다. id 필수. 현재 씬 편집분은 보존(flush) 후 대상 씬을 로드한다. 이미 활성이면 멱등. Play 모드면 거부(§4.9).',
+    inputSchema: OBJ({ id: { type: 'string' } }, ['id']),
+    async handler(args) {
+      if (!args || typeof args.id !== 'string') return toolError('id 필수');
+      const r = await bridgeRequest('POST', '/api/scene/switch', { id: args.id });
+      if (r.status === 409) return toolError('Play 모드 — 씬 전환 불가(§4.9)', { status: 409 });
+      if (r.status === 404) return toolError('씬 없음: ' + args.id, { status: 404 });
+      if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError('씬 전환 실패', { status: r.status });
+      return toolText({ ok: true, activeSceneId: r.json.activeSceneId, seq: r.json.seq });
+    }
+  },
+
+  scene_add: {
+    description: '새 빈 씬을 추가한다(전환은 안 함). name 선택(기본 "Scene N"). Play 모드면 거부, 씬 수 상한(256) 초과 시 거부.',
+    inputSchema: OBJ({ name: { type: ['string', 'null'] } }),
+    async handler(args) {
+      const body = (args && typeof args.name === 'string') ? { name: args.name } : {};
+      const r = await bridgeRequest('POST', '/api/scene/add', body);
+      if (r.status === 409) return toolError('Play 모드 — 씬 구조 read-only(§4.9)', { status: 409 });
+      if (r.status === 400) return toolError((r.json && r.json.error) || '씬 추가 거부', { status: 400 });
+      if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError('씬 추가 실패', { status: r.status });
+      return toolText({ ok: true, scene: r.json.scene, scenes: r.json.scenes, activeSceneId: r.json.activeSceneId, seq: r.json.seq });
+    }
+  },
+
+  scene_rename: {
+    description: '씬 이름을 변경한다. id·name 필수. Play 모드면 거부.',
+    inputSchema: OBJ({ id: { type: 'string' }, name: { type: 'string' } }, ['id', 'name']),
+    async handler(args) {
+      if (!args || typeof args.id !== 'string') return toolError('id 필수');
+      if (typeof args.name !== 'string') return toolError('name 필수');
+      const r = await bridgeRequest('POST', '/api/scene/rename', { id: args.id, name: args.name });
+      if (r.status === 409) return toolError('Play 모드 — 씬 구조 read-only(§4.9)', { status: 409 });
+      if (r.status === 404) return toolError('씬 없음: ' + args.id, { status: 404 });
+      if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError('씬 이름변경 실패', { status: r.status });
+      return toolText({ ok: true, scenes: r.json.scenes, seq: r.json.seq });
+    }
+  },
+
+  scene_remove: {
+    description: '씬을 삭제한다. id 필수. 마지막 1개는 거부. 활성 씬 삭제 시 남은 첫 씬으로 전환. Play 모드면 거부.',
+    inputSchema: OBJ({ id: { type: 'string' } }, ['id']),
+    async handler(args) {
+      if (!args || typeof args.id !== 'string') return toolError('id 필수');
+      const r = await bridgeRequest('POST', '/api/scene/remove', { id: args.id });
+      if (r.status === 409) return toolError('Play 모드 — 씬 구조 read-only(§4.9)', { status: 409 });
+      if (r.status === 404) return toolError('씬 없음: ' + args.id, { status: 404 });
+      if (r.status === 400) return toolError((r.json && r.json.error) || '씬 삭제 거부(마지막 씬?)', { status: 400 });
+      if (r.status !== 200 || !r.json || r.json.ok !== true) return toolError('씬 삭제 실패', { status: r.status });
+      return toolText({ ok: true, scenes: r.json.scenes, activeSceneId: r.json.activeSceneId, seq: r.json.seq });
+    }
+  },
+
   // ── 역채널(에디터 챗) ────────────────────────────────────────────────────────
   editor_next_message: {
     description: '에디터에서 사용자가 보낸 미처리 메시지를 1건 가져온다(long-poll). 없으면 일정 시간 후 message:null 로 반환(재호출). 이 호출 자체가 Claude 루프 하트비트.',
