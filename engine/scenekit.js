@@ -857,6 +857,16 @@
       added.push(ent);
     }
     bumpIdSeq(world);
+    // 사이클 가드(손상/외부 주입 doc 방어): 배치-내부 리맵된 parentId 가 사이클을 형성하면 그
+    // 엔티티를 최상위로 드롭한다. 정상 프리팹(savePrefab=collectSubtree 트리)은 사이클이 없고,
+    // raw /api/scene/instantiate 로 들어온 손상 doc(루트↔자식 상호참조)만 해소한다. push 후라
+    // 기존 wouldCycle(world) 재사용(임의깊이 조상 순회·guard 100000 — 무한루프 없음). cmdReparent
+    // 사이클 거부와 정합. 외부 dropParent 는 기존 world 엔티티라 구조상 사이클 불가(검사 무해).
+    for (var ci = 0; ci < added.length; ci++) {
+      if (added[ci].parentId != null && wouldCycle(world, added[ci].id, added[ci].parentId)) {
+        delete added[ci].parentId;
+      }
+    }
     for (var k = 0; k < added.length; k++) initEntity(added[k], world);
     var ids = [];
     for (var m = 0; m < added.length; m++) ids.push(added[m].id);

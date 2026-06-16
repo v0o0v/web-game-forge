@@ -1500,6 +1500,46 @@ function ScenekitStep(w) { SceneKit.step(w, 1 / 60); }
   const e1H = SceneKit.findEntity(wH, 'e1');
   ok('G30-H 충돌방어 undo → 기존 e1 보존(주입본만 제거)',
     wH.entities.length === 1 && e1H && e1H.name === 'pre', `count=${wH.entities.length} name=${e1H && e1H.name}`);
+
+  // G30-I 사이클 가드(손상 doc: 루트↔자식 상호참조 → 무한루프 없이 정상 종료·사이클 드롭).
+  const cyc = [
+    { id: 'ca', name: 'A', transform: {}, parentId: 'cb', components: [] },
+    { id: 'cb', name: 'B', transform: {}, parentId: 'ca', components: [] }
+  ];
+  const wI = SceneKit.load({ walls: [], entities: [] }, { mode: 'edit', seed: 1 });
+  const undoI = SceneKit.applyCommand(wI, { type: 'instantiate', entities: cyc });
+  ok('G30-I 사이클 doc instantiate 정상 종료(+2, 무한루프 없음)',
+    wI.entities.length === 2 && undoI.ids.length === 2, `count=${wI.entities.length}`);
+  const rootsI = wI.entities.filter((e) => e.parentId == null);
+  ok('G30-I 사이클 해소(≥1 최상위 — 무한 계층 아님)', rootsI.length >= 1, `roots=${rootsI.length}`);
+  ok('G30-I 사이클 후 hashState 결정성(2회 일치)', SceneKit.hashState(wI) === SceneKit.hashState(wI), 'deterministic');
+  SceneKit.applyUndo(wI, undoI);
+  ok('G30-I 사이클 doc undo → 통째 제거', wI.entities.length === 0, `count=${wI.entities.length}`);
+
+  // G30-J 부모-자식 역순 entities(자식이 배열 먼저, 부모 나중) 리맵 정합.
+  const rev = [
+    { id: 'rc', name: 'child', transform: {}, parentId: 'rp', components: [] },
+    { id: 'rp', name: 'parent', transform: {}, components: [] }
+  ];
+  const wJ = SceneKit.load({ walls: [], entities: [] }, { mode: 'edit', seed: 1 });
+  SceneKit.applyCommand(wJ, { type: 'instantiate', entities: rev });
+  const newRc = wJ.entities.find((e) => e.name === 'child'), newRp = wJ.entities.find((e) => e.name === 'parent');
+  ok('G30-J 역순 entities 리맵 정합(자식 parentId=부모 newId·부모 최상위)',
+    newRc && newRp && newRc.parentId === newRp.id && newRp.parentId == null,
+    `childParent=${newRc && newRc.parentId} parentId=${newRp && newRp.id}`);
+
+  // G30-K 3단계 서브트리(루트→중간→잎) 리맵 정합(사이클 가드가 정상 트리를 안 깨는지).
+  const three = [
+    { id: 'tr', name: 'root3', transform: {}, components: [] },
+    { id: 'tm', name: 'mid3', transform: {}, parentId: 'tr', components: [] },
+    { id: 'tl', name: 'leaf3', transform: {}, parentId: 'tm', components: [] }
+  ];
+  const wK = SceneKit.load({ walls: [], entities: [] }, { mode: 'edit', seed: 1 });
+  SceneKit.applyCommand(wK, { type: 'instantiate', entities: three });
+  const nr = wK.entities.find((e) => e.name === 'root3'), nm = wK.entities.find((e) => e.name === 'mid3'), nl = wK.entities.find((e) => e.name === 'leaf3');
+  ok('G30-K 3단계 리맵 정합(mid→root·leaf→mid·root 최상위)',
+    nm.parentId === nr.id && nl.parentId === nm.id && nr.parentId == null,
+    `mid=${nm.parentId} leaf=${nl.parentId} root=${nr.parentId}`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
