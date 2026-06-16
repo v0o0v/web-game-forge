@@ -91,12 +91,23 @@ function App({ controller, settings }) {
 
   // 컨트롤러 변경 → 상태 동기화.
   function syncState() {
-    setWorld(controller.getWorld());
+    const w = controller.getWorld();
+    setWorld(w);
     setSelection(controller.getSelection());
     setGizmoMode(controller.getGizmoMode());
     setMode(controller.getMode());
     setUndoDepth(controller.undoDepth());
     setRedoDepth(controller.redoDepth());
+    // 활성 TilemapLayer 컨테이너가 현재 씬(world)에 더는 없으면 무효화한다 — 씬 전환
+    //  (switchScene/SSE scene 델타)·컨테이너 삭제·undo 를 모두 포괄. 이전 씬의 컨테이너 id 는
+    //  새 씬엔 없으므로 null 로 리셋되고, 다음 페인트가 새 씬에 새 컨테이너를 만든다(존재하지
+    //  않는 부모에 타일을 붙이는 버그 차단). 함수형 갱신이라 syncState 클로저의 stale 값이 아니라
+    //  항상 현재 activeLayerId 를 검사하며, 값이 그대로면 동일 참조를 돌려 불필요한 재렌더를 막는다.
+    setActiveLayerId((cur) => {
+      if (cur == null) return cur;
+      const exists = !!(w && Array.isArray(w.entities) && w.entities.some((e) => e.id === cur));
+      return exists ? cur : null;
+    });
     forceRender((n) => n + 1);
   }
 
