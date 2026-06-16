@@ -228,10 +228,14 @@ const TOOLS = {
   },
 
   scene_reparent: {
-    description: '엔티티의 부모를 변경한다. (v1 SceneKit 은 flat 엔티티 모델이라 계층 reparent 미지원 — 후속. 호출 시 구조화 에러 반환.)',
+    description: '엔티티의 부모를 변경한다(계층 2A). parentId 생략/null = 루트로 승격. 자기참조·존재하지 않는 부모·사이클은 코어가 no-op 으로 거부(부모 불변). 부모-따라가기 시각합성은 어댑터 translate-only(코어 트랜스폼 불변·단일 진실). Play 모드면 409.',
     inputSchema: OBJ({ id: { type: 'string' }, parentId: { type: ['string', 'null'] } }, ['id']),
-    async handler() {
-      return toolError('reparent 미지원 — v1 SceneKit 은 flat 엔티티 모델(계층은 후속 TilemapLayer/프리팹에서).');
+    async handler(args) {
+      if (!args || typeof args.id !== 'string') return toolError('id 필수');
+      const parentId = (args.parentId == null) ? null : String(args.parentId);
+      const r = await proxyCommand({ type: 'reparent', id: args.id, parentId });
+      if (r.rejected) return toolError(r.error, { status: r.status });
+      return toolText({ ok: true, seq: r.seq });
     }
   },
 

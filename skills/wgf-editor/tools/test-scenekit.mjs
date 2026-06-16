@@ -1200,6 +1200,130 @@ function ScenekitStep(w) { SceneKit.step(w, 1 / 60); }
     `_sceneRequest=${wd1._sceneRequest}`);
 }
 
+// ═════════════════════════════════════════════════════════════════════════════
+// G28  묶음H 2A 계층(parentId) — 회귀앵커·결정성·reparent·가드·승격·직렬화 (OQ5=(b))
+//   A 회귀앵커: flat 씬 골든 해시(코어 수정 *전* 측정) 불변 = parentId 토큰 회귀 0
+//   B 계층 결정성 + parentId 해시 반영(계층≠flat) + parentId 보존
+//   C reparent apply→undo 해시 원복
+//   D 사이클·고아·자기참조 reparent 거부(부모 불변·해시 불변)
+//   E 부모삭제=자식 승격(ADR-002) + undo 해시 원복 + parentId 복원
+//   F serialize 가 parentId 보존(루트는 키 부재) + serialize→재load 동형성
+// ═════════════════════════════════════════════════════════════════════════════
+{
+  // G28-A 회귀 앵커 — 2A 코어 수정 전 측정한 골든(seed 42). parentId 도입 후에도 비트 불변.
+  const GOLD_T0 = '4f7683f9', GOLD_T120 = 'cd287343';
+  const wf = SceneKit.load(SCENE_DOC, { mode: 'play', seed: 42 });
+  const a0 = SceneKit.hashState(wf);
+  ok('G28-A flat 씬 t=0 해시 = 골든(계층 도입 회귀 0)', a0 === GOLD_T0, `actual=${a0} gold=${GOLD_T0}`);
+  for (let i = 0; i < 120; i++) SceneKit.step(wf, 1 / 60);
+  const a120 = SceneKit.hashState(wf);
+  ok('G28-A flat 씬 120프레임 해시 = 골든', a120 === GOLD_T120, `actual=${a120} gold=${GOLD_T120}`);
+}
+{
+  // G28-B 계층 결정성 + parentId 해시 반영.
+  function buildHierDoc(parentOfChild) {
+    return { walls: [], entities: [
+      { id: 'par', name: '부모', transform: { x: 100, y: 50 }, components: [] },
+      { id: 'chd', name: '자식', transform: { x: 10, y: 0 }, parentId: parentOfChild, components: [] }
+    ] };
+  }
+  const SEED = 7;
+  const wa = SceneKit.load(buildHierDoc('par'), { mode: 'play', seed: SEED });
+  const wb = SceneKit.load(buildHierDoc('par'), { mode: 'play', seed: SEED });
+  const ha = SceneKit.hashState(wa), hb = SceneKit.hashState(wb);
+  ok('G28-B 계층 씬 결정성(2회 hashState 일치)', ha === hb, `ha=${ha} hb=${hb}`);
+  const wflat = SceneKit.load(buildHierDoc(null), { mode: 'play', seed: SEED });
+  const hflat = SceneKit.hashState(wflat);
+  ok('G28-B parentId 해시 반영(계층 ≠ 동좌표 flat)', ha !== hflat, `hier=${ha} flat=${hflat}`);
+  const child = SceneKit.findEntity(wa, 'chd');
+  ok('G28-B 자식 parentId 보존(=par)', child && child.parentId === 'par', `parentId=${child && child.parentId}`);
+}
+{
+  // G28-C reparent apply→undo 해시 원복.
+  function build3() {
+    return { walls: [], entities: [
+      { id: 'a', name: 'A', transform: { x: 0, y: 0 }, components: [] },
+      { id: 'b', name: 'B', transform: { x: 50, y: 0 }, components: [] },
+      { id: 'c', name: 'C', transform: { x: 100, y: 0 }, components: [] }
+    ] };
+  }
+  const w = SceneKit.load(build3(), { mode: 'edit', seed: 1 });
+  const h0 = SceneKit.hashState(w);
+  const undo = SceneKit.applyCommand(w, { type: 'reparent', id: 'c', parentId: 'a' });
+  const h1 = SceneKit.hashState(w);
+  ok('G28-C reparent 후 해시 변경', h0 !== h1, `h0=${h0} h1=${h1}`);
+  ok('G28-C reparent 적용(c.parentId=a)', SceneKit.findEntity(w, 'c').parentId === 'a',
+    `parentId=${SceneKit.findEntity(w, 'c').parentId}`);
+  SceneKit.applyUndo(w, undo);
+  const h2 = SceneKit.hashState(w);
+  ok('G28-C reparent apply→undo 해시 원복', h0 === h2, `h0=${h0} h2=${h2}`);
+  ok('G28-C undo 후 c.parentId 제거(루트 복귀)', SceneKit.findEntity(w, 'c').parentId === undefined,
+    `parentId=${SceneKit.findEntity(w, 'c').parentId}`);
+}
+{
+  // G28-D 사이클·고아·자기참조 reparent 거부.
+  function buildChain() {
+    return { walls: [], entities: [
+      { id: 'a', name: 'A', transform: { x: 0, y: 0 }, components: [] },
+      { id: 'b', name: 'B', transform: { x: 0, y: 0 }, parentId: 'a', components: [] },
+      { id: 'c', name: 'C', transform: { x: 0, y: 0 }, parentId: 'b', components: [] }
+    ] };
+  }
+  const w = SceneKit.load(buildChain(), { mode: 'edit', seed: 1 });
+  const h0 = SceneKit.hashState(w);
+  SceneKit.applyCommand(w, { type: 'reparent', id: 'a', parentId: 'c' });  // a←b←c←a 순환
+  ok('G28-D 사이클 reparent 거부(a.parentId 불변)', SceneKit.findEntity(w, 'a').parentId === undefined,
+    `parentId=${SceneKit.findEntity(w, 'a').parentId}`);
+  ok('G28-D 사이클 거부 후 해시 불변', SceneKit.hashState(w) === h0, `h0=${h0} now=${SceneKit.hashState(w)}`);
+  SceneKit.applyCommand(w, { type: 'reparent', id: 'c', parentId: 'NOPE' });  // 고아
+  ok('G28-D 고아(없는 부모) 거부(c.parentId=b 유지)', SceneKit.findEntity(w, 'c').parentId === 'b',
+    `parentId=${SceneKit.findEntity(w, 'c').parentId}`);
+  SceneKit.applyCommand(w, { type: 'reparent', id: 'b', parentId: 'b' });  // 자기참조
+  ok('G28-D 자기참조 거부(b.parentId=a 유지)', SceneKit.findEntity(w, 'b').parentId === 'a',
+    `parentId=${SceneKit.findEntity(w, 'b').parentId}`);
+}
+{
+  // G28-E 부모삭제=자식 승격(ADR-002) + undo 정합.
+  function buildPC() {
+    return { walls: [], entities: [
+      { id: 'parent', name: '부모', transform: { x: 0, y: 0 }, components: [] },
+      { id: 'child1', name: '자식1', transform: { x: 10, y: 0 }, parentId: 'parent', components: [] },
+      { id: 'child2', name: '자식2', transform: { x: 20, y: 0 }, parentId: 'parent', components: [] },
+      { id: 'other', name: '무관', transform: { x: 99, y: 0 }, components: [] }
+    ] };
+  }
+  const w = SceneKit.load(buildPC(), { mode: 'edit', seed: 1 });
+  const h0 = SceneKit.hashState(w);
+  const undo = SceneKit.applyCommand(w, { type: 'removeEntity', id: 'parent' });
+  ok('G28-E 부모 삭제됨', SceneKit.findEntity(w, 'parent') === null, 'parent removed');
+  const c1 = SceneKit.findEntity(w, 'child1'), c2 = SceneKit.findEntity(w, 'child2');
+  ok('G28-E 자식1 승격(보존+parentId 제거)', c1 && c1.parentId === undefined, `child1.parentId=${c1 && c1.parentId}`);
+  ok('G28-E 자식2 승격(보존+parentId 제거)', c2 && c2.parentId === undefined, `child2.parentId=${c2 && c2.parentId}`);
+  SceneKit.applyUndo(w, undo);
+  const h2 = SceneKit.hashState(w);
+  ok('G28-E 부모삭제 apply→undo 해시 원복', h0 === h2, `h0=${h0} h2=${h2}`);
+  const c1b = SceneKit.findEntity(w, 'child1');
+  ok('G28-E undo 후 자식 parentId 복원(child1=parent)', c1b && c1b.parentId === 'parent',
+    `child1.parentId=${c1b && c1b.parentId}`);
+}
+{
+  // G28-F serialize parentId 보존 + 재load 동형성.
+  const doc = { walls: [], entities: [
+    { id: 'p', name: 'P', transform: { x: 5, y: 5 }, components: [] },
+    { id: 'k', name: 'K', transform: { x: 1, y: 1 }, parentId: 'p', components: [] }
+  ] };
+  const w = SceneKit.load(doc, { mode: 'edit', seed: 1 });
+  const ser = SceneKit.serialize(w);
+  const kSer = ser.entities.find((e) => e.id === 'k');
+  const pSer = ser.entities.find((e) => e.id === 'p');
+  ok('G28-F serialize 가 자식 parentId 보존(=p)', kSer && kSer.parentId === 'p', `parentId=${kSer && kSer.parentId}`);
+  ok('G28-F 루트 엔티티는 parentId 키 부재', pSer && !('parentId' in pSer), `hasKey=${pSer && ('parentId' in pSer)}`);
+  const h0 = SceneKit.hashState(w);
+  const w2 = SceneKit.load(ser, { mode: 'edit', seed: 1 });
+  ok('G28-F serialize→재load 해시 동형(parentId 보존)', SceneKit.hashState(w2) === h0,
+    `h0=${h0} reload=${SceneKit.hashState(w2)}`);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 결과 출력
 // ─────────────────────────────────────────────────────────────────────────────
